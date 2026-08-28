@@ -1,0 +1,23 @@
+# Local development against a real PostgreSQL, for anyone who wants one.
+# Without this the service runs on in-process PGlite and needs nothing at all.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_PASSWORD: pumasi
+      POSTGRES_USER: pumasi
+      POSTGRES_DB: pumasi
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pumasi"]
+      interval: 5s
+      retries: 10
+  service:
+    build: .
+    environment:
+      DATABASE_URL: postgres://pumasi:pumasi@db:5432/pumasi
+      PORT: 8080
+      SEED_DEMO: "true"
+    ports: ["8080:8080"]
+    depends_on:
+      db: { condition: service_healthy }

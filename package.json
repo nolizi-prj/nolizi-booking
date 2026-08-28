@@ -1,0 +1,35 @@
+{
+  "name": "@pumasi/scheduling-service",
+  "version": "0.1.0",
+  "description": "Deployable scheduling service. Implements SPEC-0002.",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:test": "tsc -p tsconfig.test.json",
+    "test": "npm run build:test && node --test .build/test/*.test.js",
+    "dev": "SEED_DEMO=true npm run build && node dist/server.js",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@js-temporal/polyfill": "^0.5.1",
+    "@pumasi/scheduling-core": "github:pumasi-ai/scheduling-core",
+    "nodemailer": "^9.0.3",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
+    "@types/node": "^22.0.0",
+    "@types/nodemailer": "^8.0.1",
+    "@types/pg": "^8.20.3",
+    "@types/smtp-server": "^3.5.13",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "smtp-server": "^3.19.2",
+    "typescript": "^5.7.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pumasi-ai/scheduling-service.git"
+  }
+}

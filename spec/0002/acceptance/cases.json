@@ -1,0 +1,1321 @@
+{
+  "suite": "SPEC-0002 scheduling-service acceptance",
+  "version": "1.0.0",
+  "frozen_at_approval": true,
+  "note": "Service-level conformance suite. A runner provisions a clean database, applies migrations, and drives the service through its real surfaces. Runners are ordinary risk; this file is the truth. The engine's own suite is spec/0001-scheduling-core/acceptance/cases.json and is not duplicated here.",
+  "environment": {
+    "tzdata": "2026a",
+    "postgres": "pinned; the P1 exclusion constraint is version-sensitive",
+    "on_mismatch": "FAIL_TO_START",
+    "rationale": "SPEC.md section 5. A service that starts with the wrong tzdata computes wrong slots and reports itself healthy."
+  },
+  "identity_cases": [
+    {
+      "id": "I-001",
+      "clause": "I1",
+      "description": "Invite is single-use under concurrency. N concurrent redemptions of one invite create exactly one account; the others are rejected and consume nothing.",
+      "concurrency": {
+        "workers": 16,
+        "iterations": 1000
+      },
+      "steps": [
+        {
+          "call": "concurrent_ops",
+          "args": {
+            "operations": [
+              {
+                "call": "redeem_invite",
+                "args": {
+                  "invite": "inv-1"
+                }
+              }
+            ],
+            "replicas": 16
+          },
+          "expect": {
+            "accounts_created": 1,
+            "rejected": 15
+          }
+        },
+        {
+          "assert": "invite inv-1 is consumed exactly once"
+        },
+        {
+          "assert": "account_count == 1"
+        }
+      ]
+    },
+    {
+      "id": "I-002",
+      "clause": "I2",
+      "description": "Public signup flag fails closed. Absent, empty, and unparseable configuration all yield signup DISABLED — never enabled by accident.",
+      "steps": [
+        {
+          "call": "start_service",
+          "args": {
+            "config": {
+              "public_signup": null
+            }
+          },
+          "expect": {
+            "public_signup": false
+          }
+        },
+        {
+          "call": "start_service",
+          "args": {
+            "config": {
+              "public_signup": ""
+            }
+          },
+          "expect": {
+            "public_signup": false
+          }
+        },
+        {
+          "call": "start_service",
+          "args": {
+            "config": {
+              "public_signup": "yes-please"
+            }
+          },
+          "expect": {
+            "public_signup": false
+          }
+        },
+        {
+          "call": "signup",
+          "args": {
+            "invite": null
+          },
+          "expect": {
+            "status": "forbidden"
+          }
+        }
+      ]
+    },
+    {
+      "id": "I-003",
+      "clause": "I3",
+      "description": "Session cookie carries no readable claims and is invalidated server-side on logout. A cookie replayed after logout is rejected even though the client still holds it.",
+      "steps": [
+        {
+          "call": "login",
+          "capture": "cookie"
+        },
+        {
+          "assert": "cookie is HttpOnly and Secure and SameSite=Lax"
+        },
+        {
+          "assert": "cookie value contains no account identifier and no decodable claims"
+        },
+        {
+          "call": "logout",
+          "args": {
+            "cookie": "$cookie"
+          }
+        },
+        {
+          "call": "get_schedules",
+          "args": {
+            "cookie": "$cookie"
+          },
+          "expect": {
+            "status": "unauthorised"
+          }
+        }
+      ]
+    },
+    {
+      "id": "I-004",
+      "clause": "I4",
+      "description": "Cross-account access is denied at the query, not by hiding controls. Owner A requesting owner B's schedule and booking by direct identifier is refused.",
+      "steps": [
+        {
+          "call": "create_owner",
+          "args": {
+            "name": "A"
+          },
+          "capture": "a"
+        },
+        {
+          "call": "create_owner",
+          "args": {
+            "name": "B"
+          },
+          "capture": "b"
+        },
+        {
+          "call": "create_schedule",
+          "args": {
+            "owner": "$b"
+          },
+          "capture": "sched_b"
+        },
+        {
+          "call": "get_schedule",
+          "args": {
+            "as": "$a",
+            "schedule": "$sched_b"
+          },
+          "expect": {
+            "status": "not_found"
+          }
+        },
+        {
+          "assert": "the response does not distinguish 'exists but forbidden' from 'does not exist'"
+        }
+      ]
+    },
+    {
+      "id": "I-005",
+      "clause": "I5",
+      "description": "A booker completes a booking with no account, no session, and no credential of any kind.",
+      "steps": [
+        {
+          "call": "submit_booking",
+          "args": {
+            "cookie": null,
+            "auth": null
+          },
+          "expect": {
+            "status": "confirmed"
+          }
+        },
+        {
+          "assert": "no account was created for the booker"
+        },
+        {
+          "assert": "no session was issued to the booker"
+        }
+      ]
+    },
+    {
+      "id": "I-006",
+      "clause": "I6",
+      "description": "Unauthenticated surfaces are rate-limited per IP and per schedule; exceeding the limit returns a retry signal, not an error page, and sends no mail.",
+      "steps": [
+        {
+          "call": "flood",
+          "args": {
+            "surface": "booking_page",
+            "count": 10000,
+            "from_ip": "1.2.3.4"
+          },
+          "capture": "r"
+        },
+        {
+          "assert": "$r includes a retry signal once the limit is exceeded"
+        },
+        {
+          "assert": "no mail was sent for rate-limited attempts"
+        },
+        {
+          "call": "flood",
+          "args": {
+            "surface": "management_link",
+            "count": 10000
+          },
+          "expect": {
+            "enumeration_possible": false
+          }
+        }
+      ]
+    }
+  ],
+  "persistence_cases": [
+    {
+      "id": "P-001",
+      "clause": "P1a",
+      "description": "Exclusivity holds under concurrency because the DATABASE forbids overlap. Concurrent bookings of one interval yield exactly one confirmed.",
+      "concurrency": {
+        "workers": 16,
+        "iterations": 1000
+      },
+      "steps": [
+        {
+          "call": "concurrent_ops",
+          "args": {
+            "operations": [
+              {
+                "call": "book",
+                "args": {
+                  "owner": "$owner",
+                  "start": "2026-06-01T13:00:00Z",
+                  "end": "2026-06-01T14:00:00Z",
+                  "distinct_keys": true
+                }
+              }
+            ],
+            "replicas": 16
+          },
+          "expect": {
+            "confirmed_count": 1
+          }
+        },
+        {
+          "assert": "no two confirmed bookings for one owner have intersecting intervals"
+        }
+      ]
+    },
+    {
+      "id": "P-002",
+      "clause": "P1",
+      "description": "Both constraints exist in the live schema, by structure rather than by behaviour. A behavioural test alone cannot distinguish 'the constraint holds' from 'no test happened to race'.",
+      "steps": [
+        {
+          "call": "inspect_schema",
+          "capture": "sc"
+        },
+        {
+          "assert": "$sc contains an EXCLUDE USING gist constraint on (owner_id, tstzrange) WHERE status='confirmed'"
+        },
+        {
+          "assert": "$sc contains a UNIQUE index on booking_id WHERE status='confirmed'"
+        },
+        {
+          "assert": "$sc has the btree_gist extension installed"
+        },
+        {
+          "assert": "no application code path is the sole enforcer of either invariant"
+        },
+        {
+          "assert": "the reschedule code path executes within a single transaction and takes a row-level lock on the current confirmed row"
+        }
+      ]
+    },
+    {
+      "id": "P-003",
+      "clause": "P2b",
+      "description": "The engine is pure across the boundary. During a full booking flow the engine reads no clock, opens no socket, and touches no file.",
+      "steps": [
+        {
+          "call": "trace_engine_calls",
+          "args": {
+            "during": "book_flow"
+          },
+          "capture": "trace"
+        },
+        {
+          "assert": "$trace contains no clock read, no network call, no filesystem access"
+        },
+        {
+          "assert": "every engine call received an explicit `now` argument"
+        }
+      ]
+    },
+    {
+      "id": "P-004",
+      "clause": "P3",
+      "description": "Revalidation happens at commit with the commit-time clock. A slot rendered as available but now inside minimum notice returns `expired`, and no booking exists.",
+      "steps": [
+        {
+          "call": "render_page",
+          "args": {
+            "now": "2026-06-01T11:00:00Z",
+            "minimum_notice_minutes": 60
+          },
+          "capture": "slot"
+        },
+        {
+          "call": "submit_booking",
+          "args": {
+            "slot": "$slot",
+            "now": "2026-06-01T12:45:00Z"
+          },
+          "expect": {
+            "status": "expired"
+          }
+        },
+        {
+          "assert": "confirmed_booking_count == 0"
+        }
+      ]
+    },
+    {
+      "id": "P-005",
+      "clause": "P1b, P2a",
+      "description": "THE case the first draft would have failed. A reschedule must never leave a booking holding two intervals or none — including under concurrency with an unrelated booker taking the vacated slot. P1a alone permits the two-interval state because the rows do not overlap.",
+      "concurrency": {
+        "workers": 16,
+        "iterations": 1000
+      },
+      "steps": [
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-11T09:00:00Z",
+            "end": "2026-06-11T10:00:00Z",
+            "idempotency_key": "r1"
+          },
+          "expect": {
+            "status": "confirmed"
+          },
+          "capture": "idr"
+        },
+        {
+          "call": "concurrent_ops",
+          "args": {
+            "distinct_keys": true,
+            "operations": [
+              {
+                "call": "reschedule",
+                "args": {
+                  "booking_id": "$idr",
+                  "new_start": "2026-06-11T15:00:00Z",
+                  "new_end": "2026-06-11T16:00:00Z"
+                }
+              },
+              {
+                "call": "book",
+                "args": {
+                  "start": "2026-06-11T09:00:00Z",
+                  "end": "2026-06-11T10:00:00Z"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "assert": "$idr has exactly ONE confirmed row at every observable instant — never two, never zero"
+        },
+        {
+          "assert": "$idr is confirmed at exactly one of 09:00-10:00 or 15:00-16:00"
+        },
+        {
+          "assert": "$idr is never cancelled"
+        },
+        {
+          "assert": "no two confirmed bookings for the owner intersect"
+        }
+      ]
+    },
+    {
+      "id": "P-006",
+      "clause": "P4",
+      "description": "Cancel and reschedule preserve history. The prior record survives and remains readable after the transition.",
+      "steps": [
+        {
+          "call": "book",
+          "capture": "b"
+        },
+        {
+          "call": "reschedule",
+          "args": {
+            "booking_id": "$b"
+          }
+        },
+        {
+          "call": "cancel",
+          "args": {
+            "booking_id": "$b"
+          }
+        },
+        {
+          "assert": "the original interval is still recorded and readable"
+        },
+        {
+          "assert": "the transition sequence book -> reschedule -> cancel is reconstructible"
+        }
+      ]
+    },
+    {
+      "id": "P-007",
+      "clause": "P5",
+      "description": "The store provides the required primitive. A store without an equivalent exclusion primitive fails this case rather than degrading silently to application-level checking.",
+      "steps": [
+        {
+          "assert": "the configured store supports range exclusion constraints"
+        },
+        {
+          "call": "start_service",
+          "args": {
+            "store": "without_exclusion_support"
+          },
+          "expect": {
+            "status": "refuses_to_start"
+          }
+        }
+      ]
+    },
+    {
+      "id": "P-008",
+      "clause": "P6",
+      "description": "Migrations complete before traffic is served, and are forward-only.",
+      "steps": [
+        {
+          "call": "deploy",
+          "args": {
+            "migrations": "pending"
+          }
+        },
+        {
+          "assert": "no request is served until migrations report complete"
+        },
+        {
+          "call": "apply_migration",
+          "args": {
+            "direction": "down"
+          },
+          "expect": {
+            "status": "refused"
+          }
+        }
+      ]
+    },
+    {
+      "id": "P-009",
+      "clause": "P2c",
+      "description": "Concurrent reschedules of the SAME booking. Exactly one wins; the loser returns `conflict` rather than an uninterpretable integrity error or a silent last-writer-wins; the booking sits at the winner's interval and is never cancelled.",
+      "concurrency": {
+        "workers": 16,
+        "iterations": 1000
+      },
+      "steps": [
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-12T09:00:00Z",
+            "end": "2026-06-12T10:00:00Z",
+            "idempotency_key": "s1"
+          },
+          "expect": {
+            "status": "confirmed"
+          },
+          "capture": "ids"
+        },
+        {
+          "call": "concurrent_ops",
+          "args": {
+            "distinct_keys": true,
+            "operations": [
+              {
+                "call": "reschedule",
+                "args": {
+                  "booking_id": "$ids",
+                  "new_start": "2026-06-12T14:00:00Z",
+                  "new_end": "2026-06-12T15:00:00Z"
+                }
+              },
+              {
+                "call": "reschedule",
+                "args": {
+                  "booking_id": "$ids",
+                  "new_start": "2026-06-12T16:00:00Z",
+                  "new_end": "2026-06-12T17:00:00Z"
+                }
+              }
+            ]
+          },
+          "expect": {
+            "confirmed_count": 1,
+            "conflict_count": 1
+          }
+        },
+        {
+          "assert": "the losing call returned status `conflict`, not an integrity or server error"
+        },
+        {
+          "assert": "$ids holds exactly one confirmed interval, and it is the winner's"
+        },
+        {
+          "assert": "$ids is never cancelled, and never holds 09:00-10:00 after either succeeds"
+        }
+      ]
+    }
+  ],
+  "flow_cases": [
+    {
+      "id": "F-001",
+      "clause": "F1",
+      "description": "The page shows exactly what the engine returned — no slot added, shifted, extended, or silently dropped.",
+      "steps": [
+        {
+          "call": "compute_slots_direct",
+          "capture": "engine_slots"
+        },
+        {
+          "call": "render_page",
+          "capture": "page_slots"
+        },
+        {
+          "assert": "$page_slots is a subset of $engine_slots with identical start and end values"
+        },
+        {
+          "assert": "no slot in $page_slots is absent from $engine_slots"
+        }
+      ]
+    },
+    {
+      "id": "F-002",
+      "clause": "F2",
+      "description": "Conversion is display-only. The page renders in the viewer's timezone; nothing converted is ever submitted or stored.",
+      "steps": [
+        {
+          "call": "render_page",
+          "args": {
+            "viewer_timezone": "Australia/Sydney"
+          },
+          "capture": "rendered"
+        },
+        {
+          "assert": "$rendered displays Sydney local times"
+        },
+        {
+          "call": "submit_booking",
+          "args": {
+            "from": "$rendered"
+          },
+          "capture": "submitted"
+        },
+        {
+          "assert": "$submitted carries UTC instants only"
+        },
+        {
+          "assert": "the stored booking carries UTC instants only"
+        }
+      ]
+    },
+    {
+      "id": "F-003",
+      "clause": "F3",
+      "description": "Booking collects name and email and nothing else. A request carrying extra personal fields is rejected or strips them; nothing extra is stored.",
+      "steps": [
+        {
+          "call": "submit_booking",
+          "args": {
+            "name": "X",
+            "email": "x@example.com",
+            "phone": "+1555",
+            "notes": "private"
+          },
+          "capture": "b"
+        },
+        {
+          "assert": "the stored record contains name and email only"
+        },
+        {
+          "assert": "no field named phone or notes exists in storage"
+        }
+      ]
+    },
+    {
+      "id": "F-004",
+      "clause": "F4",
+      "description": "A slot taken between render and submit returns `conflict` with a refreshed list, not an error.",
+      "steps": [
+        {
+          "call": "render_page",
+          "capture": "slots"
+        },
+        {
+          "call": "book",
+          "args": {
+            "slot": "$slots[0]",
+            "as": "other"
+          },
+          "expect": {
+            "status": "confirmed"
+          }
+        },
+        {
+          "call": "submit_booking",
+          "args": {
+            "slot": "$slots[0]"
+          },
+          "expect": {
+            "status": "conflict"
+          }
+        },
+        {
+          "assert": "the conflict response carries a refreshed slot list"
+        },
+        {
+          "assert": "the refreshed list does not contain $slots[0]"
+        }
+      ]
+    },
+    {
+      "id": "F-005",
+      "clause": "F5",
+      "description": "Double submission is idempotent. The same idempotency key returns the original booking; no second booking is created.",
+      "steps": [
+        {
+          "call": "submit_booking",
+          "args": {
+            "idempotency_key": "k1"
+          },
+          "expect": {
+            "status": "confirmed"
+          },
+          "capture": "id1"
+        },
+        {
+          "call": "submit_booking",
+          "args": {
+            "idempotency_key": "k1"
+          },
+          "expect": {
+            "status": "confirmed",
+            "booking_id": "$id1"
+          }
+        },
+        {
+          "assert": "confirmed_booking_count == 1"
+        }
+      ]
+    }
+  ],
+  "link_cases": [
+    {
+      "id": "L-001",
+      "clause": "L1",
+      "description": "Management tokens are unguessable. Tokens are >= 128 bits from a CSPRNG, and show no ordering or structure across a large sample.",
+      "steps": [
+        {
+          "call": "create_bookings",
+          "args": {
+            "count": 1000
+          },
+          "capture": "tokens"
+        },
+        {
+          "assert": "every token carries >= 128 bits of entropy"
+        },
+        {
+          "assert": "$tokens are not sequential, not time-ordered, and share no common prefix"
+        },
+        {
+          "assert": "no token is derived from booking_id, email, or timestamp"
+        }
+      ]
+    },
+    {
+      "id": "L-002",
+      "clause": "L2",
+      "description": "A token authorises exactly one booking and discloses nothing about others.",
+      "steps": [
+        {
+          "call": "create_booking",
+          "capture": "b1"
+        },
+        {
+          "call": "create_booking",
+          "capture": "b2"
+        },
+        {
+          "call": "open_management_link",
+          "args": {
+            "token": "$b1.token"
+          },
+          "capture": "view"
+        },
+        {
+          "assert": "$view describes $b1 only"
+        },
+        {
+          "call": "cancel_via_link",
+          "args": {
+            "token": "$b1.token",
+            "booking": "$b2"
+          },
+          "expect": {
+            "status": "forbidden"
+          }
+        }
+      ]
+    },
+    {
+      "id": "L-003",
+      "clause": "L3",
+      "description": "Tokens expire. A token used after the booking's end plus grace is rejected; a cancelled booking's token stops working immediately.",
+      "steps": [
+        {
+          "call": "open_management_link",
+          "args": {
+            "token": "$tok",
+            "now": "after_end_plus_grace"
+          },
+          "expect": {
+            "status": "expired"
+          }
+        },
+        {
+          "call": "cancel_via_link",
+          "args": {
+            "token": "$tok2"
+          },
+          "expect": {
+            "status": "cancelled"
+          }
+        },
+        {
+          "call": "open_management_link",
+          "args": {
+            "token": "$tok2"
+          },
+          "expect": {
+            "status": "expired"
+          }
+        }
+      ]
+    },
+    {
+      "id": "L-004",
+      "clause": "L4",
+      "description": "Cancelling frees the interval at once; rescheduling is atomic and keeps the booking_id.",
+      "steps": [
+        {
+          "call": "cancel_via_link",
+          "args": {
+            "token": "$tok"
+          },
+          "expect": {
+            "status": "cancelled"
+          }
+        },
+        {
+          "call": "book",
+          "args": {
+            "slot": "$freed"
+          },
+          "expect": {
+            "status": "confirmed"
+          }
+        },
+        {
+          "call": "reschedule_via_link",
+          "args": {
+            "token": "$tok2",
+            "to": "$other"
+          },
+          "expect": {
+            "status": "confirmed",
+            "booking_id": "$id2"
+          }
+        },
+        {
+          "assert": "$id2 covers exactly one interval, never both, never neither"
+        }
+      ]
+    }
+  ],
+  "mail_cases": [
+    {
+      "id": "M-001",
+      "clause": "M1",
+      "description": "Mail is isolated behind the port. No provider type, field, or error escapes the adapter.",
+      "steps": [
+        {
+          "assert": "no module outside the mail adapter imports or references a mail provider SDK"
+        },
+        {
+          "assert": "the port interface exposes no provider-specific field"
+        },
+        {
+          "call": "swap_adapter",
+          "args": {
+            "to": "recording_stub"
+          },
+          "expect": {
+            "status": "ok",
+            "other_modules_changed": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "M-002",
+      "clause": "M2",
+      "description": "Mail is sent after commit, never inside the transaction.",
+      "steps": [
+        {
+          "call": "trace_booking",
+          "capture": "t"
+        },
+        {
+          "assert": "the mail call in $t occurs after transaction commit"
+        },
+        {
+          "assert": "no database transaction is open during the mail call"
+        }
+      ]
+    },
+    {
+      "id": "M-003",
+      "clause": "M3",
+      "description": "A mail provider outage does not invalidate a booking. With the provider failing every call, the booking is still confirmed, the page says so, and delivery is retried.",
+      "steps": [
+        {
+          "call": "set_mail_provider",
+          "args": {
+            "mode": "always_fail"
+          }
+        },
+        {
+          "call": "submit_booking",
+          "expect": {
+            "status": "confirmed"
+          }
+        },
+        {
+          "assert": "confirmed_booking_count == 1"
+        },
+        {
+          "assert": "the response to the booker reports success"
+        },
+        {
+          "assert": "a retry is scheduled for the undelivered message"
+        }
+      ]
+    },
+    {
+      "id": "M-004",
+      "clause": "M4",
+      "description": "Confirmation carries the management link and the time in the recipient's timezone, converted at send from the stored UTC value.",
+      "steps": [
+        {
+          "call": "submit_booking",
+          "args": {
+            "booker_timezone": "Asia/Seoul"
+          },
+          "capture": "b"
+        },
+        {
+          "assert": "the message contains a management link matching $b.token"
+        },
+        {
+          "assert": "the message renders the meeting time in Asia/Seoul"
+        },
+        {
+          "assert": "the stored value remains UTC"
+        }
+      ]
+    },
+    {
+      "id": "M-005",
+      "clause": "M5",
+      "description": "Both parties are notified on booking, cancellation and reschedule — six messages across the three transitions.",
+      "steps": [
+        {
+          "call": "book",
+          "capture": "b"
+        },
+        {
+          "assert": "owner and booker were each notified"
+        },
+        {
+          "call": "reschedule",
+          "args": {
+            "booking_id": "$b"
+          }
+        },
+        {
+          "assert": "owner and booker were each notified"
+        },
+        {
+          "call": "cancel",
+          "args": {
+            "booking_id": "$b"
+          }
+        },
+        {
+          "assert": "owner and booker were each notified"
+        }
+      ]
+    }
+  ],
+  "data_cases": [
+    {
+      "id": "D-001",
+      "clause": "D1",
+      "description": "Public signup stays blocked while D-105 is open, and the scale ceilings cannot be raised while it is open. Lowering is permitted.",
+      "steps": [
+        {
+          "call": "set_config",
+          "args": {
+            "public_signup": true
+          },
+          "expect": {
+            "status": "refused",
+            "reason": "DEBT.md D-105 open"
+          }
+        },
+        {
+          "assert": "public signup remains disabled"
+        },
+        {
+          "call": "set_config",
+          "args": {
+            "max_owner_accounts": 50
+          },
+          "expect": {
+            "status": "refused",
+            "reason": "DEBT.md D-105 open"
+          }
+        },
+        {
+          "call": "set_config",
+          "args": {
+            "max_owner_accounts": 3
+          },
+          "expect": {
+            "status": "ok"
+          }
+        },
+        {
+          "assert": "the refusals are logged"
+        }
+      ]
+    },
+    {
+      "id": "D-002",
+      "clause": "D2",
+      "description": "Only the documented fields are stored, for owner and booker alike.",
+      "steps": [
+        {
+          "assert": "the owner table contains exactly: email, display name, timezone, availability rules"
+        },
+        {
+          "assert": "the booking table contains exactly: name, email, interval, booker timezone, status, token"
+        },
+        {
+          "assert": "every column is named in SPEC.md D2"
+        }
+      ]
+    },
+    {
+      "id": "D-003",
+      "clause": "D3",
+      "description": "Deletion removes data, verified by absence rather than by a flag.",
+      "steps": [
+        {
+          "call": "delete_account",
+          "args": {
+            "owner": "$o"
+          }
+        },
+        {
+          "assert": "no row anywhere references $o"
+        },
+        {
+          "call": "delete_booking_data_via_link",
+          "args": {
+            "token": "$tok"
+          }
+        },
+        {
+          "assert": "the booker name and email are absent from storage, not merely marked deleted"
+        }
+      ]
+    },
+    {
+      "id": "D-004",
+      "clause": "D4",
+      "description": "A booker's email never leaves the owner relationship. It appears in no URL, no log line, and no report.",
+      "steps": [
+        {
+          "call": "run_full_flow",
+          "capture": "artifacts"
+        },
+        {
+          "assert": "no URL in $artifacts contains the booker email"
+        },
+        {
+          "assert": "no log line in $artifacts contains the booker email"
+        },
+        {
+          "assert": "no emitted report in $artifacts contains the booker email or name"
+        }
+      ]
+    },
+    {
+      "id": "D-005",
+      "clause": "D5",
+      "description": "Automatic reporting carries no OWNER or BOOKER data, and the opt-out works. The report is signed with the operator's own identity, which is deliberate and is not what D5 forbids. Charter Part 5.1 gate checks.",
+      "steps": [
+        {
+          "call": "emit_report",
+          "capture": "r"
+        },
+        {
+          "assert": "$r matches the documented schema and contains no owner or booker name, address, meeting time, or count derived from them"
+        },
+        {
+          "call": "set_reporting",
+          "args": {
+            "enabled": false
+          }
+        },
+        {
+          "call": "run_full_flow",
+          "capture": "net"
+        },
+        {
+          "assert": "no network call attributable to reporting occurs in $net"
+        },
+        {
+          "assert": "the acceptance suite passes identically with reporting on and off"
+        },
+        {
+          "assert": "the first-run notice appears and names the opt-out"
+        }
+      ]
+    },
+    {
+      "id": "D-006",
+      "clause": "D6",
+      "description": "Every subprocessor is named publicly, with what it receives, before it receives anything.",
+      "steps": [
+        {
+          "assert": "a published subprocessor list exists"
+        },
+        {
+          "assert": "the mail provider and hosting platform each appear with the data they receive"
+        },
+        {
+          "call": "send_mail",
+          "args": {
+            "provider": "unlisted_provider"
+          },
+          "expect": {
+            "status": "refused"
+          }
+        }
+      ]
+    },
+    {
+      "id": "D-007",
+      "clause": "D7",
+      "description": "Deletion reach is documented and true. Application data goes immediately; backup and subprocessor expiry windows are stated rather than implied.",
+      "steps": [
+        {
+          "call": "delete_account",
+          "args": {
+            "owner": "$o"
+          }
+        },
+        {
+          "assert": "application data for $o is absent"
+        },
+        {
+          "assert": "a published statement gives the backup retention window"
+        },
+        {
+          "assert": "the statement does not claim backups are erased immediately"
+        }
+      ]
+    },
+    {
+      "id": "D-008",
+      "clause": "D8",
+      "description": "A management link cannot destroy personal data in one step; deletion from a link requires a confirmation from that same link.",
+      "steps": [
+        {
+          "call": "delete_booking_data_via_link",
+          "args": {
+            "token": "$tok",
+            "confirm": false
+          },
+          "expect": {
+            "status": "confirmation_required"
+          }
+        },
+        {
+          "assert": "nothing was deleted"
+        },
+        {
+          "call": "delete_booking_data_via_link",
+          "args": {
+            "token": "$tok",
+            "confirm": true
+          },
+          "expect": {
+            "status": "deleted"
+          }
+        }
+      ]
+    },
+    {
+      "id": "D-009",
+      "clause": "D1",
+      "description": "The ceilings hold. The sixth owner account and the two hundred and first booking are refused, and nothing already stored is affected.",
+      "steps": [
+        {
+          "call": "create_owners",
+          "args": {
+            "count": 5
+          },
+          "expect": {
+            "status": "ok"
+          }
+        },
+        {
+          "call": "create_owner",
+          "expect": {
+            "status": "refused",
+            "reason": "ceiling"
+          }
+        },
+        {
+          "call": "create_bookings",
+          "args": {
+            "count": 200
+          },
+          "expect": {
+            "status": "ok"
+          }
+        },
+        {
+          "call": "submit_booking",
+          "expect": {
+            "status": "refused",
+            "reason": "ceiling"
+          }
+        },
+        {
+          "assert": "all 200 existing bookings remain readable and unmodified"
+        },
+        {
+          "assert": "the refusal message names the ceiling and does not blame the booker"
+        }
+      ]
+    },
+    {
+      "id": "D-010",
+      "clause": "D9",
+      "description": "The booking form tells the booker what is stored, who sees it, and how to delete it — visibly, next to the field, not behind a link alone.",
+      "steps": [
+        {
+          "call": "render_booking_form",
+          "capture": "f"
+        },
+        {
+          "assert": "$f contains a visible notice adjacent to the email field"
+        },
+        {
+          "assert": "the notice states what is stored, who can see it, and how to have it deleted"
+        },
+        {
+          "assert": "the notice is present without expanding, hovering, or opening anything"
+        }
+      ]
+    }
+  ],
+  "ops_cases": [
+    {
+      "id": "O-001",
+      "clause": "O1",
+      "description": "The running service reports the commit it was built from, and it matches the deployed revision.",
+      "steps": [
+        {
+          "call": "get_version",
+          "capture": "v"
+        },
+        {
+          "assert": "$v names a commit that exists in the repository"
+        },
+        {
+          "assert": "$v matches the revision the platform reports as deployed"
+        }
+      ]
+    },
+    {
+      "id": "O-002",
+      "clause": "O2",
+      "description": "No secret is present in the repository. Database URL, mail credentials, and session key come from the environment.",
+      "steps": [
+        {
+          "assert": "no committed file contains a database URL, API key, or session secret"
+        },
+        {
+          "assert": "the service fails to start with a clear error when a required secret is absent"
+        }
+      ]
+    },
+    {
+      "id": "O-003",
+      "clause": "O3",
+      "description": "Readiness is distinct from health. With migrations incomplete the service is healthy but NOT ready, and receives no traffic.",
+      "steps": [
+        {
+          "call": "start_service",
+          "args": {
+            "migrations": "incomplete"
+          }
+        },
+        {
+          "call": "get_health",
+          "expect": {
+            "status": "ok"
+          }
+        },
+        {
+          "call": "get_ready",
+          "expect": {
+            "status": "not_ready"
+          }
+        },
+        {
+          "assert": "no request is routed to the instance while not ready"
+        }
+      ]
+    },
+    {
+      "id": "O-004",
+      "clause": "O4",
+      "description": "The service refuses to start on a tzdata or PostgreSQL version mismatch, and reports both versions on readiness.",
+      "steps": [
+        {
+          "call": "start_service",
+          "args": {
+            "tzdata": "2025b"
+          },
+          "expect": {
+            "status": "refuses_to_start"
+          }
+        },
+        {
+          "call": "start_service",
+          "args": {
+            "postgres": "unsupported"
+          },
+          "expect": {
+            "status": "refuses_to_start"
+          }
+        },
+        {
+          "call": "get_ready",
+          "capture": "r"
+        },
+        {
+          "assert": "$r reports the tzdata and PostgreSQL versions in use"
+        }
+      ]
+    },
+    {
+      "id": "O-005",
+      "clause": "O5",
+      "description": "Server-side time is UTC regardless of host timezone. Running the suite under a non-UTC host produces byte-identical results.",
+      "steps": [
+        {
+          "call": "run_suite",
+          "args": {
+            "host_tz": "UTC"
+          },
+          "capture": "a"
+        },
+        {
+          "call": "run_suite",
+          "args": {
+            "host_tz": "Pacific/Auckland"
+          },
+          "capture": "b"
+        },
+        {
+          "assert": "$a and $b are byte-identical"
+        }
+      ]
+    }
+  ]
+}

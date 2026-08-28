@@ -1,0 +1,37 @@
+# RISK_ZONES.yaml — SPEC-0002 scheduling-service
+#
+# CHARTER.md Part 4: can this change hurt someone outside the project?
+# Unmapped or unclear defaults to can_hurt. Moving a path to `ordinary` is
+# itself a can-hurt change.
+
+rule: CHARTER-part-4
+question: can_this_change_hurt_someone_outside_the_project
+unmapped_or_unclear_defaults_to: can_hurt
+reclassification_to_ordinary: requires_can_hurt_procedure
+
+paths:
+  ordinary:
+    - README.md
+    - INTENT.md
+    - acceptance/          # tests do not ship
+
+  can_hurt:
+    - "*"                  # everything else
+
+why_everything: >
+  This service holds third parties' names, email addresses, and who they are
+  meeting and when; it books on their behalf and sends mail in their name. The
+  booking commit path can double-book a real person. Identity, storage, mail and
+  the public page are all either that path or substrate for it, and CHARTER.md
+  Part 4 inherits can-hurt through dependencies. Enumerating exceptions here
+  would be an exercise in finding loopholes in our own risk model.
+
+notable:
+  persistence_layer: >
+    The exclusion constraint (SPEC.md P1) is the single control that makes
+    SPEC-0001 B2 true in a concurrent service. A change to the schema or to that
+    constraint is the highest-consequence change in this item.
+  mail_adapter: >
+    Holds booker email addresses and transmits them to a third party.
+  session_handling: >
+    Compromise grants access to another owner's schedule and their bookers' data.
