@@ -7,14 +7,14 @@
  * interface (SPEC.md §1).
  */
 
-import { computeSlots } from '@pumasi/scheduling-core';
+import { computeSlots } from '@pumasi/booking-core';
 import type {
   ComputeSlotsResponse,
   AvailabilityRule,
   DateOverride,
   Interval,
   Weekday,
-} from '@pumasi/scheduling-core';
+} from '@pumasi/booking-core';
 import type { SqlClient } from './store.ts';
 
 export interface Schedule {

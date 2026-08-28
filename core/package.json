@@ -1,5 +1,5 @@
 {
-  "name": "@pumasi/scheduling-core",
+  "name": "@pumasi/booking-core",
   "version": "0.1.0",
   "description": "Availability computation and booking. Apache-2.0, embeddable. Implements SPEC-0001.",
   "license": "Apache-2.0",
@@ -34,9 +34,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pumasi-ai/scheduling-core.git"
+    "url": "git+https://github.com/pumasi-ai/pumasi-booking.git"
   },
-  "homepage": "https://github.com/pumasi-ai/scheduling-core",
+  "homepage": "https://github.com/pumasi-ai/pumasi-booking",
   "keywords": [
     "scheduling",
     "availability",

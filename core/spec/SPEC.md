@@ -1,7 +1,7 @@
 # SPEC-0001 — Scheduling Core
 
 **Office:** Specifier · **Drafted:** 2026-07-28 · **Status:** awaiting human spec approval
-**Gap:** [`GAP-0001`](../../gap/0001-scheduling.md) · **Duplication finding:** [`DUPLICATION.md`](./DUPLICATION.md) — verdict BUILD
+**Gap:** [`GAP-0001`](https://github.com/pumasi-ai/pumasi/blob/main/gap/0001-scheduling.md) · **Duplication finding:** [`DUPLICATION.md`](./DUPLICATION.md) — verdict BUILD
 **Acceptance suite:** [`acceptance/cases.json`](./acceptance/cases.json) — **frozen at approval; the Builder may not modify it** (`RULE-6.4-ACCEPTANCE-IMMUTABLE`)
 
 ---
@@ -30,12 +30,12 @@ non-deterministic acceptance test cannot be the sole truth that C5 says it is.
 
 ## 2 · Non-goals
 
-UI · calendar-provider integration ([GAP-0002](../../gap/0002-calendar-integration.md)) · notifications · payments ·
+UI · calendar-provider integration ([GAP-0002](https://github.com/pumasi-ai/pumasi/blob/main/gap/0002-calendar-integration.md)) · notifications · payments ·
 round-robin or team pooling · persistence · **requester-timezone presentation** ·
 **seats per slot** · the limit classes in §2.1.
 
 **Out of scope for this spec, not for the catalog.** All of the above are
-sequenced in [`GAP-0004`](../../gap/0004-feature-parity.md), which records the
+sequenced in [`GAP-0004`](https://github.com/pumasi-ai/pumasi/blob/main/gap/0004-feature-parity.md), which records the
 steward's direction that this catalog reach feature parity with Cal.com and
 Calendly and then exceed it. This item is the engine everything else stands on;
 holding the surface area down here is what makes the rest cheap and correct.
@@ -59,7 +59,7 @@ additive (§12.1) — the engine keeps one representation, which is the point.
 ### 2.1 Deferred limit classes — sequenced, not abandoned
 
 *Since 2026-08-01 the direction is explicit feature parity with Cal.com and
-Calendly, and beyond it — [`GAP-0004`](../../gap/0004-feature-parity.md). Every
+Calendly, and beyond it — [`GAP-0004`](https://github.com/pumasi-ai/pumasi/blob/main/gap/0004-feature-parity.md). Every
 row below is **item 2 on that roadmap**, to be converted once this engine has an
 implementation passing its suite. They are out of scope for this spec, not for
 the catalog.*
@@ -478,7 +478,7 @@ unaffected by the conflict.
 ## 12 · Designed for what comes next
 
 *Added 2026-08-01 on the steward's direction: the roadmap items in
-[`GAP-0004`](../../gap/0004-feature-parity.md) must be implementable later
+[`GAP-0004`](https://github.com/pumasi-ai/pumasi/blob/main/gap/0004-feature-parity.md) must be implementable later
 without rework.*
 
 **The principle: name the seams, do not build them.** Naming where a future

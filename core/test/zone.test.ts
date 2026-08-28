@@ -2,7 +2,7 @@
  * Unit tests for zone.ts.
  *
  * These are ADDITIONAL to the acceptance suite, not a substitute. The suite in
- * spec/0001-scheduling-core is the truth about what the engine must do; this
+ * core/spec is the truth about what the engine must do; this
  * file covers implementation edges that the suite deliberately does not reach
  * into, and the defensive guards that exist because a first implementation got
  * them wrong.

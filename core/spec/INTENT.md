@@ -17,7 +17,7 @@ We will not copy Cal.com, but we will review them carefully and implement all th
 
 Two specifics worth knowing. Cal.com's paid tier is **not** open source — it is proprietary and more restricted than the free part, so we study its *behaviour* only and never its code. And the enterprise features you would want from it, single sign-on and the like, are built on public standards, so we implement them from the standards directly and never need to look.
 
-**This first piece is the engine, not the whole product.** The parity ambition is real and is written down as [`GAP-0004`](../../gap/0004-feature-parity.md), sequenced item by item. The list below is what is out of scope *for this piece*, not what we will never build. 
+**This first piece is the engine, not the whole product.** The parity ambition is real and is written down as [`GAP-0004`](https://github.com/pumasi-ai/pumasi/blob/main/gap/0004-feature-parity.md), sequenced item by item. The list below is what is out of scope *for this piece*, not what we will never build. 
 
 ## What "working" will mean
 

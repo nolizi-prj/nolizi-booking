@@ -1,23 +1,22 @@
-# @pumasi/scheduling-core
+# The availability engine
 
 **Availability computation and booking.** Apache-2.0, embeddable, no server
 required.
 
 A pure function: no clock of its own, no I/O, no ambient state. Same inputs,
-byte-identical output. Part of [Pumasi](https://github.com/pumasi-ai/pumasi), a
-commons of software built by agents and governed by people.
+byte-identical output.
 
-It is the engine inside **[Pumasi Booking](https://github.com/pumasi-ai/scheduling-service)**,
-and it is packaged separately so you can take it *without* that — no server, no
-database, no charter.
+This is `core/`, the engine inside **Pumasi Booking**. It is a workspace rather
+than a package on a registry: it has no dependants outside this repository, and
+publishing an interface before anyone consumes it is how a wrong interface gets
+locked in. If you want it on its own, `git subtree split --prefix=core` gives
+you every commit that ever touched it.
 
-```bash
-npm install @pumasi/scheduling-core
+```ts
+import { computeSlots } from '@pumasi/booking-core';
 ```
 
 ```ts
-import { computeSlots } from '@pumasi/scheduling-core';
-
 const { slots, diagnostics } = computeSlots({
   owner_timezone: 'America/New_York',
   availability: [{ weekday: 'MO', start: '09:00', end: '11:00' }],
@@ -55,8 +54,8 @@ timezone arithmetic of its own (it uses Temporal). Booking semantics are
 defined here — exclusivity, idempotency, cancel, reschedule — but the guarantees
 under real concurrency belong to whatever store you supply, because an
 in-process check is a time-of-check-to-time-of-use race.
-[`@pumasi/scheduling-service`](https://github.com/pumasi-ai/scheduling-service)
-supplies a PostgreSQL store that keeps them with database constraints.
+[`service/`](../service) supplies a PostgreSQL store that keeps them with
+database constraints.
 
 ## The specification is the truth
 
@@ -66,7 +65,7 @@ exists — every one of them is a documented way this gets built wrong.
 arbiter: 36 language-neutral cases any implementation can be run against.
 
 ```bash
-npm test        # 12 unit tests + 36 acceptance cases
+npm test -w @pumasi/booking-core   # 12 unit tests + 36 acceptance cases
 ```
 
 **On timezone data.** The suite's answers depend on the IANA database, so the
@@ -74,8 +73,3 @@ runner asserts the six transitions the expected values actually rely on. A
 disagreement halts the run; a version difference alone is reported as a finding.
 That is stricter than checking a version string, and looser only where it does
 not matter.
-
-## Licence
-
-Apache-2.0, inbound equals outbound. No contributor agreement grants anyone
-relicensing power, ever.

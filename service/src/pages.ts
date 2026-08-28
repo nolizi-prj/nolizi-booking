@@ -7,7 +7,7 @@
  * below is where it is kept honest.
  */
 
-import type { Slot } from '@pumasi/scheduling-core';
+import type { Slot } from '@pumasi/booking-core';
 import type { Schedule } from './schedules.ts';
 
 const esc = (s: string): string =>

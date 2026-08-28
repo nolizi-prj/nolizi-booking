@@ -1,18 +1,10 @@
 # Pumasi Booking
 
-**A deployable booking service.** Accounts, a public booking page, confirmation
-mail, and management links. Send someone the link and they pick a time.
+**A booking page people can send someone to pick a time on.** Accounts, a public
+booking page, confirmation mail, and management links.
 
-*Package name `@pumasi/scheduling-service`. The repository is named for what it
-contains and is deliberately not renamed to match the product — a repository
-says what it holds, a product says what you use, and renaming code to follow
-branding breaks every clone and fork for no gain.*
-
-Part of [Pumasi](https://github.com/pumasi-ai/pumasi). Implements
-[`spec/0002/SPEC.md`](spec/0002/SPEC.md) and wraps
-[`@pumasi/scheduling-core`](https://github.com/pumasi-ai/scheduling-core) — it
-does not reimplement it. Every availability question goes to the engine and
-every exclusivity question goes to the database; neither is decided here.
+Part of [Pumasi](https://github.com/pumasi-ai/pumasi), a commons of software
+built by agents and governed by people. Apache-2.0, inbound equals outbound.
 
 ## The one thing to know before using it
 
@@ -20,7 +12,7 @@ every exclusivity question goes to the database; neither is decided here.
 made inside it, so it will offer a time you are already busy and confirm a
 booking on top of it. Double-booking against your own calendar is the *expected*
 behaviour today. Calendar connection is
-[`spec/0003`](spec/0003/INTENT.md), promoted to next.
+[`service/spec/0003`](service/spec/0003/INTENT.md), promoted to next.
 
 **There is no settled lawful basis for the personal data it holds.** The service
 caps itself at five accounts and two hundred bookings and refuses to raise those
@@ -35,8 +27,8 @@ commitment that self-hosting stays first-class forever.
 ## Run it
 
     npm install
-    npm run build --workspaces
-    node apps/service/dist/server.js
+    npm run build
+    node service/dist/server.js
 
 It prints a sign-up link on first start:
 
@@ -49,11 +41,32 @@ edit. Share the page link and someone can book a time.
 up it stops, even if asked for explicitly — an invite that keeps appearing is a
 back door. After that, mint them deliberately:
 
-    node apps/service/dist/cli.js invite        # prints a sign-up link
-    node apps/service/dist/cli.js invites       # list, used and unused
+    node service/dist/cli.js invite        # prints a sign-up link
+    node service/dist/cli.js invites       # list, used and unused
 
 `npm run dev` adds a seeded demo page at `/demo` if you would rather not create
 one. No database, no container, no configuration for either path.
+
+## How the repository is laid out
+
+Two workspaces, one product, one repository.
+
+| | Holds |
+|---|---|
+| [`core/`](core/) | The availability engine. A pure function: no clock, no I/O, no ambient state. [`ENGINE.md`](core/ENGINE.md) |
+| [`service/`](service/) | Everything that touches the world: HTTP, PostgreSQL, mail, sessions |
+
+**Why the engine is a separate workspace rather than a separate repository.**
+It has a real boundary — purity, its own specification, its own acceptance suite
+— and that boundary is enforced by the code and its tests, not by a repository
+wall. Splitting it out bought two READMEs, two merge gates, and a
+`github:`-URL dependency with no version pinning, in exchange for a reusability
+nobody has yet asked for. The day someone wants the engine alone,
+`git subtree split` gives it to them with its history intact. Until then, one
+product is one repository.
+
+    npm test                    # 36 acceptance cases + 12 unit + 80 service
+    npm test -w @pumasi/booking-core
 
 ## Databases
 
@@ -128,6 +141,12 @@ the first while violating the second, and the database would report nothing.
 Proven against real PostgreSQL with genuinely parallel connections: 90 contended
 rounds where exactly one caller may win.
 
+The engine is held to its own standard: the clock is an argument, so the same
+inputs give byte-identical output and the tests can be the arbiter. See
+[`core/ENGINE.md`](core/ENGINE.md) for what it gets right that is commonly got
+wrong — a window spanning spring-forward, a local time that never occurs, a zone
+that skips an entire calendar day.
+
 ## Health and readiness
 
 `/healthz` means the process is up. `/readyz` means migrations are complete, the
@@ -136,6 +155,22 @@ database answers, and reports the commit and tzdata version in use. Route on
 
 ## What is not built
 
-See [`spec/0002/SPEC.md` §8.1](spec/0002/SPEC.md). The booker's
+See [`service/spec/0002/SPEC.md` §8.1](service/spec/0002/SPEC.md). The booker's
 path is complete; accounts, sessions, the owner application, token expiry and
 reschedule-over-HTTP are declared but not implemented.
+
+## The specifications are the truth
+
+| | |
+|---|---|
+| [`core/spec/SPEC.md`](core/spec/SPEC.md) | What the engine must do, and why each clause exists |
+| [`core/spec/acceptance/cases.json`](core/spec/acceptance/cases.json) | 36 language-neutral cases — the executable arbiter |
+| [`service/spec/0002/SPEC.md`](service/spec/0002/SPEC.md) | What the service must do |
+| [`service/spec/0003/INTENT.md`](service/spec/0003/INTENT.md) | Calendar connection, in plain language |
+
+**Where prose and code disagree, the prose governs and the code is a defect.**
+
+## Licence
+
+Apache-2.0, inbound equals outbound. No contributor agreement grants anyone
+relicensing power, ever.

@@ -1,5 +1,5 @@
 /**
- * @pumasi/scheduling-core — SPEC-0001.
+ * @pumasi/booking-core — SPEC-0001.
  *
  * compute_slots is a pure function of its arguments, including the clock.
  * book, cancel and reschedule define state transitions but choose no store.

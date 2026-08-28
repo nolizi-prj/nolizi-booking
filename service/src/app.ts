@@ -19,7 +19,7 @@ import {
 } from './identity.ts';
 import { RATE_LIMITS, type Config } from './config.ts';
 import type { MailPort } from './mail.ts';
-import type { Slot } from '@pumasi/scheduling-core';
+import type { Slot } from '@pumasi/booking-core';
 
 export interface Reply {
   status: number;
