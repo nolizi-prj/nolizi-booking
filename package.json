@@ -22,7 +22,8 @@
     "build:test": "tsc -p tsconfig.test.json",
     "test": "npm run build:test && node --test .build/test/zone.test.js && node .build/test/run-acceptance.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:unit": "npm run build:test && node --test .build/test/zone.test.js"
+    "test:unit": "npm run build:test && node --test .build/test/zone.test.js",
+    "prepare": "npm run build"
   },
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1"
