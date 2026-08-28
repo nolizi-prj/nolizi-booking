@@ -13,10 +13,15 @@ import type { Schedule } from './schedules.ts';
 const esc = (s: string): string =>
   s.replace(/[&<>"']/g, (c) => `&${{ '&': 'amp', '<': 'lt', '>': 'gt', '"': 'quot', "'": '#39' }[c]};`);
 
+// The product name. It belongs in the browser tab, where it identifies the tool
+// without competing with the page's own heading -- a public booking page is the
+// OWNER'S page, and their schedule title stays the largest thing on it.
+const PRODUCT = 'Pumasi Booking';
+
 const SHELL = (title: string, body: string): string => `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)}</title>
+<title>${esc(title)} &middot; ${PRODUCT}</title>
 <style>
  :root{color-scheme:light dark;--fg:#111;--muted:#666;--line:#ddd;--accent:#1a56db}
  @media(prefers-color-scheme:dark){:root{--fg:#eee;--muted:#999;--line:#333;--accent:#7aa2f7}}

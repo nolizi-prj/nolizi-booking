@@ -1,7 +1,12 @@
-# @pumasi/scheduling-service
+# Pumasi Booking
 
-**A deployable scheduling service.** Accounts, a public booking page,
-confirmation mail, and management links.
+**A deployable booking service.** Accounts, a public booking page, confirmation
+mail, and management links. Send someone the link and they pick a time.
+
+*Package name `@pumasi/scheduling-service`. The repository is named for what it
+contains and is deliberately not renamed to match the product — a repository
+says what it holds, a product says what you use, and renaming code to follow
+branding breaks every clone and fork for no gain.*
 
 Part of [Pumasi](https://github.com/pumasi-ai/pumasi). Implements
 [`spec/0002/SPEC.md`](spec/0002/SPEC.md) and wraps
