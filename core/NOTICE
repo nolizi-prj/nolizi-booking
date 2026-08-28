@@ -1,0 +1,10 @@
+@pumasi/scheduling-core
+Copyright the Pumasi contributors.
+
+Licensed under the Apache License, Version 2.0.
+
+This implementation was written from spec/0001-scheduling-core/SPEC.md.
+No code was copied or adapted from any incompatibly licensed source.
+Cal.com is AGPL-3.0 and its Enterprise Edition is proprietary; neither was
+read while writing this. See spec/0001-scheduling-core/DUPLICATION.md §5
+condition 5 for the clean-room requirement this satisfies.

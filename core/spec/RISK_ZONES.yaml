@@ -1,0 +1,35 @@
+# RISK_ZONES.yaml — SPEC-0001 scheduling-core
+#
+# CHARTER.md Part 4 asks one question per path: can this change hurt someone
+# outside the project?  Unmapped or unclear paths default to `can_hurt`.
+# Moving a path from can_hurt to ordinary is ITSELF a can-hurt change.
+
+rule: CHARTER-part-4
+question: can_this_change_hurt_someone_outside_the_project
+unmapped_or_unclear_defaults_to: can_hurt
+reclassification_to_ordinary: requires_can_hurt_procedure
+
+paths:
+  ordinary:
+    - README.md
+    - ALTERNATIVES.md
+    - INTENT.md
+    - DUPLICATION.md
+    - acceptance/          # tests do not ship
+    - fixtures/
+
+  can_hurt:
+    - book                 # a race double-books a real person
+    - cancel               # a lost cancellation leaves someone holding a slot
+    - reschedule           # a failed move must never degrade into a cancellation
+    - compute_slots        # inherited — see below
+
+inheritance:
+  # CHARTER.md Part 4: anything the can-hurt path depends on is itself can-hurt.
+  compute_slots:
+    inherited_from: book
+    why: >
+      B3 re-evaluates constraints at commit time, so a slot compute_slots wrongly
+      emits becomes a booking book wrongly confirms. The engine is substrate for
+      the commit path. Classifying it ordinary would guard the leaf handler while
+      the code deciding what is bookable merged on the loose gate.
