@@ -28,12 +28,12 @@ export interface Database extends SqlClient {
   /** Run `fn` inside a transaction on a connection of its own. */
   transaction<T>(fn: (tx: SqlClient) => Promise<T>): Promise<T>;
   close(): Promise<void>;
-  readonly kind: 'pglite' | 'postgres';
+  readonly kind: 'pglite' | 'postgres' | 'sqlite' | 'do-sqlite';
   readonly describe: string;
 }
 
 /** Serialises whole transactions where the driver has a single connection. */
-class Serialiser {
+export class Serialiser {
   #tail: Promise<unknown> = Promise.resolve();
   run<T>(fn: () => Promise<T>): Promise<T> {
     const next = this.#tail.then(fn, fn);
@@ -132,5 +132,10 @@ export async function createPostgresDriver(databaseUrl: string): Promise<Databas
  * restart — so the choice is logged either way.
  */
 export async function createDatabase(databaseUrl?: string): Promise<Database> {
+  if (databaseUrl?.startsWith('sqlite:')) {
+    const { createSqliteDriver } = await import('./driver-sqlite.ts');
+    const location = databaseUrl.slice('sqlite:'.length) || ':memory:';
+    return createSqliteDriver(location);
+  }
   return databaseUrl ? createPostgresDriver(databaseUrl) : createPgliteDriver();
 }

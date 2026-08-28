@@ -55,7 +55,7 @@ export async function start(): Promise<{ close: () => Promise<void>; port: numbe
   }
 
   let ready = false;
-  const applied = await migrate(db);
+  const applied = await migrate(db, db.kind === 'sqlite' ? { dir: 'migrations-sqlite' } : undefined);
   console.log(`[db] migrations applied: ${applied.join(', ')}`);
   // Invite-only needs a first invite, or nobody can ever start.
   const boot = await bootstrapInvite(db, process.env['BOOTSTRAP_INVITE']);

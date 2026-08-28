@@ -1,0 +1,17 @@
+// Cloudflare deployment of the scheduling service. See src/worker.ts for the
+// architecture; the Node entry (src/server.ts) is unaffected by this file.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pumasi-booking",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // Migrations ship inside the bundle as text (.sql is Text by default rule).
+  "durable_objects": {
+    "bindings": [{ "name": "PUMASI", "class_name": "PumasiService" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PumasiService"] }],
+  "observability": { "enabled": true }
+  // BASE_URL is set per deployment:  wrangler deploy --var BASE_URL:https://…
+  // Secrets (GOOGLE_OAUTH_*, BOOTSTRAP_INVITE) via:  wrangler secret put NAME
+}

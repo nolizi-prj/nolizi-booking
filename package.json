@@ -26,7 +26,8 @@
     "@types/smtp-server": "^3.5.13",
     "embedded-postgres": "^18.4.0-beta.17",
     "smtp-server": "^3.19.2",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "wrangler": "^4.127.0"
   },
   "repository": {
     "type": "git",

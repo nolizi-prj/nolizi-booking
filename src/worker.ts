@@ -1,0 +1,123 @@
+/**
+ * Cloudflare Workers entry — the whole service inside one Durable Object.
+ *
+ * Why a Durable Object and not D1: the store's transactions are interactive
+ * (SELECT, decide, INSERT under one lock), which D1 does not offer. A
+ * SQLite-backed DO gives real transactions on a single connection — exactly
+ * the PGlite model the drivers already assume, with the storage persisted.
+ *
+ * One instance, named 'main', serves every request. That is a deliberate
+ * ceiling, not an accident: this service is D1-capped to five owner accounts
+ * (config.ts), and one SQLite writer is the concurrency model the SQL dialect
+ * seam (sqlite-dialect.ts) depends on.
+ *
+ * This file is bundled by wrangler and excluded from the Node build; it must
+ * not import anything node:-only at module scope.
+ */
+
+import { DurableObject } from 'cloudflare:workers';
+import { loadConfig } from './config.ts';
+import { handle, type AppDeps } from './app.ts';
+import { migrate } from './db.ts';
+import { bootstrapInvite } from './bootstrap.ts';
+import { RecordingMail, RetryingMail } from './mail.ts';
+import type { SqlClient, Transactor } from './store.ts';
+import { Serialiser } from './driver.ts';
+import { bindable, normalizeDbError, translateSql } from './sqlite-dialect.ts';
+// Bundled as text via the `rules` entry in wrangler.jsonc.
+// @ts-expect-error — .sql imports exist only under wrangler's bundler
+import schema001 from '../migrations-sqlite/001_schema.sql';
+
+/** Mirrors server.ts: a form here is a name, an address and two timestamps. */
+const MAX_BODY_BYTES = 64 * 1024;
+
+type WorkerEnv = Record<string, string | undefined> & {
+  PUMASI: { idFromName(name: string): unknown; get(id: unknown): { fetch(r: Request): Promise<Response> } };
+};
+
+export class PumasiService extends DurableObject {
+  #deps: AppDeps | undefined;
+  #serial = new Serialiser();
+
+  async #init(): Promise<AppDeps> {
+    if (this.#deps) return this.#deps;
+
+    const storage = (this.ctx as { storage: { sql: { exec(q: string, ...b: unknown[]): { toArray(): Record<string, unknown>[] } }; transaction<T>(fn: () => Promise<T>): Promise<T> } }).storage;
+
+    const client: SqlClient = {
+      query: async (text, params) => {
+        try {
+          return { rows: storage.sql.exec(translateSql(text), ...bindable(params)).toArray() };
+        } catch (err) {
+          throw normalizeDbError(err);
+        }
+      },
+      exec: async (text) => {
+        try {
+          storage.sql.exec(text);
+        } catch (err) {
+          throw normalizeDbError(err);
+        }
+      },
+    };
+    const tx: Transactor = {
+      transaction: (fn) => this.#serial.run(() => storage.transaction(() => fn(client))),
+    };
+
+    const env = this.env as WorkerEnv;
+    const config = loadConfig(env as never);
+
+    const applied = await migrate(client, {
+      files: [{ name: '001_schema.sql', sql: schema001 as string }],
+    });
+    if (applied.length > 0) console.log(`[db] migrations applied: ${applied.join(', ')}`);
+
+    // Invite-only needs a first invite, or nobody can ever start. The code
+    // lands in the logs (`wrangler tail`), not in any response.
+    const boot = await bootstrapInvite(client, env['BOOTSTRAP_INVITE']);
+    if (boot.reason !== 'owners_exist') console.log(`[invite] bootstrap invite: ${boot.code}`);
+
+    const mail = new RetryingMail(new RecordingMail());
+    console.warn('[mail] no mail transport on Workers yet — messages are recorded in memory and discarded.');
+
+    this.#deps = {
+      sql: client,
+      tx,
+      config,
+      mail,
+      now: () => new Date().toISOString().replace('.000Z', 'Z'),
+      ready: () => true, // init completes before any request is handled
+    };
+    return this.#deps;
+  }
+
+  override async fetch(request: Request): Promise<Response> {
+    const deps = await this.#init();
+    const url = new URL(request.url);
+
+    let form: Record<string, string> | undefined;
+    if (request.method === 'POST' || request.method === 'PUT') {
+      const raw = await request.text();
+      if (raw.length > MAX_BODY_BYTES) return new Response('request too large', { status: 413 });
+      form = Object.fromEntries(new URLSearchParams(raw));
+    }
+
+    const reply = await handle(deps, {
+      method: request.method,
+      path: url.pathname,
+      // Set by Cloudflare on every request; a client cannot forge it here.
+      ip: request.headers.get('cf-connecting-ip') ?? 'unknown',
+      form,
+      cookie: request.headers.get('cookie') ?? undefined,
+      query: Object.fromEntries(url.searchParams),
+    });
+    return new Response(reply.body, { status: reply.status, headers: reply.headers });
+  }
+}
+
+export default {
+  async fetch(request: Request, env: WorkerEnv): Promise<Response> {
+    const id = env.PUMASI.idFromName('main');
+    return env.PUMASI.get(id).fetch(request);
+  },
+};
