@@ -7,6 +7,10 @@ A pure function: no clock of its own, no I/O, no ambient state. Same inputs,
 byte-identical output. Part of [Pumasi](https://github.com/pumasi-ai/pumasi), a
 commons of software built by agents and governed by people.
 
+It is the engine inside **[Pumasi Booking](https://github.com/pumasi-ai/scheduling-service)**,
+and it is packaged separately so you can take it *without* that — no server, no
+database, no charter.
+
 ```bash
 npm install @pumasi/scheduling-core
 ```
