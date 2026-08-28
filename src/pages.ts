@@ -21,7 +21,7 @@ const PRODUCT = 'Pumasi Booking';
 const SHELL = (title: string, body: string): string => `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)} &middot; ${PRODUCT}</title>
+<title>${title === PRODUCT ? PRODUCT : `${esc(title)} &middot; ${PRODUCT}`}</title>
 <style>
  :root{color-scheme:light dark;--fg:#111;--muted:#666;--line:#ddd;--accent:#1a56db}
  @media(prefers-color-scheme:dark){:root{--fg:#eee;--muted:#999;--line:#333;--accent:#7aa2f7}}
@@ -203,6 +203,23 @@ document.querySelectorAll('#mv .slot').forEach(function(b){
   };
 });
 </script>`,
+  );
+}
+
+/**
+ * The front door. Until this existed, `/` answered 404 and the service read as
+ * broken to anyone who typed the bare domain. It explains what lives here and
+ * where the doors are; the real surfaces are the owners' booking pages.
+ */
+export function homePage(): string {
+  return SHELL(
+    PRODUCT,
+    `<h1>${PRODUCT}</h1>
+<p class="muted">Share a link; people pick a time.</p>
+<p>Booking pages live at their own links. If someone sent you one,
+use that link to pick a time — this page cannot list them.</p>
+<p><a href="/login">Sign in</a> to manage your booking pages.
+Accounts are invite-only while the service stays small.</p>`,
   );
 }
 

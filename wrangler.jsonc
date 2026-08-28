@@ -12,7 +12,13 @@
     "bindings": [{ "name": "PUMASI", "class_name": "PumasiService" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PumasiService"] }],
-  "observability": { "enabled": true }
-  // BASE_URL is set per deployment:  wrangler deploy --var BASE_URL:https://…
-  // Secrets (GOOGLE_OAUTH_*, BOOTSTRAP_INVITE) via:  wrangler secret put NAME
+  "observability": { "enabled": true },
+  "vars": {
+    "BASE_URL": "https://booking.pumasi.ai",
+    "MAIL_FROM": "Pumasi Booking <no-reply@pumasi.ai>",
+    // The Workspace user the mailer service account impersonates (DWD).
+    // no-reply@pumasi.ai is a registered send-as alias of this account.
+    "GMAIL_IMPERSONATE": "admin@pumasi.ai"
+  }
+  // Secrets (GMAIL_SA_KEY, BOOTSTRAP_INVITE) via:  wrangler secret put NAME
 }

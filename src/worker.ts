@@ -20,7 +20,8 @@ import { loadConfig } from './config.ts';
 import { handle, type AppDeps } from './app.ts';
 import { migrate } from './db.ts';
 import { bootstrapInvite } from './bootstrap.ts';
-import { RecordingMail, RetryingMail } from './mail.ts';
+import { RecordingMail, RetryingMail, type MailPort } from './mail.ts';
+import { GmailMail } from './mail-gmail.ts';
 import type { SqlClient, Transactor } from './store.ts';
 import { Serialiser } from './driver.ts';
 import { bindable, normalizeDbError, translateSql } from './sqlite-dialect.ts';
@@ -77,8 +78,24 @@ export class PumasiService extends DurableObject {
     const boot = await bootstrapInvite(client, env['BOOTSTRAP_INVITE']);
     if (boot.reason !== 'owners_exist') console.log(`[invite] bootstrap invite: ${boot.code}`);
 
-    const mail = new RetryingMail(new RecordingMail());
-    console.warn('[mail] no mail transport on Workers yet — messages are recorded in memory and discarded.');
+    // M1 · Gmail API when configured (GMAIL_SA_KEY secret + GMAIL_IMPERSONATE
+    // var); otherwise mail is recorded and discarded, loudly.
+    let inner: MailPort;
+    const saKey = env['GMAIL_SA_KEY'];
+    const impersonate = env['GMAIL_IMPERSONATE'];
+    if (saKey && impersonate) {
+      inner = new GmailMail({
+        saKeyJson: saKey,
+        impersonate,
+        from: config.mailFrom,
+        baseUrl: config.baseUrl,
+      });
+      console.log(`[mail] Gmail API transport active (as ${impersonate})`);
+    } else {
+      inner = new RecordingMail();
+      console.warn('[mail] GMAIL_SA_KEY/GMAIL_IMPERSONATE unset — messages are recorded in memory and discarded.');
+    }
+    const mail = new RetryingMail(inner);
 
     this.#deps = {
       sql: client,

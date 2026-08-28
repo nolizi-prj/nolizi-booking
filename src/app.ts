@@ -10,7 +10,7 @@ import { Temporal } from '@js-temporal/polyfill';
 import { PostgresBookingStore, type SqlClient, type Transactor } from './store.ts';
 import { availableSlots, findScheduleById, findScheduleBySlug, type Schedule } from './schedules.ts';
 import {
-  bookingPage, confirmedPage, errorPage, loginPage, managePage, ownerHome, signupPage,
+  bookingPage, confirmedPage, errorPage, homePage, loginPage, managePage, ownerHome, signupPage,
   type ScheduleSummary,
 } from './pages.ts';
 import {
@@ -418,7 +418,7 @@ export async function handle(
 
   // ── the public booking page ──────────────────────────────────────────────
   const slug = parts[0];
-  if (!slug) return html(404, errorPage(404, 'Nothing here.'));
+  if (!slug) return html(200, homePage());
 
   const schedule = await findScheduleBySlug(sql, slug);
   if (!schedule) return html(404, errorPage(404, 'No such booking page.'));
