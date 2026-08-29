@@ -157,9 +157,9 @@ test('with the public-signup flag open, no invite is needed (code path only — 
   assert.equal(Number(c.rows[0]!['c']), 1);
 });
 
-test('loadConfig refuses public signup while D-105 is open, whatever the env says', async () => {
-  const cfg = loadConfig({ PUBLIC_SIGNUP: 'true' } as NodeJS.ProcessEnv);
-  assert.equal(cfg.publicSignup, false);
+test('loadConfig leaves public signup off unless the operator turns it on', async () => {
+  assert.equal(loadConfig({} as NodeJS.ProcessEnv).publicSignup, false);
+  assert.equal(loadConfig({ PUBLIC_SIGNUP: 'true' } as NodeJS.ProcessEnv).publicSignup, true);
 });
 
 test('settings update profile, brand, welcome; the landing page shows them', async () => {

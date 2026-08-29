@@ -6,15 +6,20 @@
  * dangerous direction.
  */
 
-/** DEBT.md D-105. While this is open, the ceilings below cannot be raised. */
-export const D105_OPEN = true;
+/**
+ * DEBT.md D-105 is open at DEGRADING: the lawful basis is stated and in force
+ * (see legal.ts); what remains is the entity name, governing law, transfer
+ * mechanism and a review by counsel. It no longer gates configuration. The
+ * ceilings below are defaults an operator may raise, and public signup is an
+ * operator decision rather than a permanent block.
+ */
 
 export interface Config {
   databaseUrl: string | undefined;
   port: number;
-  /** I2 — disabled unless explicitly and correctly enabled, and D1 blocks it. */
+  /** I2 — disabled unless explicitly and correctly enabled. */
   publicSignup: boolean;
-  /** D1 — enforced ceilings. "Small and known" expires silently otherwise. */
+  /** D1 — deployment ceilings. Defaults, deliberately raisable. */
   maxOwnerAccounts: number;
   maxBookingsRetained: number;
   /** Part 5.1 — reporting is on by default and off in one step. */
@@ -54,22 +59,20 @@ function int(raw: string | undefined, fallback: number): number {
 }
 
 /**
- * D1 · A ceiling may be lowered, never raised, while D-105 is open. The
- * justification for operating without a settled privacy basis is that the
- * circle is small and known; a number that can be raised without answering the
- * question is not a ceiling, it is a suggestion.
+ * D1 · A ceiling defaults low so that a fresh deployment does not quietly grow
+ * into a service holding thousands of strangers' details before anyone chose
+ * that. An operator may raise it; the default keeps the choice visible.
  */
-function ceiling(raw: string | undefined, max: number): number {
-  const requested = int(raw, max);
-  return Math.min(requested, D105_OPEN ? max : requested);
+function ceiling(raw: string | undefined, fallback: number): number {
+  return int(raw, fallback);
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     databaseUrl: env['DATABASE_URL'],
     port: int(env['PORT'], 8080),
-    // I2 + D1: even an explicit `true` is refused while D-105 is open.
-    publicSignup: D105_OPEN ? false : bool(env['PUBLIC_SIGNUP'], false),
+    // I2 · off unless explicitly and correctly enabled; an explicit `true` is honoured.
+    publicSignup: bool(env['PUBLIC_SIGNUP'], false),
     maxOwnerAccounts: ceiling(env['MAX_OWNER_ACCOUNTS'], CEILING_DEFAULTS.owners),
     maxBookingsRetained: ceiling(env['MAX_BOOKINGS'], CEILING_DEFAULTS.bookings),
     reportingEnabled: bool(env['PUMASI_REPORTING'], true),
@@ -106,24 +109,21 @@ export interface ConfigRefusal {
  */
 export function refusals(env: NodeJS.ProcessEnv = process.env): ConfigRefusal[] {
   const out: ConfigRefusal[] = [];
-  if (!D105_OPEN) return out;
-  if (bool(env['PUBLIC_SIGNUP'], false)) {
-    out.push({
-      setting: 'PUBLIC_SIGNUP',
-      reason: 'DEBT.md D-105 is open: no lawful basis has been established for holding third-party personal data. Public signup stays blocked.',
-    });
-  }
-  if (int(env['MAX_OWNER_ACCOUNTS'], 0) > CEILING_DEFAULTS.owners) {
-    out.push({
-      setting: 'MAX_OWNER_ACCOUNTS',
-      reason: `DEBT.md D-105 is open: the ceiling of ${CEILING_DEFAULTS.owners} may be lowered but not raised.`,
-    });
-  }
-  if (int(env['MAX_BOOKINGS'], 0) > CEILING_DEFAULTS.bookings) {
-    out.push({
-      setting: 'MAX_BOOKINGS',
-      reason: `DEBT.md D-105 is open: the ceiling of ${CEILING_DEFAULTS.bookings} may be lowered but not raised.`,
-    });
+  // A value that did not parse silently became the fallback; say so rather than
+  // let an operator believe a setting took effect (D-001).
+  for (const [key, kind] of [
+    ['PUBLIC_SIGNUP', 'boolean'],
+    ['MAX_OWNER_ACCOUNTS', 'integer'],
+    ['MAX_BOOKINGS', 'integer'],
+  ] as const) {
+    const raw = env[key];
+    if (raw === undefined) continue;
+    const parsed = kind === 'boolean'
+      ? ['true', '1', 'yes', 'false', '0', 'no'].includes(raw.trim().toLowerCase())
+      : Number.isInteger(Number(raw)) && Number(raw) >= 0;
+    if (!parsed) {
+      out.push({ setting: key, reason: `not a valid ${kind}; the default was used instead.` });
+    }
   }
   return out;
 }

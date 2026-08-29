@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isPermittedMailHost, mailHostOf, PERMITTED_MAIL_HOSTS } from '../src/subprocessors.ts';
+import { RefusingMail, RetryingMail } from '../src/mail.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -58,4 +59,29 @@ test('the retention statement does not claim more than it can do', () => {
     !/backups?\s+are\s+(erased|deleted)\s+immediately/i.test(doc),
     'must not claim backups vanish immediately',
   );
+});
+
+test('D6 an undisclosed mail host stops the mail, not the service', async () => {
+  // The duty is that nobody's name, address or meeting time reaches an
+  // undisclosed party. Refusing the send discharges it; refusing to boot would
+  // additionally take down the booking pages, which protects no one.
+  const refusing = new RefusingMail('smtp.some-vendor.example');
+  await assert.rejects(
+    () => refusing.send({} as never),
+    /not named in SUBPROCESSORS\.md/,
+    'the send is refused, and the reason names the register',
+  );
+
+  // Wrapped as it is in production, the booking still commits and the message
+  // is queued for retry rather than lost (M3).
+  const queued = new RetryingMail(refusing);
+  await queued.send({} as never);
+  assert.equal(queued.failed.length, 1, 'the message is held for retry, not dropped');
+});
+
+test('the register text and the enforced list agree on what is permitted', () => {
+  const doc = published();
+  for (const p of PERMITTED_MAIL_HOSTS) {
+    assert.ok(doc.includes(p.host), `${p.host} is enforced in code but absent from the register`);
+  }
 });

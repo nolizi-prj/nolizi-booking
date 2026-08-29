@@ -64,8 +64,10 @@ An invite is single-use and is consumed atomically with account creation; two
 concurrent redemptions of one invite create **exactly one** account.
 
 **I2 · Public signup is disabled by a flag that fails closed.** Absent or
-unparseable configuration means disabled. Enabling it is an explicit act, and D1
-forbids that act until the privacy basis exists.
+unparseable configuration means disabled. Enabling it is an explicit act by the
+operator, and the service honours it. It is no longer refused unconditionally:
+the basis D1 refers to is written and in force, so this is a deployment decision
+rather than a governance block.
 
 **I3 · Sessions** are opaque server-side references in an `HttpOnly`, `Secure`,
 `SameSite=Lax` cookie. Never a token containing claims the client can read, and
@@ -274,30 +276,38 @@ either produces a person who believes something false about their own day.
 
 ### 4.6 · Data protection — `D`
 
-**D1 · Operating without a settled privacy basis — deliberately, and with a
-ceiling.** The steward decided on 2026-08-02 to take real bookings from a small
-circle of personally known people before the basis in `DEBT.md` D-105 is
-established. That is a recorded decision, and this clause is what keeps it
-bounded rather than open-ended.
+**D1 · Operating limits are configurable, and the privacy basis is stated.** The
+lawful basis for holding owner and booker data is written, in force, and
+checkable in `src/legal.ts`: contract plus legitimate interest for account
+holders, and the account holder's legitimate interest — with this service acting
+as their **processor** — for bookers. `DEBT.md` D-105 remains open at DEGRADING
+for what is genuinely outstanding: the legal entity name, the governing law, the
+transfer mechanism, and a review by counsel.
 
-The reasoning for the decision is that the circle is small and known. **So the
-size is enforced in code, not assumed:**
+**The ceilings stay, as defaults, and are now raisable.**
 
 | Ceiling | Default | May be lowered | May be raised |
 |---|---|---|---|
-| Owner accounts | 5 | yes | **no, while D-105 is open** |
-| Total bookings retained | 200 | yes | **no, while D-105 is open** |
+| Owner accounts | 5 | yes | yes, by configuration |
+| Total bookings retained | 200 | yes | yes, by configuration |
 
 Reaching a ceiling refuses the next write with a clear message and does not
-degrade anything already stored. Raising one is refused while D-105 is open —
-the same fail-closed mechanism as I2. **Public signup remains blocked**
-regardless.
+degrade anything already stored. Public signup is likewise a configuration
+decision (I2) rather than a permanent block.
 
-*Why a ceiling at all.* "A small known circle" is a justification that expires
-silently. Nobody notices the booking that takes it from personal favour to
-processing strangers' data at scale, because no single booking does. A number
-that cannot be raised without answering the question is the only version of
-"small" that stays true.
+*Why the ceilings survive as defaults.* A fresh deployment should not silently
+become a service holding thousands of strangers' details before anyone chose
+that. A default that must be raised deliberately keeps the choice visible. What
+changed is that raising it is now a decision an operator is allowed to make,
+rather than one the code refused on behalf of a question nobody had been assigned
+to answer.
+
+*What the earlier version got wrong, recorded rather than quietly dropped.* The
+un-raisable ceiling and permanent signup block were compensating controls for an
+unanswered question. They were strict about a private, deletable database of
+booking details while the same project published a natural person's identity and
+environment fingerprint permanently and unrecallably by default. The care now
+sits where the irreversibility is — see CHARTER §5.2's published/held split.
 
 **D9 · The booker is told, at the point of collection, in one sentence.** The
 booking form states what is stored, who can see it, and how to have it deleted,
@@ -306,10 +316,22 @@ the field where the person is typing their address. This costs nothing and is th
 minimum owed to someone handing over their email to software they have never
 heard of.
 
-**D2 · Collect the minimum that makes the feature work.** Owner: email, display
-name, timezone, availability rules. Booker: name, email, the interval, and their
-timezone for display. Nothing else, and no field is added without a reason
-recorded next to it.
+**D2 · Collect what the stated purpose supports, and record the reason beside
+each field.** The purpose is operating the service and improving it, and that is
+what `src/legal.ts` tells people.
+
+*Personal data stays minimal*, because it is the category where collection is
+hardest to justify and deletion has to actually work. Owner: email, display name,
+timezone, availability rules. Booker: name, email, the interval, and their
+timezone for display. No new **personal** field without a recorded reason.
+
+*Operating and quality data is not held to that standard*, because it is not
+about a person. Feature usage, timings, error and crash detail, and the shape of
+a configuration are collected freely under CHARTER §5.2's held tier — they carry
+no booker or owner identity, they are what tells us why the software failed for
+someone, and refusing them was a rule against learning anything. The boundary is
+the same line the charter draws: **how the software behaved is ours; what a user
+put into it is theirs.**
 
 **D3 · Deletion works and is reachable.** An owner can delete their account and
 everything belonging to it. A booker can delete their booking data from the
@@ -318,11 +340,21 @@ management link. Deletion removes the data; it does not merely hide it.
 **D4 · A booker's email is never shown to anyone but the owner of that booking**,
 and never appears in a URL, a log line, or a report.
 
-**D5 · Automatic reporting carries no owner or booker data.** Not their names,
-addresses, meeting times, counts, or anything derived from them. Charter Part 5.1
-requires this item to implement reporting and a working opt-out; that reporting
-is the conformance tier in `REPORTING.md` and this service's user data is outside
-it entirely.
+**D5 · Automatic reporting carries no owner or booker identity, in either
+tier.** Not their names, addresses, or meeting times. Charter Part 5.1 requires
+this item to implement reporting and a working opt-out.
+
+What each tier may carry, since §5.2 now defines two:
+
+| Tier | May carry | Never carries |
+|---|---|---|
+| **Published** | Conformance results, environment facts, the operator's signature. | Anything about owners or bookers, including counts derived from them. |
+| **Held** | Feature usage, timings, error and crash detail, configuration shape — including *aggregate* counts such as how many bookings a deployment holds. | Names, email addresses, meeting times, note contents, or any value a booker typed. |
+
+Aggregate counts move to the held tier rather than staying forbidden outright:
+"this deployment holds 4 schedules and 60 bookings" is operating signal, is not
+about any identifiable person, and is exactly the kind of fact that shows whether
+the product works. It is never published and never signed.
 
 *Stated precisely, because the absolute version is false:* the report **is**
 signed with the operator's own identity (`REPORTING.md`), which is personal data
@@ -335,6 +367,15 @@ publish anything, ever.
 provider and the hosting platform both see personal data. Each is listed publicly
 with what it receives and why, before the first message is sent. An unnamed
 subprocessor is data shared without disclosure, whatever the intention.
+
+**Enforcement is a loud refusal to send, not a refusal to start.** Configuring a
+mail host absent from `SUBPROCESSORS.md` logs a prominent warning at startup and
+**refuses to send mail through it** until it is listed. The service still boots,
+still serves booking pages, and still records bookings. Refusing to start turned
+a disclosure duty into an outage: no privacy regime requires a service to be
+down, and taking the whole product offline over an undisclosed *mail* host
+punished the operator far past the harm. The duty is that nobody's details reach
+an unnamed party — refusing the send satisfies it exactly.
 
 **D7 · Deletion reaches as far as we control, and says where it stops.** D3
 removes application data. Backups, replicas, and subprocessor copies expire on

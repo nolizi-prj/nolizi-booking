@@ -45,6 +45,25 @@ export class RetryingMail implements MailPort {
 }
 
 /** Development and tests. Records rather than sends. */
+/**
+ * D6 · The mail host is not a named subprocessor, so nothing is sent through it.
+ *
+ * This replaces an earlier refusal to *start*. The duty D6 creates is that
+ * nobody's name, address or meeting time reaches an undisclosed party; refusing
+ * the send discharges that exactly. Refusing to boot additionally took down the
+ * booking pages, which protects no one and is an outage the operator did not
+ * choose. Failures here are collected by RetryingMail, so the booking still
+ * commits and the message is queued rather than lost.
+ */
+export class RefusingMail implements MailPort {
+  constructor(private readonly host: string) {}
+  async send(_message: MailMessage): Promise<void> {
+    throw new Error(
+      `refusing to send: mail host "${this.host}" is not named in SUBPROCESSORS.md`,
+    );
+  }
+}
+
 export class RecordingMail implements MailPort {
   readonly sent: MailMessage[] = [];
   async send(message: MailMessage): Promise<void> {

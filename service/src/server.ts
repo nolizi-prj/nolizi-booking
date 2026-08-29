@@ -11,7 +11,7 @@ import { GoogleCalendarProvider } from './calendar-google.ts';
 import { MicrosoftCalendarProvider } from './calendar-microsoft.ts';
 import { createDatabase, type Database } from './driver.ts';
 import { handle, type AppDeps } from './app.ts';
-import { RecordingMail, RetryingMail, type MailPort } from './mail.ts';
+import { RecordingMail, RefusingMail, RetryingMail, type MailPort } from './mail.ts';
 import { FileMail, SmtpMail } from './mail-smtp.ts';
 import { isPermittedMailHost, mailHostOf, PERMITTED_MAIL_HOSTS } from './subprocessors.ts';
 import { seedDemo } from './seed.ts';
@@ -83,20 +83,23 @@ export async function start(): Promise<{ close: () => Promise<void>; port: numbe
   let inner: MailPort;
   if (config.smtpUrl) {
     // D6 · a provider that will see people's names, addresses and meeting times
-    // must be named publicly first. Refusing here is what makes the published
-    // list a control rather than a description.
+    // must be named publicly first. An unnamed host does not stop the service;
+    // it stops the mail, which is where the disclosure duty actually bites.
     const host = mailHostOf(config.smtpUrl);
     if (!isPermittedMailHost(host)) {
       console.error('');
-      console.error(`  REFUSING TO START — mail host "${host}" is not a named subprocessor`);
+      console.error(`  NOT SENDING MAIL — host "${host}" is not a named subprocessor`);
+      console.error('  Bookings still work and the service is up; confirmations are queued,');
+      console.error('  not delivered, until this host is disclosed.');
       console.error('  Add it to SUBPROCESSORS.md and src/subprocessors.ts, together,');
       console.error('  saying what it will see and why. Currently permitted:');
       for (const p of PERMITTED_MAIL_HOSTS) console.error(`    ${p.host} — ${p.why}`);
       console.error('');
-      throw new Error(`unnamed mail subprocessor: ${host}`);
+      inner = new RefusingMail(host);
+    } else {
+      inner = new SmtpMail({ url: config.smtpUrl, from: config.mailFrom, baseUrl: config.baseUrl });
+      console.log(`[mail] SMTP via ${host} (named in SUBPROCESSORS.md)`);
     }
-    inner = new SmtpMail({ url: config.smtpUrl, from: config.mailFrom, baseUrl: config.baseUrl });
-    console.log(`[mail] SMTP via ${host} (named in SUBPROCESSORS.md)`);
   } else if (config.mailDir) {
     inner = new FileMail(config.mailDir, config.baseUrl);
     console.log(`[mail] writing messages to ${config.mailDir}`);

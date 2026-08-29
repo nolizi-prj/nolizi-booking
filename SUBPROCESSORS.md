@@ -14,10 +14,17 @@ of it. This file explains the part that is *code*: how the list is enforced.
 
 ## Enforced, not merely written down
 
-`SPEC-0002` D6: the service **refuses to start** if configured to send mail
-through a host that does not appear in `service/src/subprocessors.ts`. Adding a
+`SPEC-0002` D6: the service **refuses to send mail** through a host that does not
+appear in `service/src/subprocessors.ts`, and says so loudly at startup. Adding a
 provider means editing the register text and that file **together**, in a change
 anyone can read.
+
+It does **not** refuse to start. Bookings still work and the pages stay up;
+confirmations are queued rather than delivered until the host is disclosed. The
+duty this register creates is that nobody's name, address or meeting time reaches
+an undisclosed party — stopping the mail discharges that exactly, while taking
+the whole service down over an undeclared SMTP host was an outage nobody chose
+and no regime requires.
 
 | Permitted mail host | Why |
 |---|---|

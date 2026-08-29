@@ -283,14 +283,20 @@ test('I6 the booking surface is rate-limited and sends no mail when limited', as
   assert.ok(mail.sent.length <= 2, 'rate-limited attempts send no mail');
 });
 
-test('D1 public signup cannot be enabled while D-105 is open', async () => {
-  const cfg = loadConfig({ PUBLIC_SIGNUP: 'true' } as unknown as NodeJS.ProcessEnv);
-  assert.equal(cfg.publicSignup, false, 'an explicit true is refused, not honoured');
+test('I2 public signup is off by default and honoured when explicitly enabled', async () => {
+  const dflt = loadConfig({} as unknown as NodeJS.ProcessEnv);
+  assert.equal(dflt.publicSignup, false, 'absent configuration means disabled');
+  const on = loadConfig({ PUBLIC_SIGNUP: 'true' } as unknown as NodeJS.ProcessEnv);
+  assert.equal(on.publicSignup, true, 'an explicit true is an operator decision, and is honoured');
+  const junk = loadConfig({ PUBLIC_SIGNUP: 'perhaps' } as unknown as NodeJS.ProcessEnv);
+  assert.equal(junk.publicSignup, false, 'unparseable is not a licence to guess');
 });
 
-test('D1 the ceilings may be lowered but not raised', async () => {
+test('D1 the ceilings default low and may be raised or lowered', async () => {
+  const dflt = loadConfig({} as unknown as NodeJS.ProcessEnv);
+  assert.equal(dflt.maxBookingsRetained, 200, 'the default keeps the choice visible');
   const raised = loadConfig({ MAX_BOOKINGS: '99999' } as unknown as NodeJS.ProcessEnv);
-  assert.equal(raised.maxBookingsRetained, 200, 'raising is refused while D-105 is open');
+  assert.equal(raised.maxBookingsRetained, 99999, 'raising is an operator decision');
   const lowered = loadConfig({ MAX_BOOKINGS: '10' } as unknown as NodeJS.ProcessEnv);
   assert.equal(lowered.maxBookingsRetained, 10, 'lowering is permitted');
 });

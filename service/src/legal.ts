@@ -58,7 +58,10 @@ steward of this service, reachable at **admin@pumasi.ai**.
 
 ## What is collected
 
-Nothing is collected that the meeting does not require. This is the complete list.
+Nothing about *you* is collected that the meeting does not require. This is the
+complete list of what the service stores about a person; the software's own
+self-reporting, which is about the software and not about you, is described at
+the end of this section.
 
 **If you book a meeting**, the booking page asks for and stores:
 - your **name** and **email address**, because the person you are meeting needs
@@ -82,6 +85,23 @@ which proposed times you accepted, until the poll is deleted.
 **If you answer a routing form** — the one-question form that sends you to the
 right booking page — your answer is **not stored at all**. It selects a
 destination and is gone.
+
+**Separately from all of the above, the software reports on itself.** It sends us
+how it behaved — which features were used, what was slow, what crashed, and the
+shape of the operator's configuration — so we can find defects and fix them. That
+stream is deliberately kept apart from everything on this page:
+
+- It carries **no name, no email address, no meeting time, no note contents**,
+  and nothing a booker typed. It is about the software, not about you.
+- It is **not published**. The operator's own conformance result is published and
+  signed, as it always has been; this operating detail is not, and never carries
+  your details in either case.
+- It is kept to a stated retention period and can be deleted on request.
+- The operator can turn all of it off in one step, and nothing about the service
+  changes when they do.
+
+The basis for it is our legitimate interest in operating and improving software
+we give away. Full detail is in **REPORTING.md**.
 
 **If you hold an account**, we store your email address, display name, timezone,
 your public link name, an optional welcome message and accent colour, your
