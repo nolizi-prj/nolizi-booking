@@ -112,6 +112,28 @@ response, and the shard returns a byte-identical page on the success side. The
 invite path keeps its specific messages: holding a valid invite is authorisation
 to learn that the invite was already spent.
 
+I8 is one instance of **I10**, which is where the rule itself lives.
+
+**I10 · An unauthenticated endpoint never reveals whether something exists.**
+Several surfaces here can be asked a question about a stranger — *does this
+person have an account? was this link ever real?* — and the answer is not the
+caller's to have. Each one therefore returns the **same** response for "yes" and
+"no", and the sameness is the specified behaviour, not an implementation detail.
+
+| Surface | Cases collapsed | Into |
+|---|---|---|
+| `POST /login` | address has an account · does not | the same 200 "link is on its way" |
+| `POST /signup`, public path (I8) | created · `already_registered` | the same 200 page |
+| Management link lookup (L3, L4) | expired · wrong · never existed | "not found" |
+| `/v/` booking verification | expired · already used · never existed | a byte-identical 404 |
+
+Two rules that make this survive maintenance. **A ceiling refusal may differ**,
+on any surface: it is a fact about the deployment, not about a person. And
+**adding a surface of this shape means adding a row here** — the property is
+stated once precisely so that changing one endpoint cannot quietly drop it from
+the others, which is the failure mode a rule repeated in four places always
+eventually has ([L-007](https://github.com/pumasi-ai/governance/blob/main/lessons/L-007-restating-a-rule-forks-it.md)).
+
 **I9 · Public signup is rate-limited per IP**, at **5 sign-ups per hour**. It
 creates database rows and sends mail to an address the caller chose, which is the
 mail-amplification surface I6 names — and unlike a booking it had no limit at all
