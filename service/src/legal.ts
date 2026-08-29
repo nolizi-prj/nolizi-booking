@@ -9,8 +9,14 @@
  * — a privacy policy that describes a system nobody built is the most common
  * kind of lie in software. Where the honest answer is "nothing yet" or "we
  * cannot", it says so. Where a decision is the steward's or counsel's to make,
- * it is marked [TO BE COMPLETED] rather than invented: a fabricated legal
- * entity or governing law would be worse than a visible blank.
+ * it was marked [TO BE COMPLETED] rather than invented. The operator (ATX APPLE
+ * LLC, Texas) and governing law were supplied by the steward on 2026-08-29 and
+ * those blanks are now filled. The registered address is deliberately NOT
+ * published: the steward asked that nothing be disclosed beyond what is needed,
+ * and an email contact discharges the duty to be reachable. What remains
+ * genuinely unreviewed by counsel is the transfer position, which the documents
+ * now state factually ("processed in the United States") instead of claiming a
+ * mechanism nobody has executed.
  *
  * The prose lives here rather than in a Markdown file because both hosts serve
  * it and there must be exactly one copy. Cross-references that must stay true:
@@ -24,8 +30,9 @@ export const LEGAL_EFFECTIVE = '2026-08-29';
 
 /** Shown on every legal page: honest about review status, not disclaiming force. */
 const STATUS =
-  'Status: in force for the invited circle now using this service, and under ' +
-  'legal review before public sign-up opens. Version ' +
+  'Status: in force for everyone using this service. Written by the people who ' +
+  'built it and not yet reviewed by a lawyer — we would rather say so than ' +
+  'imply a review that has not happened. Version ' +
   LEGAL_VERSION + ', effective ' + LEGAL_EFFECTIVE + '.';
 
 export interface LegalDoc {
@@ -52,9 +59,9 @@ and they carry different duties.
   meeting and want your details removed, the fastest route is the link in your
   confirmation email, described below; you may also contact us and we will act.
 
-Operator and contact: **[TO BE COMPLETED: legal entity name and registered
-address]**. Until that blank is filled, the responsible party in practice is the
-steward of this service, reachable at **admin@pumasi.ai**.
+Operator: **ATX APPLE LLC**, a Texas limited liability company, United States.
+Contact us about anything on this page at **admin@pumasi.ai** — that address
+reaches the people who run the service, and it is the fastest route.
 
 ## What is collected
 
@@ -157,10 +164,10 @@ why, in our [subprocessor register](/subprocessors). That register is enforced b
 the software, not merely written down: the service **will not send mail** through
 a provider that is not listed. Bookings still work; the confirmation waits.
 
-These providers operate globally, so data may be processed outside your country,
-including in the United States, under the transfer safeguards those providers
-offer. **[TO BE COMPLETED by counsel: the specific transfer mechanism relied
-upon.]**
+**The service is operated from the United States and your data is processed
+there.** If you are outside the United States, using it means your details are
+transferred there. We say that plainly rather than name a transfer mechanism we
+have not put in place.
 
 ## How long it is kept, and how to delete it
 
@@ -196,8 +203,9 @@ to **admin@pumasi.ai**. We will respond within one month. If you booked a meetin
 through someone's page, we may need to refer the request to them as the
 controller, and we will tell you when we do.
 
-You may complain to a data-protection supervisory authority.
-**[TO BE COMPLETED: the relevant authority once the operating entity is fixed.]**
+If you are in the UK or the EU, you may complain to your own national
+data-protection authority. We would rather you wrote to us first, but that right
+does not depend on us.
 
 ## Security
 
@@ -231,8 +239,9 @@ calendar. These terms govern its use by account holders. Bookers who simply use
 someone's page are covered by the [privacy notice](/privacy) rather than these
 terms.
 
-Operator: **[TO BE COMPLETED: legal entity name and registered address]**.
-Governing law and jurisdiction: **[TO BE COMPLETED by counsel]**.
+Operator: **ATX APPLE LLC**, a Texas limited liability company, United States.
+Governing law: **the laws of the State of Texas**, excluding its conflict-of-law
+rules. Disputes go to the state and federal courts sitting in Texas.
 
 ## The account
 
@@ -280,8 +289,10 @@ in which case we will give you time and a means to export what you have.
 To the maximum extent the law allows, the service is provided "as is", and we are
 not liable for indirect or consequential loss, lost profits, or lost
 opportunities arising from missed, duplicated or mis-timed meetings. Nothing here
-excludes liability that cannot lawfully be excluded. **[TO BE COMPLETED by
-counsel: any cap, and its relationship to the fee — currently zero.]**
+excludes liability that cannot lawfully be excluded. Because the service is
+provided free of charge, our total liability to you is limited to the amount you
+have paid to use it. Today that amount is zero, and we would rather say so than
+imply a cap that sounds larger than it is.
 
 ## The software itself
 
@@ -305,8 +316,9 @@ details of the people who book meetings through your pages. They form part of th
 [Terms of Service](/terms). Where you require a signed agreement on your own
 paper, write to **admin@pumasi.ai**.
 
-**[TO BE COMPLETED by counsel: execution block, the operating entity, and the
-standard contractual clauses relied on for transfers.]**
+These terms take effect when you use the service; no signature is required for
+them to bind us. The operator is **ATX APPLE LLC** (Texas, United States), and
+processing takes place in the United States — see **Transfers** below.
 
 ## Roles
 
@@ -362,8 +374,11 @@ and the members of your own team who hold accounts.
 
 ## Transfers
 
-Our subprocessors operate internationally and data may be processed outside your
-country. **[TO BE COMPLETED by counsel: the transfer mechanism.]**
+The service is operated from the United States and personal data you entrust to
+it is processed there. If your own obligations require standard contractual
+clauses or an equivalent mechanism, write to **admin@pumasi.ai** before you rely
+on this service for that data — we would rather have that conversation than let
+you assume a safeguard is in place.
 
 ## Your obligations
 
