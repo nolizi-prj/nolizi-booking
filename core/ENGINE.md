@@ -41,7 +41,19 @@ deliberately hard at the places where that happens:
 | A zone that skips a whole calendar day | Correctly **nonexistent** | Read as an ambiguous hour |
 | Daily booking cap | Counts on the **owner's** local date | Counts on UTC's, or the requester's |
 
-Both category leaders have open bugs in two of these today.
+These are the cases calendar arithmetic is easiest to get wrong, which is why
+each one is a named acceptance case here rather than left to the implementation.
+
+*This sentence used to read "Both category leaders have open bugs in two of these
+today." It cited nothing, and it is removed rather than sourced.* The only
+competitor defect this repository cites is Cal.com issue #23365, in
+[`spec/SPEC.md`](spec/SPEC.md) — it concerns **week-boundary limits**, which is
+not one of the cases above, and its own author records it as *evidence that the
+boundary is error-prone, not proof of any particular rule*. That citation could
+not support the claim it was being used to make, and one of the products is
+closed-source, so nobody outside it could check the claim either way. A project
+that discards uncited objections in review does not get to make uncited
+assertions about other people's software in its own documentation.
 
 **The clock is an argument.** `now` is required. A function that reads the
 system clock cannot have deterministic tests, and a non-deterministic test
