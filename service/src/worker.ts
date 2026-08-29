@@ -37,7 +37,8 @@ import { MicrosoftCalendarProvider } from './calendar-microsoft.ts';
 import { processDueJobs } from './automation.ts';
 import { Directory, dispatchDirectoryCall, type DirectoryCall } from './directory.ts';
 import { googleSsoExchange, googleSsoUrl } from './sso-google.ts';
-import { errorPage, homePage, loginPage, signupPage } from './pages.ts';
+import { errorPage, homePage, legalPage, loginPage, signupPage } from './pages.ts';
+import { LEGAL_DOCS } from './legal.ts';
 // Bundled as text via the `rules` entry in wrangler.jsonc.
 // @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema001 from '../migrations-sqlite/001_schema.sql';
@@ -435,6 +436,13 @@ export default {
       return htmlResponse(200, signupPage(url.searchParams.get('invite') ?? '', undefined,
         { sso: ssoEnabled, publicSignup: config.publicSignup }));
     }
+    // D-105 · the privacy pack is global and data-free: the router serves it
+    // without touching any tenant.
+    if (request.method === 'GET') {
+      const doc = LEGAL_DOCS.find((d) => url.pathname === `/${d.slug}`);
+      if (doc) return htmlResponse(200, legalPage(doc));
+    }
+
     if (url.pathname === '/embed.js' && request.method === 'GET') {
       const js = `(function(){var s=document.currentScript;var p=s.getAttribute('data-pumasi');if(!p)return;
 var f=document.createElement('iframe');f.src=${JSON.stringify(config.baseUrl)}+p;

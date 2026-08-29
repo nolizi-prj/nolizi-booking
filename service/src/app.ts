@@ -14,6 +14,7 @@ import {
 } from './schedules.ts';
 import {
   availabilityEditor, bookingPage, confirmedPage, contactsPage, errorPage, eventTypeEditor,
+  legalPage,
   apiKeysPage, auditPage, homePage, loginPage, managePage, meetingsPage, messagePage, ownerHome,
   ownerLanding, pollDetailPage, pollsPage, pollVotePage, routeFormPage, routingPage, settingsPage,
   signupPage, webhooksPage, workflowsPage,
@@ -30,6 +31,7 @@ import { discoverOidc, oidcAuthUrl, oidcExchange } from './sso-oidc.ts';
 import { RATE_LIMITS, type Config } from './config.ts';
 import type { CalendarHub } from './calendars.ts';
 import { icsFor } from './ics.ts';
+import { LEGAL_DOCS } from './legal.ts';
 import { cancelPendingJobs, fireTrigger, type BookingCtx } from './automation.ts';
 import type { MailPort } from './mail.ts';
 import type { Interval, Slot } from '@pumasi/booking-core';
@@ -589,11 +591,32 @@ async function handleRoutes(
       if (req.form?.['confirm'] !== 'yes') {
         return html(400, errorPage(400, 'Deletion needs the confirmation box ticked.'));
       }
-      await sql.query(
-        `UPDATE bookings SET status='cancelled', booker_name=NULL, booker_email=NULL, booker_tz=NULL
-          WHERE booking_id = $1`,
+      // D7 · "deleted" must reach everything derived from this booking, or the
+      // sentence below is false. The booking's identity fields, the contact
+      // the booking created, and any queued mail still carrying the name and
+      // address all go in one transaction. Sent mail cannot be recalled and
+      // the privacy notice says so rather than implying otherwise.
+      const bookerRow = await sql.query(
+        `SELECT booker_email, owner_id FROM bookings WHERE booking_id = $1 ORDER BY id DESC LIMIT 1`,
         [bookingId],
       );
+      const goneEmail = bookerRow.rows[0]?.['booker_email'];
+      const goneOwner = bookerRow.rows[0]?.['owner_id'];
+      await deps.tx.transaction(async (tx) => {
+        await tx.query(
+          `UPDATE bookings SET status='cancelled', booker_name=NULL, booker_email=NULL, booker_tz=NULL,
+                  owner_note=NULL
+            WHERE booking_id = $1`,
+          [bookingId],
+        );
+        // Queued workflow mail and webhook payloads embed the booker's details.
+        await tx.query(`DELETE FROM jobs WHERE booking_id = $1`, [bookingId]);
+        if (goneEmail && goneOwner) {
+          await tx.query(`DELETE FROM contacts WHERE owner_id = $1 AND email = $2`,
+            [goneOwner, String(goneEmail).toLowerCase()]);
+        }
+      });
+      await deps.calendars?.onCancelled(sql, bookingId);
       return html(200, errorPage(200, 'Your booking is cancelled and your details are deleted.'));
     }
     return html(405, errorPage(405, 'Method not allowed.'));
@@ -2230,6 +2253,12 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
                  'cache-control': 'public, max-age=3600' },
       body: js,
     };
+  }
+
+  // ── D-105 · the published privacy pack, on every host ────────────────────
+  if (req.method === 'GET') {
+    const doc = LEGAL_DOCS.find((d) => d.slug === parts[0] && parts.length === 1);
+    if (doc) return html(200, legalPage(doc));
   }
 
   // ── the public surfaces (P2) ─────────────────────────────────────────────

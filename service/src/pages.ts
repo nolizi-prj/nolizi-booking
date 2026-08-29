@@ -9,6 +9,7 @@
 
 import type { Slot } from '@pumasi/booking-core';
 import { locationText, type Schedule } from './schedules.ts';
+import { renderLegalBody, LEGAL_STATUS_LINE, type LegalDoc } from './legal.ts';
 
 const esc = (s: string): string =>
   s.replace(/[&<>"']/g, (c) => `&${{ '&': 'amp', '<': 'lt', '>': 'gt', '"': 'quot', "'": '#39' }[c]};`);
@@ -17,6 +18,36 @@ const esc = (s: string): string =>
 // without competing with the page's own heading -- a public booking page is the
 // OWNER'S page, and their schedule title stays the largest thing on it.
 const PRODUCT = 'Pumasi Booking';
+
+/** D-105 · every public page carries the way to the privacy answers. */
+export const FOOTER = `<footer class="foot">
+  <a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a> &middot;
+  <a href="/subprocessors">Who sees data</a>
+</footer>
+<style>
+ .foot{margin-top:2.5rem;padding-top:1rem;border-top:1px solid var(--line);
+   font-size:.8rem;color:var(--muted)}
+ .foot a{color:var(--muted)}
+</style>`;
+
+/** D-105 · the published documents, rendered from one source (legal.ts). */
+export function legalPage(doc: LegalDoc): string {
+  return SHELL(
+    doc.title,
+    `<p class="muted"><a href="/">&lsaquo; ${esc(PRODUCT)}</a></p>
+<h1>${esc(doc.title)}</h1>
+<p class="muted">${esc(LEGAL_STATUS_LINE)}</p>
+<div class="legal">${renderLegalBody(doc.body)}</div>
+${FOOTER}
+<style>
+ .legal{max-width:42rem}
+ .legal h2{font-size:1.05rem;margin:1.75rem 0 .4rem}
+ .legal p{margin:.6rem 0}
+ .legal ul{margin:.5rem 0;padding-left:1.25rem}
+ .legal li{margin:.35rem 0}
+</style>`,
+  );
+}
 
 const SHELL = (title: string, body: string): string => `<!doctype html>
 <html lang="en"><head>
@@ -98,7 +129,7 @@ ${err}${empty}
   <!-- D9 · told at the point of collection, next to the field, not behind a link -->
   <p class="notice">We store your name, email and the meeting time so the organiser
     can meet you. Nobody else sees them. The confirmation email has a link that
-    cancels the booking and deletes these details.</p>
+    cancels the booking and deletes these details. <a href="/privacy">What we keep</a>.</p>
   <input type="hidden" name="booker_tz" id="btz">
   <button class="submit" type="submit">Confirm booking</button>
 </form>
@@ -304,7 +335,8 @@ export function homePage(): string {
 <p>Booking pages live at their own links. If someone sent you one,
 use that link to pick a time — this page cannot list them.</p>
 <p><a href="/login">Sign in</a> to manage your booking pages.
-Accounts are invite-only while the service stays small.</p>`,
+Accounts are invite-only while the service stays small.</p>
+${FOOTER}`,
   );
 }
 
@@ -1236,6 +1268,7 @@ export function ownerLanding(
 <h1>${esc(displayName)}</h1>
 <p class="muted">${welcome ? esc(welcome) : 'Pick a meeting to see available times.'}</p>
 ${cards || '<p class="muted">No booking pages yet.</p>'}
+${FOOTER}
 <style>
  .ev{display:flex;flex-direction:column;gap:.15rem;border:1px solid var(--line);
    border-left:3px solid var(--accent);border-radius:.4rem;padding:.8rem 1rem;
