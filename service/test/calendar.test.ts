@@ -67,9 +67,9 @@ class FakeProvider implements CalendarProvider {
     if (this.failFreeBusy) throw new Error('provider down');
     return this.busy;
   }
-  async createEvent(_a: string, calendarId: string, ev: BookingEvent): Promise<string> {
+  async createEvent(_a: string, calendarId: string, ev: BookingEvent): Promise<{ eventId: string; meetUrl?: string }> {
     this.created.push({ calendarId, ev });
-    return `evt-${this.created.length}`;
+    return { eventId: `evt-${this.created.length}` };
   }
   async moveEvent(_a: string, _c: string, eventId: string, start: string, end: string): Promise<void> {
     this.moved.push({ eventId, start, end });

@@ -36,6 +36,13 @@ export interface BookingEvent {
   description: string;
   start: string;
   end: string;
+  /** P2 · mint a Google Meet conference on the event. */
+  conference?: boolean;
+}
+
+export interface CreatedEvent {
+  eventId: string;
+  meetUrl?: string;
 }
 
 export interface CalendarProvider {
@@ -55,7 +62,7 @@ export interface CalendarProvider {
     from: string,
     to: string,
   ): Promise<Interval[]>;
-  createEvent(accessToken: string, calendarId: string, ev: BookingEvent): Promise<string>;
+  createEvent(accessToken: string, calendarId: string, ev: BookingEvent): Promise<CreatedEvent>;
   moveEvent(
     accessToken: string,
     calendarId: string,
@@ -326,19 +333,21 @@ export class CalendarHub {
     ownerId: string,
     bookingId: string,
     ev: BookingEvent,
-  ): Promise<void> {
+  ): Promise<{ meetUrl?: string }> {
     try {
       const dest = await this.#destination(sql, ownerId);
-      if (!dest) return;
+      if (!dest) return {};
       const access = await this.#accessToken(sql, dest.row);
-      const eventId = await dest.provider.createEvent(access, dest.calendarId, ev);
+      const created = await dest.provider.createEvent(access, dest.calendarId, ev);
       await sql.query(
-        `UPDATE bookings SET calendar_event_id = $2, calendar_connection_id = $3
+        `UPDATE bookings SET calendar_event_id = $2, calendar_connection_id = $3, meet_url = $4
           WHERE booking_id = $1`,
-        [bookingId, eventId, dest.connectionId],
+        [bookingId, created.eventId, dest.connectionId, created.meetUrl ?? null],
       );
+      return { meetUrl: created.meetUrl };
     } catch (err) {
       console.warn(`[calendar] write-back failed for booking: ${(err as Error).message}`);
+      return {};
     }
   }
 

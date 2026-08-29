@@ -8,9 +8,13 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { Temporal } from '@js-temporal/polyfill';
 import { PostgresBookingStore, type SqlClient, type Transactor } from './store.ts';
-import { availableSlots, findScheduleById, findScheduleBySlug, type Schedule } from './schedules.ts';
 import {
-  bookingPage, confirmedPage, errorPage, homePage, loginPage, managePage, ownerHome, signupPage,
+  availableSlots, findScheduleById, findScheduleByOwnerSlug, findScheduleBySlug, locationText,
+  type Schedule,
+} from './schedules.ts';
+import {
+  availabilityEditor, bookingPage, confirmedPage, errorPage, eventTypeEditor, homePage, loginPage,
+  managePage, ownerHome, ownerLanding, signupPage,
   type ScheduleSummary,
 } from './pages.ts';
 import {
@@ -410,18 +414,35 @@ async function handleRoutes(
       if (!/^[a-z0-9-]{2,40}$/.test(slug)) {
         return html(400, errorPage(400, 'A link may use lowercase letters, digits and dashes.'));
       }
+      // P2 · every event type draws from an availability set; reuse the
+      // owner's first, or found a 'Working hours' set on first use.
+      let setId: string;
+      const existingSet = await sql.query(
+        `SELECT set_id FROM availability_sets WHERE owner_id = $1 ORDER BY created_at LIMIT 1`,
+        [owner.owner_id],
+      );
+      if (existingSet.rows[0]) {
+        setId = String(existingSet.rows[0]['set_id']);
+      } else {
+        setId = randomUUID();
+        await sql.query(
+          `INSERT INTO availability_sets (set_id, owner_id, name) VALUES ($1, $2, 'Working hours')`,
+          [setId, owner.owner_id],
+        );
+      }
+      const newId = randomUUID();
       try {
         await sql.query(
           `INSERT INTO schedules (schedule_id, owner_id, slug, title, duration_minutes,
-             granularity_minutes, minimum_notice_minutes, maximum_horizon_days)
-           VALUES ($1, $2, $3, $4, $5, $5, 60, 30)`,
-          [randomUUID(), owner.owner_id, slug, (f['title'] ?? 'Booking').trim(),
-           Number(f['duration_minutes'] ?? 30)],
+             granularity_minutes, minimum_notice_minutes, maximum_horizon_days, availability_set_id)
+           VALUES ($1, $2, $3, $4, $5, $5, 60, 30, $6)`,
+          [newId, owner.owner_id, slug, (f['title'] ?? 'Booking').trim(),
+           Number(f['duration_minutes'] ?? 30), setId],
         );
       } catch {
         return html(409, errorPage(409, 'That link is already taken.'));
       }
-      return { status: 303, headers: { location: '/app' }, body: '' };
+      return { status: 303, headers: { location: `/app/event/${newId}` }, body: '' };
     }
 
     if (req.method === 'POST' && parts[1] === 'schedules' && parts[2] && parts[3] === 'availability') {
@@ -434,20 +455,206 @@ async function handleRoutes(
       if (!upd.rows[0]) return html(404, errorPage(404, 'No such booking page.'));
 
       const f = req.form ?? {};
+      // P2 · the quick editor now writes to the schedule's availability SET
+      // (shared across event types); the schedule-keyed table remains only for
+      // rows that predate sets.
+      const setRow = await sql.query(
+        `SELECT availability_set_id FROM schedules WHERE schedule_id = $1`, [parts[2]]);
+      const setId = setRow.rows[0]?.['availability_set_id'];
       await deps.tx.transaction(async (tx) => {
-        await tx.query(`DELETE FROM availability_rules WHERE schedule_id = $1`, [parts[2]]);
+        if (setId) {
+          await tx.query(`DELETE FROM set_rules WHERE set_id = $1`, [setId]);
+        } else {
+          await tx.query(`DELETE FROM availability_rules WHERE schedule_id = $1`, [parts[2]]);
+        }
         for (const d of ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU']) {
           const s = (f[`${d}_start`] ?? '').trim();
           const e = (f[`${d}_end`] ?? '').trim();
           if (!/^\d{2}:\d{2}$/.test(s) || !/^\d{2}:\d{2}$/.test(e)) continue;
-          await tx.query(
-            `INSERT INTO availability_rules (schedule_id, weekday, starts_local, ends_local)
-             VALUES ($1, $2, $3, $4)`,
-            [parts[2], d, s, e],
-          );
+          if (setId) {
+            await tx.query(
+              `INSERT INTO set_rules (set_id, weekday, starts_local, ends_local)
+               VALUES ($1, $2, $3, $4)`, [String(setId), d, s, e]);
+          } else {
+            await tx.query(
+              `INSERT INTO availability_rules (schedule_id, weekday, starts_local, ends_local)
+               VALUES ($1, $2, $3, $4)`, [parts[2], d, s, e]);
+          }
         }
       });
       return { status: 303, headers: { location: '/app' }, body: '' };
+    }
+
+    // ── availability sets (P2) ───────────────────────────────────────────
+    if (parts[1] === 'availability') {
+      if (req.method === 'POST' && !parts[2]) {
+        const name = (req.form?.['name'] ?? '').trim() || 'Working hours';
+        await sql.query(
+          `INSERT INTO availability_sets (set_id, owner_id, name) VALUES ($1, $2, $3)`,
+          [randomUUID(), owner.owner_id, name],
+        );
+        return { status: 303, headers: { location: '/app' }, body: '' };
+      }
+      // Ownership at the query (I4): every set operation is owner-scoped.
+      const owned = parts[2]
+        ? await sql.query(
+            `SELECT set_id, name FROM availability_sets WHERE set_id = $1 AND owner_id = $2`,
+            [parts[2], owner.owner_id],
+          )
+        : { rows: [] };
+      if (!owned.rows[0]) return html(404, errorPage(404, 'No such availability schedule.'));
+      const setId = String(owned.rows[0]['set_id']);
+
+      if (req.method === 'GET' && !parts[3]) {
+        const rules = await sql.query(
+          `SELECT weekday, starts_local, ends_local FROM set_rules
+            WHERE set_id = $1 ORDER BY weekday, starts_local`, [setId]);
+        const overrides = await sql.query(
+          `SELECT local_date, starts_local, ends_local FROM set_overrides
+            WHERE set_id = $1 ORDER BY local_date`, [setId]);
+        return html(200, availabilityEditor({
+          set_id: setId,
+          name: String(owned.rows[0]['name']),
+          timezone: owner.timezone,
+          rules: rules.rows.map((x) => ({
+            weekday: String(x['weekday']),
+            start: String(x['starts_local']),
+            end: String(x['ends_local']),
+          })),
+          overrides: overrides.rows.map((x) => ({
+            date: String(x['local_date']).slice(0, 10),
+            start: x['starts_local'] === null ? undefined : String(x['starts_local']),
+            end: x['ends_local'] === null ? undefined : String(x['ends_local']),
+          })),
+        }));
+      }
+
+      if (req.method === 'POST' && parts[3] === 'hours') {
+        const f = req.form ?? {};
+        await deps.tx.transaction(async (tx) => {
+          await tx.query(`DELETE FROM set_rules WHERE set_id = $1`, [setId]);
+          for (const d of ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU']) {
+            const st = (f[`${d}_start`] ?? '').trim();
+            const en = (f[`${d}_end`] ?? '').trim();
+            if (!/^\d{2}:\d{2}$/.test(st) || !/^\d{2}:\d{2}$/.test(en)) continue;
+            await tx.query(
+              `INSERT INTO set_rules (set_id, weekday, starts_local, ends_local)
+               VALUES ($1, $2, $3, $4)`, [setId, d, st, en]);
+          }
+        });
+        return { status: 303, headers: { location: `/app/availability/${setId}` }, body: '' };
+      }
+
+      if (req.method === 'POST' && parts[3] === 'overrides') {
+        const f = req.form ?? {};
+        if (f['remove']) {
+          await sql.query(`DELETE FROM set_overrides WHERE set_id = $1 AND local_date = $2`,
+            [setId, f['remove']]);
+          return { status: 303, headers: { location: `/app/availability/${setId}` }, body: '' };
+        }
+        const date = (f['date'] ?? '').trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          return html(400, errorPage(400, 'An override needs a date (YYYY-MM-DD).'));
+        }
+        const st = (f['start'] ?? '').trim();
+        const en = (f['end'] ?? '').trim();
+        const windowed = /^\d{2}:\d{2}$/.test(st) && /^\d{2}:\d{2}$/.test(en);
+        // S11: a date present with no window means unavailable that day.
+        await sql.query(`DELETE FROM set_overrides WHERE set_id = $1 AND local_date = $2`,
+          [setId, date]);
+        await sql.query(
+          `INSERT INTO set_overrides (set_id, local_date, starts_local, ends_local)
+           VALUES ($1, $2, $3, $4)`,
+          [setId, date, windowed ? st : null, windowed ? en : null]);
+        return { status: 303, headers: { location: `/app/availability/${setId}` }, body: '' };
+      }
+
+      // P2 · holiday import: public holidays become full-day overrides. The
+      // fetch happens once, here, at the owner's request — never on a booking
+      // path. Source: date.nager.at (public domain data).
+      if (req.method === 'POST' && parts[3] === 'holidays') {
+        const country = (req.form?.['country'] ?? '').trim().toUpperCase();
+        if (!/^[A-Z]{2}$/.test(country)) {
+          return html(400, errorPage(400, 'Pick a two-letter country code.'));
+        }
+        const year = Number(now.slice(0, 4));
+        let added = 0;
+        for (const y of [year, year + 1]) {
+          const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${y}/${country}`);
+          if (!res.ok) return html(502, errorPage(502, 'The holiday service did not answer. Try again.'));
+          const days = (await res.json()) as { date: string; global: boolean }[];
+          for (const d of days) {
+            if (!d.global) continue;
+            if (d.date < now.slice(0, 10)) continue;
+            await sql.query(`DELETE FROM set_overrides WHERE set_id = $1 AND local_date = $2`,
+              [setId, d.date]);
+            await sql.query(
+              `INSERT INTO set_overrides (set_id, local_date, starts_local, ends_local)
+               VALUES ($1, $2, NULL, NULL)`, [setId, d.date]);
+            added++;
+          }
+        }
+        return { status: 303, headers: { location: `/app/availability/${setId}?holidays=${added}` }, body: '' };
+      }
+      return html(404, errorPage(404, 'Nothing here.'));
+    }
+
+    // ── event type settings (P2) ─────────────────────────────────────────
+    if (parts[1] === 'event' && parts[2]) {
+      const sched = await findScheduleById(sql, parts[2]);
+      if (!sched || sched.owner_id !== owner.owner_id) {
+        return html(404, errorPage(404, 'No such booking page.'));
+      }
+      const sets = await sql.query(
+        `SELECT set_id, name FROM availability_sets WHERE owner_id = $1 ORDER BY name`,
+        [owner.owner_id],
+      );
+      if (req.method === 'GET') {
+        const link = await sql.query(`SELECT link_slug FROM owners WHERE owner_id = $1`, [owner.owner_id]);
+        const linkSlug = link.rows[0]?.['link_slug'] ? String(link.rows[0]['link_slug']) : '';
+        return html(200, eventTypeEditor(sched, sets.rows.map((r) => ({
+          set_id: String(r['set_id']), name: String(r['name']),
+        })), linkSlug, config.baseUrl));
+      }
+      if (req.method === 'POST') {
+        const f = req.form ?? {};
+        const num = (v: string | undefined, fallback: number, min = 0): number => {
+          const x = Number(v);
+          return Number.isFinite(x) && x >= min ? x : fallback;
+        };
+        const opt = (v: string | undefined): string | null => {
+          const t = (v ?? '').trim();
+          return t === '' ? null : t;
+        };
+        const kind = ['custom', 'phone', 'in_person', 'meet'].includes(f['location_kind'] ?? '')
+          ? f['location_kind']! : 'custom';
+        const chosenSet = sets.rows.some((r) => String(r['set_id']) === f['availability_set_id'])
+          ? f['availability_set_id']! : sched.availability_set_id;
+        const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+        await sql.query(
+          `UPDATE schedules SET title = $2, description = $3, duration_minutes = $4,
+                  granularity_minutes = $5, buffer_before_minutes = $6, buffer_after_minutes = $7,
+                  minimum_notice_minutes = $8, maximum_horizon_days = $9, max_bookings_per_day = $10,
+                  location_kind = $11, location_value = $12, availability_set_id = $13,
+                  available_from = $14, available_until = $15, color = $16
+            WHERE schedule_id = $1 AND owner_id = $17`,
+          [sched.schedule_id,
+           (f['title'] ?? sched.title).trim() || sched.title,
+           opt(f['description']),
+           num(f['duration_minutes'], sched.duration_minutes, 1),
+           num(f['granularity_minutes'], sched.granularity_minutes, 1),
+           num(f['buffer_before_minutes'], sched.buffer_before_minutes),
+           num(f['buffer_after_minutes'], sched.buffer_after_minutes),
+           num(f['minimum_notice_minutes'], sched.minimum_notice_minutes),
+           num(f['maximum_horizon_days'], sched.maximum_horizon_days, 1),
+           f['max_bookings_per_day'] === '' ? null : num(f['max_bookings_per_day'], 0, 1) || null,
+           kind, opt(f['location_value']), chosenSet,
+           dateRe.test(f['available_from'] ?? '') ? f['available_from']! : null,
+           dateRe.test(f['available_until'] ?? '') ? f['available_until']! : null,
+           opt(f['color']), owner.owner_id],
+        );
+        return { status: 303, headers: { location: `/app/event/${sched.schedule_id}` }, body: '' };
+      }
     }
 
     // ── calendar connections (SPEC-0003) ─────────────────────────────────
@@ -531,25 +738,75 @@ async function handleRoutes(
     const connections = deps.calendars
       ? await deps.calendars.listConnections(sql, owner.owner_id)
       : undefined;
-    return html(200, ownerHome(owner, summaries, config.baseUrl, undefined, connections));
+    const setsRows = await sql.query(
+      `SELECT set_id, name FROM availability_sets WHERE owner_id = $1 ORDER BY name`,
+      [owner.owner_id],
+    );
+    const linkRow = await sql.query(
+      `SELECT link_slug FROM owners WHERE owner_id = $1`, [owner.owner_id]);
+    return html(200, ownerHome(owner, summaries, config.baseUrl, undefined, connections,
+      setsRows.rows.map((r) => ({ set_id: String(r['set_id']), name: String(r['name']) })),
+      linkRow.rows[0]?.['link_slug'] ? String(linkRow.rows[0]['link_slug']) : undefined));
   }
 
-  // ── the public booking page ──────────────────────────────────────────────
+  // ── the public surfaces (P2) ─────────────────────────────────────────────
+  // /<owner>            the owner's landing page, listing their event types
+  // /<owner>/<event>    a booking page (the parity route)
+  // /<event>            legacy: a bare event slug still resolves
   const slug = parts[0];
   if (!slug) return html(200, homePage());
 
-  const schedule = await findScheduleBySlug(sql, slug);
-  if (!schedule) return html(404, errorPage(404, 'No such booking page.'));
+  if (await overLimit(sql, `view:${req.ip}`, RATE_LIMITS.page_views_per_ip_per_minute, 60, now)) {
+    return html(429, errorPage(429, 'Too many requests. Try again shortly.'));
+  }
 
-  if (req.method === 'GET' && parts.length === 1) {
-    if (await overLimit(sql, `view:${req.ip}`, RATE_LIMITS.page_views_per_ip_per_minute, 60, now)) {
-      return html(429, errorPage(429, 'Too many requests. Try again shortly.'));
+  // Two segments: /<owner>/<event> — page or its book action.
+  if (parts.length >= 2 && parts[1] !== 'book') {
+    const schedule = await findScheduleByOwnerSlug(sql, slug, parts[1]!);
+    if (!schedule) return html(404, errorPage(404, 'No such booking page.'));
+    if (req.method === 'GET' && parts.length === 2) {
+      const slots = await slotsFor(deps, schedule, now);
+      return html(200, bookingPage(schedule, slots.slots));
     }
+    if (req.method === 'POST' && parts[2] === 'book') {
+      return bookHandler(deps, schedule, req, now);
+    }
+    return html(404, errorPage(404, 'Nothing here.'));
+  }
+
+  // One segment: an owner landing page, or a legacy event slug.
+  if (parts.length === 1 && req.method === 'GET') {
+    const ownerRow = await sql.query(
+      `SELECT owner_id, display_name, link_slug FROM owners WHERE link_slug = $1`,
+      [slug],
+    );
+    if (ownerRow.rows[0]) {
+      const events = await sql.query(
+        `SELECT slug, title, duration_minutes, description, color FROM schedules
+          WHERE owner_id = $1 ORDER BY title`,
+        [String(ownerRow.rows[0]['owner_id'])],
+      );
+      return html(200, ownerLanding(
+        String(ownerRow.rows[0]['display_name']),
+        String(ownerRow.rows[0]['link_slug']),
+        events.rows.map((r) => ({
+          slug: String(r['slug']),
+          title: String(r['title']),
+          duration_minutes: Number(r['duration_minutes']),
+          description: r['description'] === null ? undefined : String(r['description']),
+          color: r['color'] === null ? undefined : String(r['color']),
+        })),
+      ));
+    }
+    const schedule = await findScheduleBySlug(sql, slug);
+    if (!schedule) return html(404, errorPage(404, 'No such booking page.'));
     const slots = await slotsFor(deps, schedule, now);
     return html(200, bookingPage(schedule, slots.slots));
   }
 
   if (req.method === 'POST' && parts[1] === 'book') {
+    const schedule = await findScheduleBySlug(sql, slug);
+    if (!schedule) return html(404, errorPage(404, 'No such booking page.'));
     return bookHandler(deps, schedule, req, now);
   }
 
@@ -610,8 +867,27 @@ async function ownerForBooking(sql: SqlClient, bookingId: string): Promise<Conta
 }
 
 async function slotsFor(deps: AppDeps, schedule: Schedule, now: string) {
-  const from = Temporal.Instant.from(now).toString();
-  const to = Temporal.Instant.from(now).add({ hours: 24 * 14 }).toString();
+  let from = Temporal.Instant.from(now).toString();
+  let to = Temporal.Instant.from(now).add({ hours: 24 * 14 }).toString();
+  // P2 · a fixed date range clamps the window. The dates are owner-local,
+  // inclusive; outside them the page simply has no times.
+  if (schedule.available_from) {
+    const startOfRange = Temporal.PlainDate.from(schedule.available_from)
+      .toZonedDateTime(schedule.owner_timezone).toInstant();
+    if (Temporal.Instant.compare(startOfRange, Temporal.Instant.from(from)) > 0) {
+      from = startOfRange.toString();
+    }
+  }
+  if (schedule.available_until) {
+    const endOfRange = Temporal.PlainDate.from(schedule.available_until)
+      .add({ days: 1 }).toZonedDateTime(schedule.owner_timezone).toInstant();
+    if (Temporal.Instant.compare(endOfRange, Temporal.Instant.from(to)) < 0) {
+      to = endOfRange.toString();
+    }
+  }
+  if (Temporal.Instant.compare(Temporal.Instant.from(from), Temporal.Instant.from(to)) >= 0) {
+    return { slots: [], diagnostics: [] };
+  }
   // SPEC-0003 · the calendar is consulted on every slot computation — page
   // views AND the commit-time revalidation — so a busy time that appeared
   // after the page loaded still blocks the booking (fresh fetch, B3 pattern).
@@ -721,13 +997,16 @@ async function bookHandler(
     bookingId,
   ]);
 
-  // SPEC-0003 · the booking lands in the owner's calendar (never fatal, M3).
-  await deps.calendars?.writeBack(sql, schedule.owner_id, bookingId, {
+  // SPEC-0003 · the booking lands in the owner's calendar (never fatal, M3),
+  // BEFORE the mails so a minted Meet link can ride along in them.
+  const written = await deps.calendars?.writeBack(sql, schedule.owner_id, bookingId, {
     title: `${schedule.title} — ${name}`,
     description: `Booked via ${config.baseUrl}/${schedule.slug}\nWith: ${name} <${email}>`,
     start,
     end,
+    conference: schedule.location_kind === 'meet',
   });
+  const location = locationText(schedule, written?.meetUrl);
 
   // M2 · after commit, never inside the transaction. M3 · a failure here must
   // not invalidate a confirmed booking.
@@ -735,15 +1014,15 @@ async function bookHandler(
   // as a marker -- the SMTP adapter refuses a non-address, which is how the
   // placeholder was caught.
   const owner = await ownerContact(sql, schedule.owner_id);
-  await mail.send({ kind: 'confirmed', to: email, bookingId, start, token, timezone: bookerTz });
+  await mail.send({ kind: 'confirmed', to: email, bookingId, start, token, timezone: bookerTz, location });
   if (owner) {
     // The owner gets no management token: it is the booker's credential.
-    await mail.send({ kind: 'confirmed', to: owner.email, bookingId, start, timezone: owner.timezone });
+    await mail.send({ kind: 'confirmed', to: owner.email, bookingId, start, timezone: owner.timezone, location });
   }
 
   // The management token reaches exactly one place: the confirmation mail.
   // Putting it on the response page would let anyone who books using someone
   // else's address walk away holding a credential over that booking, and would
   // leave it in browser history and on shared screens.
-  return html(200, confirmedPage({ title: schedule.title, start }));
+  return html(200, confirmedPage({ title: schedule.title, start, location }));
 }

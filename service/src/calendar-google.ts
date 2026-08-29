@@ -13,6 +13,7 @@
 import type {
   BookingEvent,
   CalendarProvider,
+  CreatedEvent,
   ProviderCalendar,
   ProviderTokens,
   ScopeLevel,
@@ -182,25 +183,39 @@ export class GoogleCalendarProvider implements CalendarProvider {
     accessToken: string,
     calendarId: string,
     ev: BookingEvent,
-  ): Promise<string> {
+  ): Promise<CreatedEvent> {
     // sendUpdates=none: this service already mails both parties (M5); Google
-    // must not mail them again.
+    // must not mail them again. Meet: a conferenceData.createRequest with a
+    // fresh requestId and conferenceDataVersion=1 — Meet is Google's default
+    // solution, no conferenceSolutionKey needed; the link exists only on the
+    // response (cal.diy learned this; we inherit it).
+    const payload: Record<string, unknown> = {
+      summary: ev.title,
+      description: ev.description,
+      start: { dateTime: ev.start, timeZone: 'UTC' },
+      end: { dateTime: ev.end, timeZone: 'UTC' },
+    };
+    if (ev.conference) {
+      payload['conferenceData'] = { createRequest: { requestId: crypto.randomUUID() } };
+    }
     const res = await fetch(
-      `${API}/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=none`,
+      `${API}/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=none&conferenceDataVersion=1`,
       {
         method: 'POST',
         headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          summary: ev.title,
-          description: ev.description,
-          start: { dateTime: ev.start, timeZone: 'UTC' },
-          end: { dateTime: ev.end, timeZone: 'UTC' },
-        }),
+        body: JSON.stringify(payload),
       },
     );
     await expectOk(res, 'event insert');
-    const body = (await res.json()) as { id: string };
-    return body.id;
+    const body = (await res.json()) as {
+      id: string;
+      hangoutLink?: string;
+      conferenceData?: { entryPoints?: { entryPointType?: string; uri?: string }[] };
+    };
+    const meetUrl =
+      body.hangoutLink ??
+      body.conferenceData?.entryPoints?.find((e) => e.entryPointType === 'video')?.uri;
+    return { eventId: body.id, meetUrl };
   }
 
   async moveEvent(

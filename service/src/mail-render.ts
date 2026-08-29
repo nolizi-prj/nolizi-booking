@@ -46,11 +46,13 @@ export function renderMessage(m: MailMessage, baseUrl: string): RenderedMail {
     ? `\nTo cancel or move it:\n  ${link}\n\nKeep that link — it is the only way back in, and anyone\nholding it can change the booking.\n`
     : '';
 
+  const where = m.location ? `Where: ${m.location}\n` : '';
+
   switch (m.kind) {
     case 'confirmed':
       return {
         subject: `Booked: ${when}`,
-        text: `Your booking is confirmed.\n\nWhen: ${when}\n${manage}`,
+        text: `Your booking is confirmed.\n\nWhen: ${when}\n${where}${manage}`,
       };
     case 'cancelled':
       return {

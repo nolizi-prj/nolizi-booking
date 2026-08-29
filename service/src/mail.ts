@@ -14,6 +14,8 @@ export interface MailMessage {
   start: string;
   token?: string;
   timezone?: string;
+  /** P2 · where the meeting happens — an address, a phone note, a Meet link. */
+  location?: string;
 }
 
 export interface MailPort {

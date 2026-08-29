@@ -135,7 +135,11 @@ test('an owner can create a booking page and set availability', async () => {
   });
   assert.equal(saved.status, 303);
 
-  const rules = await db.query(`SELECT weekday, starts_local FROM availability_rules WHERE schedule_id = $1`, [id]);
+  // P2: the quick editor writes to the schedule's availability SET.
+  const rules = await db.query(
+    `SELECT r.weekday, r.starts_local FROM set_rules r
+      JOIN schedules sc ON sc.availability_set_id = r.set_id
+     WHERE sc.schedule_id = $1`, [id]);
   assert.equal(rules.rows.length, 1, 'a blank day stores nothing');
   assert.equal(rules.rows[0]?.['weekday'], 'MO');
 

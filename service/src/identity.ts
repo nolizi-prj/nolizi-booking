@@ -76,10 +76,24 @@ export async function redeemInvite(
       ]);
       if (existing.rows[0]) throw new Refused('already_registered');
 
-      // The owner must exist before the invite can reference it.
+      // The owner must exist before the invite can reference it. P2: every
+      // owner gets a public link slug from their address's local part; on
+      // collision (or a reserved word) a numbered variant, so signup never
+      // fails over a vanity string.
+      const base = input.email.split('@')[0]!.toLowerCase().replace(/[^a-z0-9-]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'user';
+      const reserved = new Set(['app', 'auth', 'login', 'logout', 'signup', 'oauth', 'b',
+        'healthz', 'readyz', 'assets']);
+      let linkSlug = reserved.has(base) ? `${base}-1` : base;
+      for (let i = 2; i < 50; i++) {
+        const clash = await t.query(`SELECT 1 FROM owners WHERE link_slug = $1`, [linkSlug]);
+        if (!clash.rows[0]) break;
+        linkSlug = `${base}-${i}`;
+      }
       await t.query(
-        `INSERT INTO owners (owner_id, email, display_name, timezone) VALUES ($1, $2, $3, $4)`,
-        [ownerId, input.email, input.displayName, input.timezone],
+        `INSERT INTO owners (owner_id, email, display_name, timezone, link_slug)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [ownerId, input.email, input.displayName, input.timezone, linkSlug],
       );
 
       // Spentness is `consumed_at`, not `consumed_by`. The latter is cleared

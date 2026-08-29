@@ -8,7 +8,7 @@
  */
 
 import type { Slot } from '@pumasi/booking-core';
-import type { Schedule } from './schedules.ts';
+import { locationText, type Schedule } from './schedules.ts';
 
 const esc = (s: string): string =>
   s.replace(/[&<>"']/g, (c) => `&${{ '&': 'amp', '<': 'lt', '>': 'gt', '"': 'quot', "'": '#39' }[c]};`);
@@ -52,22 +52,41 @@ export function bookingPage(
 ): string {
   const err = opts.error ? `<p class="err">${esc(opts.error)}</p>` : '';
   // Rendered server-side so the page works without JavaScript. The script
-  // below replaces this with the same slots grouped and formatted in the
-  // viewer's zone — enhancement, not the only path to a booking.
+  // below replaces this with a month calendar in the viewer's timezone —
+  // enhancement, not the only path to a booking.
   const buttons = slots
     .map(
       (s) =>
-        `<button type="button" class="slot" data-start="${esc(s.start)}" data-end="${esc(s.end)}" aria-pressed="false">${esc(s.start.slice(11, 16))} UTC</button>`,
+        `<button type="button" class="slot" data-start="${esc(s.start)}" data-end="${esc(s.end)}" aria-pressed="false">${esc(s.start.slice(0, 10))} ${esc(s.start.slice(11, 16))} UTC</button>`,
     )
     .join('');
 
   const empty = slots.length === 0 ? '<p class="muted">No times available in this window.</p>' : '';
+  const where = locationText(schedule);
 
   return SHELL(
     schedule.title,
-    `<h1>${esc(schedule.title)}</h1>
-<p class="muted">${schedule.duration_minutes} minutes &middot; times shown in <span id="tz"></span></p>
+    `<div class="book-grid">
+<div class="book-meta">
+  <h1>${esc(schedule.title)}</h1>
+  <p class="muted">${schedule.duration_minutes} minutes${where ? ` &middot; ${esc(where)}` : ''}</p>
+  ${schedule.description ? `<p>${esc(schedule.description)}</p>` : ''}
+  <p class="muted">Times shown in <span id="tzname"></span></p>
+  <div id="tzwrap" hidden><label for="tzsel">Timezone</label><select id="tzsel"></select></div>
+</div>
+<div class="book-pick">
 ${err}${empty}
+<div id="cal" hidden>
+  <div class="cal-head">
+    <button type="button" id="prev" class="navbtn" aria-label="Previous month">&lsaquo;</button>
+    <div id="month" class="day" style="margin:0"></div>
+    <button type="button" id="next" class="navbtn" aria-label="Next month">&rsaquo;</button>
+  </div>
+  <div class="cal-dow" id="dow"></div>
+  <div class="cal-days" id="days"></div>
+  <div class="day" id="picked-day" hidden></div>
+  <div class="slots" id="times"></div>
+</div>
 <div id="list"><div class="slots">${buttons}</div></div>
 <script type="application/json" id="slots-data">${JSON.stringify(slots).replace(/</g, '\\u003c')}</script>
 <form method="post" action="/${esc(schedule.slug)}/book" id="f">
@@ -83,52 +102,118 @@ ${err}${empty}
   <input type="hidden" name="booker_tz" id="btz">
   <button class="submit" type="submit">Confirm booking</button>
 </form>
+</div></div>
+<style>
+ .book-grid{display:grid;grid-template-columns:1fr;gap:1rem}
+ @media(min-width:44rem){.book-grid{grid-template-columns:16rem 1fr}}
+ .cal-head{display:flex;align-items:center;justify-content:space-between;margin:.5rem 0}
+ .navbtn{border:1px solid var(--line);background:transparent;color:var(--fg);
+   border-radius:.4rem;padding:.2rem .7rem;font:inherit;cursor:pointer}
+ .cal-dow,.cal-days{display:grid;grid-template-columns:repeat(7,1fr);gap:.2rem}
+ .cal-dow{font-size:.7rem;color:var(--muted);text-transform:uppercase;text-align:center}
+ .cal-days button{aspect-ratio:1;border:0;border-radius:50%;background:transparent;
+   color:var(--fg);font:inherit;cursor:pointer}
+ .cal-days button:disabled{color:var(--muted);opacity:.35;cursor:default}
+ .cal-days button.has{background:var(--accent);color:#fff;opacity:.85}
+ .cal-days button.has:hover,.cal-days button[aria-pressed=true]{opacity:1;outline:2px solid var(--accent);outline-offset:2px}
+ .cal-days .blank{visibility:hidden}
+ select{width:100%;padding:.45rem;border:1px solid var(--line);border-radius:.4rem;
+   background:transparent;color:var(--fg);font:inherit}
+</style>
 <script>
 // F2 — conversion happens HERE and nowhere else. The values submitted below are
 // the UTC instants the server sent, untouched.
 (function(){
   document.documentElement.className += ' js';
-  var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  document.getElementById('tz').textContent = tz;
-  document.getElementById('btz').value = tz;
   var all = JSON.parse(document.getElementById('slots-data').textContent);
-  var dayFmt = new Intl.DateTimeFormat(undefined,{weekday:'long',month:'long',day:'numeric'});
-  var timeFmt = new Intl.DateTimeFormat(undefined,{hour:'numeric',minute:'2-digit'});
-  var byDay = {};
-  all.forEach(function(s){
-    var d = new Date(s.start), k = dayFmt.format(d);
-    (byDay[k] = byDay[k] || []).push(s);
-  });
-  var list = document.getElementById('list');
-  list.textContent = '';            // replace the server-rendered fallback
-  Object.keys(byDay).forEach(function(k){
-    var h = document.createElement('div'); h.className='day'; h.textContent=k; list.appendChild(h);
-    var g = document.createElement('div'); g.className='slots';
-    byDay[k].forEach(function(s){
+  var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  var tzSel = document.getElementById('tzsel');
+  try {
+    var zones = Intl.supportedValuesOf('timeZone');
+    zones.forEach(function(z){ var o=document.createElement('option'); o.value=z; o.textContent=z; tzSel.appendChild(o); });
+    tzSel.value = tz;
+    document.getElementById('tzwrap').hidden = false;
+  } catch(e) {}
+  tzSel.onchange = function(){ tz = tzSel.value; render(); };
+
+  var cal = document.getElementById('cal'), list = document.getElementById('list');
+  if (all.length) { cal.hidden = false; list.hidden = true; }
+
+  function ymd(iso, zone){ // the slot's local calendar date in that zone
+    return new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(iso));
+  }
+  var view = null, pickedDay = null;
+  function render(){
+    document.getElementById('tzname').textContent = tz;
+    document.getElementById('btz').value = tz;
+    var byDay = {};
+    all.forEach(function(s){ var k = ymd(s.start, tz); (byDay[k]=byDay[k]||[]).push(s); });
+    var dayKeys = Object.keys(byDay).sort();
+    if (!dayKeys.length) return;
+    if (!view || !pickedDay || !byDay[pickedDay]) { pickedDay = dayKeys[0]; }
+    if (!view) view = pickedDay.slice(0,7);
+    var months = {}; dayKeys.forEach(function(k){ months[k.slice(0,7)] = 1; });
+    var monthKeys = Object.keys(months).sort();
+    if (!months[view]) view = monthKeys[0];
+
+    var mFmt = new Intl.DateTimeFormat(undefined,{month:'long',year:'numeric',timeZone:'UTC'});
+    document.getElementById('month').textContent = mFmt.format(new Date(view + '-01T00:00:00Z'));
+    var i = monthKeys.indexOf(view);
+    document.getElementById('prev').disabled = i <= 0;
+    document.getElementById('next').disabled = i >= monthKeys.length - 1;
+    document.getElementById('prev').onclick = function(){ view = monthKeys[i-1]; render(); };
+    document.getElementById('next').onclick = function(){ view = monthKeys[i+1]; render(); };
+
+    var dow = document.getElementById('dow'); dow.textContent='';
+    ['S','M','T','W','T','F','S'].forEach(function(d){ var c=document.createElement('div'); c.textContent=d; dow.appendChild(c); });
+
+    var days = document.getElementById('days'); days.textContent='';
+    var first = new Date(view + '-01T00:00:00Z');
+    var startDow = first.getUTCDay();
+    var dim = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth()+1, 0)).getUTCDate();
+    for (var b=0;b<startDow;b++){ var bl=document.createElement('button'); bl.className='blank'; bl.disabled=true; days.appendChild(bl); }
+    for (var d=1;d<=dim;d++){
+      var key = view + '-' + String(d).padStart(2,'0');
+      var btn = document.createElement('button'); btn.type='button'; btn.textContent=d;
+      if (byDay[key]) {
+        btn.className='has';
+        if (key === pickedDay) btn.setAttribute('aria-pressed','true');
+        btn.onclick = (function(k){ return function(){ pickedDay = k; render(); }; })(key);
+      } else { btn.disabled = true; }
+      days.appendChild(btn);
+    }
+
+    var dayFmt = new Intl.DateTimeFormat(undefined,{weekday:'long',month:'long',day:'numeric',timeZone:tz});
+    var timeFmt = new Intl.DateTimeFormat(undefined,{hour:'numeric',minute:'2-digit',timeZone:tz});
+    var pd = document.getElementById('picked-day');
+    pd.hidden = false; pd.textContent = dayFmt.format(new Date(byDay[pickedDay][0].start));
+    var times = document.getElementById('times'); times.textContent='';
+    byDay[pickedDay].forEach(function(s){
       var b=document.createElement('button');
       b.type='button'; b.className='slot'; b.textContent=timeFmt.format(new Date(s.start));
       b.onclick=function(){
-        document.querySelectorAll('.slot').forEach(function(x){x.setAttribute('aria-pressed','false')});
+        times.querySelectorAll('.slot').forEach(function(x){x.setAttribute('aria-pressed','false')});
         b.setAttribute('aria-pressed','true');
         document.getElementById('start').value = s.start;
         document.getElementById('end').value = s.end;
         document.getElementById('f').classList.add('on');
         document.getElementById('name').focus();
       };
-      g.appendChild(b);
+      times.appendChild(b);
     });
-    list.appendChild(g);
-  });
+  }
+  render();
 })();
 </script>`,
   );
 }
 
-export function confirmedPage(opts: { title: string; start: string }): string {
+export function confirmedPage(opts: { title: string; start: string; location?: string }): string {
   return SHELL(
     'Booked',
     `<h1>Booked</h1>
 <p class="ok">${esc(opts.title)} is confirmed for <time datetime="${esc(opts.start)}" id="t">${esc(opts.start)}</time>.</p>
+${opts.location ? `<p class="muted">Where: ${esc(opts.location)}</p>` : ''}
 <p class="muted">A confirmation is on its way. It contains the link for changing
   or cancelling this booking — that link is deliberately not shown here, so that
   only whoever holds the mailbox can act on it.</p>
@@ -278,6 +363,175 @@ export interface ScheduleSummary {
 
 const DAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const;
 
+const DAYS_FULL = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const;
+
+/** P2 — the editor for one named availability set. */
+export function availabilityEditor(set: {
+  set_id: string;
+  name: string;
+  timezone: string;
+  rules: { weekday: string; start: string; end: string }[];
+  overrides: { date: string; start?: string; end?: string }[];
+}): string {
+  const weekly = DAYS_FULL.map((d) => {
+    const r = set.rules.find((x) => x.weekday === d);
+    return `<tr><th>${d}</th>
+      <td><input name="${d}_start" value="${esc(r?.start ?? '')}" placeholder="09:00" size="5"></td>
+      <td><input name="${d}_end" value="${esc(r?.end ?? '')}" placeholder="17:00" size="5"></td></tr>`;
+  }).join('');
+
+  const ov = set.overrides
+    .map(
+      (o) => `<tr><td>${esc(o.date)}</td>
+  <td>${o.start ? `${esc(o.start)}–${esc(o.end ?? '')}` : '<span class="muted">unavailable</span>'}</td>
+  <td><form method="post" action="/app/availability/${esc(set.set_id)}/overrides" style="margin:0">
+    <input type="hidden" name="remove" value="${esc(o.date)}">
+    <button class="linkish" type="submit">remove</button></form></td></tr>`,
+    )
+    .join('');
+
+  return SHELL(
+    set.name,
+    `<p class="muted"><a href="/app">&lsaquo; back</a></p>
+<h1>${esc(set.name)}</h1>
+<p class="muted">Times are in your own timezone (${esc(set.timezone)}). Every event
+  type using this schedule follows what you save here.</p>
+<div class="card">
+  <h2>Weekly hours</h2>
+  <form method="post" action="/app/availability/${esc(set.set_id)}/hours">
+    <table class="avail">${weekly}</table>
+    <p class="notice">Leave a day blank to be unavailable.</p>
+    <button class="submit" type="submit">Save weekly hours</button>
+  </form>
+</div>
+<div class="card">
+  <h2>Date-specific hours</h2>
+  <p class="muted">A date listed here replaces that day's weekly hours entirely.
+    No times means the whole day is unavailable.</p>
+  ${ov ? `<table class="avail">${ov}</table>` : ''}
+  <form method="post" action="/app/availability/${esc(set.set_id)}/overrides">
+    <label>Date <input type="date" name="date" required></label>
+    <label>From <input name="start" placeholder="09:00" size="5"></label>
+    <label>To <input name="end" placeholder="12:00" size="5"></label>
+    <button class="submit" type="submit">Add override</button>
+  </form>
+</div>
+<div class="card">
+  <h2>Holidays</h2>
+  <p class="muted">Marks your country's public holidays (this year and next) as
+    unavailable, as date overrides you can remove one by one.</p>
+  <form method="post" action="/app/availability/${esc(set.set_id)}/holidays">
+    <label>Country code <input name="country" placeholder="US" size="3" maxlength="2" required></label>
+    <button class="submit" type="submit">Block holidays</button>
+  </form>
+</div>
+<style>
+ .card{border:1px solid var(--line);border-radius:.5rem;padding:1rem;margin:1rem 0}
+ .card h2{font-size:1.1rem;margin:0 0 .25rem}
+ table.avail{border-collapse:collapse} table.avail th{text-align:left;padding-right:.5rem;font-weight:600}
+ table.avail td{padding:.15rem .35rem}
+ .linkish{background:none;border:0;color:var(--accent);font:inherit;cursor:pointer;padding:0}
+ label{display:inline-block;margin-right:.75rem}
+ input[type=date]{width:auto}
+</style>`,
+  );
+}
+
+/** P2 — the editor for one event type. */
+export function eventTypeEditor(
+  s: Schedule,
+  sets: { set_id: string; name: string }[],
+  linkSlug: string,
+  baseUrl: string,
+): string {
+  const setOptions = sets
+    .map(
+      (x) =>
+        `<option value="${esc(x.set_id)}" ${x.set_id === s.availability_set_id ? 'selected' : ''}>${esc(x.name)}</option>`,
+    )
+    .join('');
+  const kinds: [string, string][] = [
+    ['custom', 'Custom note'], ['phone', 'Phone call'],
+    ['in_person', 'In person'], ['meet', 'Google Meet'],
+  ];
+  const kindOptions = kinds
+    .map(([v, l]) => `<option value="${v}" ${v === s.location_kind ? 'selected' : ''}>${l}</option>`)
+    .join('');
+  const url = linkSlug ? `${baseUrl}/${linkSlug}/${s.slug}` : `${baseUrl}/${s.slug}`;
+
+  return SHELL(
+    s.title,
+    `<p class="muted"><a href="/app">&lsaquo; back</a></p>
+<h1>${esc(s.title)}</h1>
+<p class="muted"><a href="${esc(url)}">${esc(url)}</a></p>
+<form method="post" action="/app/event/${esc(s.schedule_id)}">
+<div class="card"><h2>What</h2>
+  <label for="t">Title</label><input id="t" name="title" value="${esc(s.title)}" required>
+  <label for="de">Description</label><input id="de" name="description" value="${esc(s.description ?? '')}" placeholder="What this meeting is for">
+  <label for="du">Duration (minutes)</label><input id="du" name="duration_minutes" type="number" min="1" value="${s.duration_minutes}">
+  <label for="co">Accent color</label><input id="co" name="color" value="${esc(s.color ?? '')}" placeholder="#1a56db" size="8">
+</div>
+<div class="card"><h2>Where</h2>
+  <label for="lk">Location</label>
+  <select id="lk" name="location_kind">${kindOptions}</select>
+  <label for="lv">Details (address, phone note, or link)</label>
+  <input id="lv" name="location_value" value="${esc(s.location_value ?? '')}" placeholder="Optional">
+  <p class="notice">Google Meet needs the calendar connection's "add bookings to
+    calendar" grant; the link is minted per booking.</p>
+</div>
+<div class="card"><h2>When</h2>
+  <label for="av">Availability schedule</label>
+  <select id="av" name="availability_set_id">${setOptions}</select>
+  <label for="gr">Start-time spacing (minutes)</label><input id="gr" name="granularity_minutes" type="number" min="1" value="${s.granularity_minutes}">
+  <label for="bb">Buffer before (minutes)</label><input id="bb" name="buffer_before_minutes" type="number" min="0" value="${s.buffer_before_minutes}">
+  <label for="ba">Buffer after (minutes)</label><input id="ba" name="buffer_after_minutes" type="number" min="0" value="${s.buffer_after_minutes}">
+  <label for="mn">Minimum notice (minutes)</label><input id="mn" name="minimum_notice_minutes" type="number" min="0" value="${s.minimum_notice_minutes}">
+  <label for="mh">How far ahead people can book (days)</label><input id="mh" name="maximum_horizon_days" type="number" min="1" value="${s.maximum_horizon_days}">
+  <label for="mb">Max bookings per day (blank = no limit)</label><input id="mb" name="max_bookings_per_day" type="number" min="1" value="${s.max_bookings_per_day ?? ''}">
+  <label for="af">Only bookable from (date, optional)</label><input id="af" name="available_from" type="date" value="${esc(s.available_from ?? '')}">
+  <label for="au">…until (date, optional)</label><input id="au" name="available_until" type="date" value="${esc(s.available_until ?? '')}">
+</div>
+<button class="submit" type="submit">Save event type</button>
+</form>
+<style>
+ .card{border:1px solid var(--line);border-radius:.5rem;padding:1rem;margin:1rem 0}
+ .card h2{font-size:1.1rem;margin:0 0 .25rem}
+ select{width:100%;padding:.55rem;border:1px solid var(--line);border-radius:.4rem;
+   background:transparent;color:var(--fg);font:inherit}
+</style>`,
+  );
+}
+
+/** P2 — the owner's public landing page: their event types, nothing else. */
+export function ownerLanding(
+  displayName: string,
+  linkSlug: string,
+  events: { slug: string; title: string; duration_minutes: number; description?: string; color?: string }[],
+): string {
+  const cards = events
+    .map(
+      (e) => `<a class="ev" href="/${esc(linkSlug)}/${esc(e.slug)}"
+  ${e.color ? `style="border-left-color:${esc(e.color)}"` : ''}>
+  <b>${esc(e.title)}</b>
+  <span class="muted">${e.duration_minutes} min</span>
+  ${e.description ? `<span class="muted">${esc(e.description)}</span>` : ''}
+</a>`,
+    )
+    .join('');
+  return SHELL(
+    displayName,
+    `<h1>${esc(displayName)}</h1>
+<p class="muted">Pick a meeting to see available times.</p>
+${cards || '<p class="muted">No booking pages yet.</p>'}
+<style>
+ .ev{display:flex;flex-direction:column;gap:.15rem;border:1px solid var(--line);
+   border-left:3px solid var(--accent);border-radius:.4rem;padding:.8rem 1rem;
+   margin:.6rem 0;text-decoration:none;color:var(--fg)}
+ .ev:hover{border-color:var(--accent)}
+</style>`,
+  );
+}
+
 export interface ConnectionView {
   connection_id: string;
   provider: string;
@@ -341,13 +595,17 @@ export function ownerHome(
   baseUrl: string,
   notice?: string,
   connections?: ConnectionView[],
+  sets?: { set_id: string; name: string }[],
+  linkSlug?: string,
 ): string {
+  const pageUrl = (slug: string) =>
+    linkSlug ? `${baseUrl}/${linkSlug}/${slug}` : `${baseUrl}/${slug}`;
   const list = schedules
     .map(
       (s) => `<div class="card">
-  <h2>${esc(s.title)}</h2>
+  <h2>${esc(s.title)} <a class="linkish" href="/app/event/${esc(s.schedule_id)}" style="font-size:.85rem">settings</a></h2>
   <p class="muted">${s.duration_minutes} min &middot;
-    <a href="${esc(baseUrl)}/${esc(s.slug)}">${esc(baseUrl)}/${esc(s.slug)}</a>
+    <a href="${esc(pageUrl(s.slug))}">${esc(pageUrl(s.slug))}</a>
     &middot; ${s.upcoming} upcoming</p>
   <form method="post" action="/app/schedules/${esc(s.schedule_id)}/availability">
     <table class="avail">
@@ -373,7 +631,18 @@ export function ownerHome(
   &middot; <form method="post" action="/logout" style="display:inline">
     <button type="submit" class="linkish">sign out</button></form></p>
 ${notice ? `<p class="ok">${esc(notice)}</p>` : ''}
+${linkSlug ? `<p class="muted">Your page: <a href="${esc(baseUrl)}/${esc(linkSlug)}">${esc(baseUrl)}/${esc(linkSlug)}</a></p>` : ''}
 ${schedules.length === 0 ? '<p class="muted">No booking pages yet.</p>' : list}
+<div class="card">
+  <h2>Availability schedules</h2>
+  <p class="muted">Named sets of hours; each event type follows one.</p>
+  ${(sets ?? []).map((x) => `<p><a href="/app/availability/${esc(x.set_id)}">${esc(x.name)}</a></p>`).join('')}
+  <form method="post" action="/app/availability">
+    <label for="setname">New schedule</label>
+    <input id="setname" name="name" placeholder="Working hours">
+    <button class="submit" type="submit">Create</button>
+  </form>
+</div>
 ${connections ? calendarSection(connections) : ''}
 <div class="card">
   <h2>Your account</h2>
