@@ -647,12 +647,61 @@ export function availabilityEditor(set: {
 }
 
 /** P2 — the editor for one event type. */
+/** P5 — organizations and their members. */
+export function teamPage(
+  orgs: {
+    org_id: string; name: string; my_role: string;
+    members: { owner_id: string; role: string; display_name: string; email: string }[];
+  }[],
+  myOwnerId: string,
+): string {
+  const list = orgs
+    .map(
+      (o) => `<div class="card">
+  <h2>${esc(o.name)} <span class="pill">${esc(o.my_role)}</span></h2>
+  ${o.members
+    .map(
+      (m) => `<p>${esc(m.display_name)} <span class="muted">${esc(m.email)} · ${esc(m.role)}</span>
+    ${o.my_role === 'admin' && m.owner_id !== myOwnerId
+      ? `<form method="post" action="/app/team/${esc(o.org_id)}/members" style="display:inline">
+      <input type="hidden" name="remove" value="${esc(m.owner_id)}">
+      <button class="linkish" type="submit">remove</button></form>` : ''}</p>`,
+    )
+    .join('')}
+  ${o.my_role === 'admin'
+    ? `<form method="post" action="/app/team/${esc(o.org_id)}/members">
+    <label>Add member by email <input name="email" type="email" required></label>
+    <button class="submit" type="submit">Add</button>
+  </form>` : ''}
+</div>`,
+    )
+    .join('');
+  return SHELL(
+    'Team',
+    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+<h1>Team</h1>
+<p class="muted">Members can host round-robin and collective event types together.
+  New members need their own account here first.</p>
+${list || '<p class="muted">No teams yet.</p>'}
+<div class="card">
+  <h2>New team</h2>
+  <form method="post" action="/app/team">
+    <label for="tn">Name</label><input id="tn" name="name" required placeholder="Sales">
+    <button class="submit" type="submit">Create team</button>
+  </form>
+</div>
+${CARD_CSS}`,
+  );
+}
+
 export function eventTypeEditor(
   s: Schedule,
   sets: { set_id: string; name: string }[],
   linkSlug: string,
   baseUrl: string,
   singleUseTokens: string[] = [],
+  hostChoices: { owner_id: string; label: string }[] = [],
+  currentHosts: string[] = [],
 ): string {
   const setOptions = sets
     .map(
@@ -688,6 +737,23 @@ export function eventTypeEditor(
   <input id="lv" name="location_value" value="${esc(s.location_value ?? '')}" placeholder="Optional">
   <p class="notice">Google Meet needs the calendar connection's "add bookings to
     calendar" grant; the link is minted per booking.</p>
+</div>
+<div class="card"><h2>Who</h2>
+  <label for="sk">Scheduling</label>
+  <select id="sk" name="scheduling_kind">
+    <option value="solo" ${s.scheduling_kind === 'solo' ? 'selected' : ''}>Just me</option>
+    <option value="round_robin" ${s.scheduling_kind === 'round_robin' ? 'selected' : ''}>Round robin — one host per booking, rotated fairly</option>
+    <option value="collective" ${s.scheduling_kind === 'collective' ? 'selected' : ''}>Collective — every host attends</option>
+  </select>
+  ${hostChoices.length
+    ? `<p class="notice">Hosts (team events use each host's own hours and calendar):</p>
+  ${hostChoices
+    .map(
+      (h) => `<label style="display:block;margin:.2rem 0">
+    <input type="checkbox" name="host:${esc(h.owner_id)}" ${currentHosts.includes(h.owner_id) ? 'checked' : ''} style="width:auto"> ${esc(h.label)}</label>`,
+    )
+    .join('')}`
+    : '<p class="notice">Create a team under /app/team to host with others.</p>'}
 </div>
 <div class="card"><h2>When</h2>
   <label for="av">Availability schedule</label>
@@ -868,7 +934,7 @@ export function ownerHome(
   &middot; <form method="post" action="/logout" style="display:inline">
     <button type="submit" class="linkish">sign out</button></form></p>
 ${notice ? `<p class="ok">${esc(notice)}</p>` : ''}
-<p class="muted"><a href="/app/meetings">Meetings</a> &middot; <a href="/app/contacts">Contacts</a> &middot; <a href="/app/settings">Settings</a></p>
+<p class="muted"><a href="/app/meetings">Meetings</a> &middot; <a href="/app/contacts">Contacts</a> &middot; <a href="/app/team">Team</a> &middot; <a href="/app/settings">Settings</a></p>
 ${setupBanner}
 ${linkSlug ? `<p class="muted">Your page: <a href="${esc(baseUrl)}/${esc(linkSlug)}">${esc(baseUrl)}/${esc(linkSlug)}</a></p>` : ''}
 ${schedules.length === 0 ? '<p class="muted">No booking pages yet.</p>' : list}

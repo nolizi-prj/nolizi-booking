@@ -38,6 +38,8 @@ import schema003 from '../migrations-sqlite/003_availability_sets.sql';
 import schema004 from '../migrations-sqlite/004_meetings.sql';
 // @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema005 from '../migrations-sqlite/005_profile.sql';
+// @ts-expect-error — .sql imports exist only under wrangler's bundler
+import schema006 from '../migrations-sqlite/006_teams.sql';
 
 /** Mirrors server.ts: a form here is a name, an address and two timestamps. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -89,6 +91,7 @@ export class PumasiService extends DurableObject {
           { name: '003_availability_sets.sql', sql: schema003 as string },
           { name: '004_meetings.sql', sql: schema004 as string },
           { name: '005_profile.sql', sql: schema005 as string },
+          { name: '006_teams.sql', sql: schema006 as string },
         ],
       }),
     );

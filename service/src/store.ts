@@ -219,6 +219,75 @@ export class PostgresBookingStore {
     );
   }
 
+  /**
+   * P5 · a collective meeting occupies EVERY host: one row per host, distinct
+   * booking_ids joined by group_id, committed in one transaction. Owners are
+   * locked in sorted order so two concurrent groups over the same hosts cannot
+   * deadlock; any host's overlap aborts the whole group (B2, per owner).
+   * The management token rides on the first entry's row only.
+   */
+  async insertConfirmedGroup(
+    groupId: string,
+    entries: { bookingId: string; ownerId: string }[],
+    start: string,
+    end: string,
+    key: string,
+    booker: { name: string; email: string; timezone: string; token: string },
+  ): Promise<{ ok: true } | { ok: false; reason: 'conflict' }> {
+    return withRetry(() =>
+      this.#tx.transaction(async (tx) => {
+        try {
+          for (const ownerId of entries.map((e) => e.ownerId).sort()) {
+            await lockOwner(tx, ownerId);
+          }
+          for (const [i, e] of entries.entries()) {
+            await tx.query(
+              `INSERT INTO bookings
+                 (booking_id, owner_id, starts_at, ends_at, status, booker_name, booker_email,
+                  booker_tz, token, group_id)
+               VALUES ($1, $2, $3, $4, 'confirmed', $5, $6, $7, $8, $9)`,
+              [e.bookingId, e.ownerId, start, end, booker.name, booker.email,
+               booker.timezone, i === 0 ? booker.token : null, groupId],
+            );
+          }
+          const claimed = await tx.query(
+            `INSERT INTO idempotency_keys (key, booking_id) VALUES ($1, $2)
+               ON CONFLICT (key) DO NOTHING
+             RETURNING key`,
+            [key, entries[0]!.bookingId],
+          );
+          if (!claimed.rows[0]) throw new KeyTaken();
+          return { ok: true as const };
+        } catch (err) {
+          if (err instanceof KeyTaken || isConflict(err)) {
+            return { ok: false as const, reason: 'conflict' as const };
+          }
+          throw err;
+        }
+      }),
+    );
+  }
+
+  /** P5 · cancelling a group releases every host's interval at once. */
+  async cancelGroup(groupId: string, key: string): Promise<string[]> {
+    return withRetry(() =>
+      this.#tx.transaction(async (tx) => {
+        const { rows } = await tx.query(
+          `UPDATE bookings SET status = 'cancelled'
+            WHERE group_id = $1 AND status = 'confirmed'
+            RETURNING booking_id`,
+          [groupId],
+        );
+        await tx.query(
+          `INSERT INTO idempotency_keys (key, booking_id) VALUES ($1, $2)
+             ON CONFLICT (key) DO NOTHING`,
+          [key, groupId],
+        );
+        return rows.map((r) => String(r['booking_id']));
+      }),
+    );
+  }
+
   /** B5 — cancelling releases the interval immediately. */
   async cancel(bookingId: string, key: string): Promise<void> {
     await withRetry(() =>

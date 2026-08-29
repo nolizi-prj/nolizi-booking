@@ -9,12 +9,13 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { Temporal } from '@js-temporal/polyfill';
 import { PostgresBookingStore, type SqlClient, type Transactor } from './store.ts';
 import {
-  availableSlots, findScheduleById, findScheduleByOwnerSlug, findScheduleBySlug, locationText,
-  type Schedule,
+  availableSlots, findScheduleById, findScheduleByOwnerSlug, findScheduleBySlug, hostSlots,
+  intersectSlots, loadHosts, locationText, unionSlots, type EventHost, type Schedule,
 } from './schedules.ts';
 import {
   availabilityEditor, bookingPage, confirmedPage, contactsPage, errorPage, eventTypeEditor,
   homePage, loginPage, managePage, meetingsPage, ownerHome, ownerLanding, settingsPage, signupPage,
+  teamPage,
   snippetPage,
   type ScheduleSummary,
 } from './pages.ts';
@@ -183,7 +184,8 @@ async function handleRoutes(
     // as "not found" so an expired link is indistinguishable from a wrong one.
     const graceCutoff = Temporal.Instant.from(now).subtract({ hours: 24 * L3_GRACE_DAYS }).toString();
     const { rows } = await sql.query(
-      `SELECT b.booking_id, b.starts_at, b.ends_at, b.status, b.schedule_id, b.owner_id, s.title
+      `SELECT b.booking_id, b.starts_at, b.ends_at, b.status, b.schedule_id, b.owner_id,
+              b.group_id, s.title
          FROM bookings b LEFT JOIN schedules s ON s.schedule_id = b.schedule_id
         WHERE b.token = $1 AND b.ends_at > $2 AND b.status = 'confirmed'
         ORDER BY (b.status='confirmed') DESC, b.id DESC LIMIT 1`,
@@ -199,9 +201,12 @@ async function handleRoutes(
 
     const status = String(r['status']);
     const scheduleId = r['schedule_id'] === null ? undefined : String(r['schedule_id']);
+    // P5 · a collective meeting occupies several hosts; its rows share a group.
+    const groupId = r['group_id'] === null ? undefined : String(r['group_id']);
 
     /** L4 · other times this booking could move to. The engine decides them. */
     const moveOptions = async (): Promise<Slot[]> => {
+      if (groupId) return []; // a group meeting is cancelled and rebooked, not moved
       if (status !== 'confirmed' || !scheduleId) return [];
       const s = await findScheduleById(sql, scheduleId);
       if (!s) return [];
@@ -218,6 +223,10 @@ async function handleRoutes(
     if (req.method === 'POST' && parts[2] === 'reschedule') {
       if (status !== 'confirmed') {
         return html(409, errorPage(409, 'This booking is no longer active.'));
+      }
+      if (groupId) {
+        return html(409, errorPage(409,
+          'This meeting has several hosts: cancel it and book a new time instead of moving it.'));
       }
       const newStart = req.form?.['start'];
       const newEnd = req.form?.['end'];
@@ -259,15 +268,21 @@ async function handleRoutes(
       const existing = await store.findById(bookingId);
       // B5 · cancelling is idempotent and total; re-cancelling is `cancelled`.
       if (existing?.status === 'confirmed') {
-        await store.cancel(bookingId, `cancel:${token}`);
-        // SPEC-0003 · the owner's calendar follows the cancellation.
-        await deps.calendars?.onCancelled(sql, bookingId);
-        const ownerRow = await ownerForBooking(sql, bookingId);
-        if (ownerRow) {
-          await mail.send({
-            kind: 'cancelled', to: ownerRow.email, bookingId,
-            start: startIso, timezone: ownerRow.timezone,
-          });
+        // P5 · a group cancels as one: every host's row, every host's calendar,
+        // every host's inbox.
+        const cancelledIds = groupId
+          ? await store.cancelGroup(groupId, `cancel:${token}`)
+          : (await store.cancel(bookingId, `cancel:${token}`), [bookingId]);
+        for (const id of cancelledIds) {
+          // SPEC-0003 · the owner's calendar follows the cancellation.
+          await deps.calendars?.onCancelled(sql, id);
+          const ownerRow = await ownerForBooking(sql, id);
+          if (ownerRow) {
+            await mail.send({
+              kind: 'cancelled', to: ownerRow.email, bookingId: id,
+              start: startIso, timezone: ownerRow.timezone,
+            });
+          }
         }
       }
       return html(200, managePage({ title, start: startIso, token, status: 'cancelled' }));
@@ -525,6 +540,9 @@ async function handleRoutes(
           `DELETE FROM set_overrides WHERE set_id IN
              (SELECT set_id FROM availability_sets WHERE owner_id = $1)`, [owner.owner_id]);
         await tx.query(`DELETE FROM availability_sets WHERE owner_id = $1`, [owner.owner_id]);
+        // P5 · memberships and host roles go too.
+        await tx.query(`DELETE FROM org_members WHERE owner_id = $1`, [owner.owner_id]);
+        await tx.query(`DELETE FROM event_hosts WHERE owner_id = $1`, [owner.owner_id]);
         await tx.query(`DELETE FROM owners WHERE owner_id = $1`, [owner.owner_id]);
       });
       return {
@@ -609,6 +627,74 @@ async function handleRoutes(
         }
       });
       return { status: 303, headers: { location: '/app' }, body: '' };
+    }
+
+    // ── team (P5): organizations and members ─────────────────────────────
+    if (parts[1] === 'team') {
+      if (req.method === 'POST' && !parts[2]) {
+        const orgName = (req.form?.['name'] ?? '').trim();
+        if (!orgName) return html(400, errorPage(400, 'A team needs a name.'));
+        const orgId = randomUUID();
+        await deps.tx.transaction(async (tx) => {
+          await tx.query(`INSERT INTO orgs (org_id, name) VALUES ($1, $2)`, [orgId, orgName]);
+          await tx.query(
+            `INSERT INTO org_members (org_id, owner_id, role) VALUES ($1, $2, 'admin')`,
+            [orgId, owner.owner_id]);
+        });
+        return { status: 303, headers: { location: '/app/team' }, body: '' };
+      }
+      if (req.method === 'POST' && parts[2] && parts[3] === 'members') {
+        // Admin-only, checked at the query (I4).
+        const admin = await sql.query(
+          `SELECT 1 FROM org_members WHERE org_id = $1 AND owner_id = $2 AND role = 'admin'`,
+          [parts[2], owner.owner_id]);
+        if (!admin.rows[0]) return html(404, errorPage(404, 'No such team.'));
+        const f = req.form ?? {};
+        if (f['remove']) {
+          await sql.query(
+            `DELETE FROM org_members WHERE org_id = $1 AND owner_id = $2 AND owner_id <> $3`,
+            [parts[2], f['remove'], owner.owner_id]);
+          return { status: 303, headers: { location: '/app/team' }, body: '' };
+        }
+        const memberEmail = (f['email'] ?? '').trim();
+        const found = await sql.query(
+          `SELECT owner_id FROM owners WHERE lower(email) = lower($1)`, [memberEmail]);
+        if (!found.rows[0]) {
+          return html(400, errorPage(400,
+            'No account with that address. Members need an account here first (invite them).'));
+        }
+        await sql.query(
+          `INSERT INTO org_members (org_id, owner_id, role) VALUES ($1, $2, 'member')
+           ON CONFLICT (org_id, owner_id) DO NOTHING`,
+          [parts[2], String(found.rows[0]['owner_id'])]);
+        return { status: 303, headers: { location: '/app/team' }, body: '' };
+      }
+      // GET /app/team — my organizations, with members where I admin.
+      const myOrgs = await sql.query(
+        `SELECT o.org_id, o.name, m.role FROM orgs o
+           JOIN org_members m ON m.org_id = o.org_id
+          WHERE m.owner_id = $1 ORDER BY o.name`,
+        [owner.owner_id]);
+      const orgs = [];
+      for (const r of myOrgs.rows) {
+        const members = await sql.query(
+          `SELECT m.owner_id, m.role, ow.display_name, ow.email FROM org_members m
+             JOIN owners ow ON ow.owner_id = m.owner_id
+            WHERE m.org_id = $1 ORDER BY ow.display_name`,
+          [String(r['org_id'])]);
+        orgs.push({
+          org_id: String(r['org_id']),
+          name: String(r['name']),
+          my_role: String(r['role']),
+          members: members.rows.map((m) => ({
+            owner_id: String(m['owner_id']),
+            role: String(m['role']),
+            display_name: String(m['display_name']),
+            email: String(m['email']),
+          })),
+        });
+      }
+      return html(200, teamPage(orgs, owner.owner_id));
     }
 
     // ── settings (P4): profile, brand, my link ───────────────────────────
@@ -699,7 +785,7 @@ async function handleRoutes(
       // Owner actions on one booking — scoped at the query (I4).
       if (req.method === 'POST' && parts[2] && parts[3]) {
         const found = await sql.query(
-          `SELECT booking_id, starts_at, status FROM bookings
+          `SELECT booking_id, starts_at, status, group_id FROM bookings
             WHERE booking_id = $1 AND owner_id = $2 ORDER BY id DESC LIMIT 1`,
           [parts[2], owner.owner_id],
         );
@@ -707,11 +793,18 @@ async function handleRoutes(
         if (!b) return html(404, errorPage(404, 'No such meeting.'));
         const bookingId = String(b['booking_id']);
         const startIso = new Date(String(b['starts_at'])).toISOString().replace('.000Z', 'Z');
+        const groupId = b['group_id'] === null ? undefined : String(b['group_id']);
 
         if (parts[3] === 'cancel' && String(b['status']) === 'confirmed') {
           const store = new PostgresBookingStore(sql, owner.owner_id, deps.tx);
-          await store.cancel(bookingId, `owner-cancel:${bookingId}`);
-          await deps.calendars?.onCancelled(sql, bookingId);
+          // P5 · cancelling any host's row of a collective meeting cancels the
+          // whole meeting — half-cancelled groups help nobody.
+          const cancelledIds = groupId
+            ? await store.cancelGroup(groupId, `owner-cancel:${groupId}`)
+            : (await store.cancel(bookingId, `owner-cancel:${bookingId}`), [bookingId]);
+          for (const id of cancelledIds) {
+            await deps.calendars?.onCancelled(sql, id);
+          }
           const booker = await bookerFor(sql, bookingId);
           if (booker?.email) {
             await mail.send({ kind: 'cancelled', to: booker.email, bookingId,
@@ -937,9 +1030,26 @@ async function handleRoutes(
             ORDER BY created_at DESC LIMIT 10`,
           [sched.schedule_id],
         );
+        // P5 · possible hosts: me plus everyone I share an organization with.
+        const mates = await sql.query(
+          `SELECT DISTINCT ow.owner_id, ow.display_name, ow.email
+             FROM org_members mine
+             JOIN org_members them ON them.org_id = mine.org_id
+             JOIN owners ow ON ow.owner_id = them.owner_id
+            WHERE mine.owner_id = $1 ORDER BY ow.display_name`,
+          [owner.owner_id]);
+        const choices = mates.rows.map((m) => ({
+          owner_id: String(m['owner_id']),
+          label: `${String(m['display_name'])} <${String(m['email'])}>`,
+        }));
+        if (!choices.some((c) => c.owner_id === owner.owner_id)) {
+          choices.unshift({ owner_id: owner.owner_id, label: `${owner.display_name} (you)` });
+        }
+        const hosts = await loadHosts(sql, sched.schedule_id);
         return html(200, eventTypeEditor(sched, sets.rows.map((r) => ({
           set_id: String(r['set_id']), name: String(r['name']),
-        })), linkSlug, config.baseUrl, su.rows.map((r) => String(r['token']))));
+        })), linkSlug, config.baseUrl, su.rows.map((r) => String(r['token'])),
+          choices, hosts.map((h) => h.owner_id)));
       }
       if (req.method === 'POST') {
         const f = req.form ?? {};
@@ -978,6 +1088,33 @@ async function handleRoutes(
            dateRe.test(f['available_until'] ?? '') ? f['available_until']! : null,
            opt(f['color']), owner.owner_id],
         );
+
+        // P5 · scheduling kind and hosts. A chosen host must share an org with
+        // the editor (or be the editor) — checked against the database, not
+        // the form.
+        const kindWanted = ['solo', 'round_robin', 'collective'].includes(f['scheduling_kind'] ?? '')
+          ? (f['scheduling_kind'] as 'solo' | 'round_robin' | 'collective') : sched.scheduling_kind;
+        const allowed = new Set<string>([owner.owner_id]);
+        const mates = await sql.query(
+          `SELECT DISTINCT them.owner_id FROM org_members mine
+             JOIN org_members them ON them.org_id = mine.org_id
+            WHERE mine.owner_id = $1`, [owner.owner_id]);
+        for (const m of mates.rows) allowed.add(String(m['owner_id']));
+        const wantedHosts = Object.keys(f)
+          .filter((k) => k.startsWith('host:'))
+          .map((k) => k.slice(5))
+          .filter((id) => allowed.has(id));
+        await deps.tx.transaction(async (tx) => {
+          await tx.query(`UPDATE schedules SET scheduling_kind = $2 WHERE schedule_id = $1`,
+            [sched.schedule_id, kindWanted]);
+          await tx.query(`DELETE FROM event_hosts WHERE schedule_id = $1`, [sched.schedule_id]);
+          const list = kindWanted === 'solo' ? [] : (wantedHosts.length ? wantedHosts : [owner.owner_id]);
+          for (const id of list) {
+            await tx.query(
+              `INSERT INTO event_hosts (schedule_id, owner_id) VALUES ($1, $2)`,
+              [sched.schedule_id, id]);
+          }
+        });
         return { status: 303, headers: { location: `/app/event/${sched.schedule_id}` }, body: '' };
       }
     }
@@ -1242,7 +1379,13 @@ async function ownerForBooking(sql: SqlClient, bookingId: string): Promise<Conta
   return r ? { email: String(r['email']), timezone: String(r['timezone']) } : undefined;
 }
 
-async function slotsFor(deps: AppDeps, schedule: Schedule, now: string) {
+interface SlotsResult {
+  slots: Slot[];
+  /** P5 · present on team events: each host's own offerable slots. */
+  team?: { hosts: EventHost[]; perHost: Map<string, Slot[]> };
+}
+
+async function slotsFor(deps: AppDeps, schedule: Schedule, now: string): Promise<SlotsResult> {
   let from = Temporal.Instant.from(now).toString();
   let to = Temporal.Instant.from(now).add({ hours: 24 * 14 }).toString();
   // P2 · a fixed date range clamps the window. The dates are owner-local,
@@ -1262,8 +1405,33 @@ async function slotsFor(deps: AppDeps, schedule: Schedule, now: string) {
     }
   }
   if (Temporal.Instant.compare(Temporal.Instant.from(from), Temporal.Instant.from(to)) >= 0) {
-    return { slots: [], diagnostics: [] };
+    return { slots: [] };
   }
+  const q = { from, to, now };
+
+  // P5 · a team event asks every host; a blind host fails the whole page
+  // closed — offering a time we cannot verify for someone is the same sin
+  // solo fail-closed exists to prevent.
+  if (schedule.scheduling_kind !== 'solo') {
+    const hosts = await loadHosts(deps.sql, schedule.schedule_id);
+    if (hosts.length === 0) return { slots: [] };
+    const perHost = new Map<string, Slot[]>();
+    for (const host of hosts) {
+      let external: Interval[] = [];
+      if (deps.calendars) {
+        const answer = await deps.calendars.busyFor(deps.sql, host.owner_id, from, to);
+        if (!answer.ok) throw new CalendarBlindError(answer.reason);
+        external = answer.intervals;
+      }
+      const r = await hostSlots(deps.sql, schedule, host, q, external);
+      perHost.set(host.owner_id, r.slots);
+    }
+    const lists = hosts.map((h) => perHost.get(h.owner_id)!);
+    const slots =
+      schedule.scheduling_kind === 'collective' ? intersectSlots(lists) : unionSlots(lists);
+    return { slots, team: { hosts, perHost } };
+  }
+
   // SPEC-0003 · the calendar is consulted on every slot computation — page
   // views AND the commit-time revalidation — so a busy time that appeared
   // after the page loaded still blocks the booking (fresh fetch, B3 pattern).
@@ -1273,7 +1441,8 @@ async function slotsFor(deps: AppDeps, schedule: Schedule, now: string) {
     if (!answer.ok) throw new CalendarBlindError(answer.reason);
     externalBusy = answer.intervals;
   }
-  return availableSlots(deps.sql, schedule, { from, to, now }, externalBusy);
+  const solo = await availableSlots(deps.sql, schedule, q, externalBusy);
+  return { slots: solo.slots };
 }
 
 async function bookHandler(
@@ -1360,20 +1529,65 @@ async function bookHandler(
   // F4 · the page is a snapshot. Losing the race is normal operation.
   const bookingId = randomUUID();
   const token = newToken();
-  const inserted = await store.insertConfirmed(bookingId, start, end, idempotencyKey, {
-    name,
-    email,
-    timezone: bookerTz,
-    token,
-  });
-  if (!inserted.ok) {
-    const slots = await slotsFor(deps, schedule, now);
-    return html(409, bookingPage(schedule, slots.slots, { error: 'Someone just took that time. Here are the rest.' }));
+  const booker = { name, email, timezone: bookerTz, token };
+  /** every owner this meeting occupies, with each one's own booking row id */
+  let occupied: { ownerId: string; bookingId: string }[];
+
+  if (schedule.scheduling_kind === 'round_robin' && offered.team) {
+    // P5 · fairness: fewest upcoming bookings first, then declared priority.
+    // Losing a host to a race falls through to the next able host.
+    const able = offered.team.hosts.filter((h) =>
+      offeredSlot(offered.team!.perHost.get(h.owner_id) ?? [], start, end));
+    const load = new Map<string, number>();
+    for (const h of able) {
+      const c = await sql.query(
+        `SELECT count(*)::int AS c FROM bookings
+          WHERE owner_id = $1 AND status = 'confirmed' AND starts_at > $2`,
+        [h.owner_id, now]);
+      load.set(h.owner_id, Number(c.rows[0]?.['c'] ?? 0));
+    }
+    able.sort((a, b) =>
+      (load.get(a.owner_id)! - load.get(b.owner_id)!) || (b.priority - a.priority)
+        || a.owner_id.localeCompare(b.owner_id));
+    let winner: string | undefined;
+    for (const h of able) {
+      const hostStore = new PostgresBookingStore(sql, h.owner_id, deps.tx);
+      const r = await hostStore.insertConfirmed(bookingId, start, end, idempotencyKey, booker);
+      if (r.ok) { winner = h.owner_id; break; }
+    }
+    if (!winner) {
+      const slots = await slotsFor(deps, schedule, now);
+      return html(409, bookingPage(schedule, slots.slots, { error: 'Someone just took that time. Here are the rest.' }));
+    }
+    occupied = [{ ownerId: winner, bookingId }];
+  } else if (schedule.scheduling_kind === 'collective' && offered.team) {
+    // P5 · every host, or nobody: one transaction, one group.
+    const groupId = randomUUID();
+    const entries = offered.team.hosts.map((h, i) => ({
+      bookingId: i === 0 ? bookingId : randomUUID(),
+      ownerId: h.owner_id,
+    }));
+    const r = await store.insertConfirmedGroup(groupId, entries, start, end, idempotencyKey, booker);
+    if (!r.ok) {
+      const slots = await slotsFor(deps, schedule, now);
+      return html(409, bookingPage(schedule, slots.slots, { error: 'Someone just took that time. Here are the rest.' }));
+    }
+    await sql.query(`UPDATE bookings SET schedule_id = $1 WHERE group_id = $2`,
+      [schedule.schedule_id, groupId]);
+    occupied = entries;
+  } else {
+    const inserted = await store.insertConfirmed(bookingId, start, end, idempotencyKey, booker);
+    if (!inserted.ok) {
+      const slots = await slotsFor(deps, schedule, now);
+      return html(409, bookingPage(schedule, slots.slots, { error: 'Someone just took that time. Here are the rest.' }));
+    }
+    occupied = [{ ownerId: schedule.owner_id, bookingId }];
   }
   await sql.query(`UPDATE bookings SET schedule_id = $1 WHERE booking_id = $2`, [
     schedule.schedule_id,
     bookingId,
   ]);
+  const primaryOwnerId = occupied[0]!.ownerId;
 
   // SPEC-0003 · the booking lands in the owner's calendar (never fatal, M3),
   // BEFORE the mails so a minted Meet link can ride along in them.
@@ -1387,7 +1601,7 @@ async function bookHandler(
   const domain = email.slice(email.indexOf('@') + 1).toLowerCase();
   const excluded = await sql.query(
     `SELECT 1 FROM contact_exclusions WHERE owner_id = $1 AND (pattern = $2 OR pattern = $3)`,
-    [schedule.owner_id, email.toLowerCase(), domain],
+    [primaryOwnerId, email.toLowerCase(), domain],
   );
   if (!excluded.rows[0]) {
     await sql.query(
@@ -1397,33 +1611,42 @@ async function bookHandler(
          name = excluded.name,
          times_booked = contacts.times_booked + 1,
          last_booked_at = excluded.last_booked_at`,
-      [schedule.owner_id, email.toLowerCase(), name, now],
+      [primaryOwnerId, email.toLowerCase(), name, now],
     );
   }
 
-  const written = await deps.calendars?.writeBack(sql, schedule.owner_id, bookingId, {
-    title: `${schedule.title} — ${name}`,
-    description: `Booked via ${config.baseUrl}/${schedule.slug}\nWith: ${name} <${email}>`,
-    start,
-    end,
-    conference: schedule.location_kind === 'meet',
-  });
-  const location = locationText(schedule, written?.meetUrl);
+  // P5 · each occupied host's own calendar receives the event; the Meet link
+  // is minted on the first host's calendar and shared with everyone.
+  let meetUrl: string | undefined;
+  for (const [i, o] of occupied.entries()) {
+    const written = await deps.calendars?.writeBack(sql, o.ownerId, o.bookingId, {
+      title: `${schedule.title} — ${name}`,
+      description: `Booked via ${config.baseUrl}/${schedule.slug}\nWith: ${name} <${email}>`,
+      start,
+      end,
+      conference: i === 0 && schedule.location_kind === 'meet',
+    });
+    if (i === 0) meetUrl = written?.meetUrl;
+  }
+  const location = locationText(schedule, meetUrl);
 
   // M2 · after commit, never inside the transaction. M3 · a failure here must
   // not invalidate a confirmed booking.
   // M5 · both parties. The owner's address is resolved here rather than passed
   // as a marker -- the SMTP adapter refuses a non-address, which is how the
   // placeholder was caught.
-  const owner = await ownerContact(sql, schedule.owner_id);
   await mail.send({
     kind: 'confirmed', to: email, bookingId, start, token, timezone: bookerTz, location,
     // P3 · the booker's copy carries an .ics any calendar can import.
     ics: icsFor({ bookingId, title: schedule.title, start, end, location }),
   });
-  if (owner) {
-    // The owner gets no management token: it is the booker's credential.
-    await mail.send({ kind: 'confirmed', to: owner.email, bookingId, start, timezone: owner.timezone, location });
+  // M5/P5 · every occupied host learns of the meeting; none gets the booker's
+  // management token — it is the booker's credential.
+  for (const o of occupied) {
+    const host = await ownerContact(sql, o.ownerId);
+    if (host) {
+      await mail.send({ kind: 'confirmed', to: host.email, bookingId, start, timezone: host.timezone, location });
+    }
   }
 
   // The management token reaches exactly one place: the confirmation mail.

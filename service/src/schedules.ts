@@ -14,6 +14,7 @@ import type {
   AvailabilityRule,
   DateOverride,
   Interval,
+  Slot,
   Weekday,
 } from '@pumasi/booking-core';
 import type { SqlClient } from './store.ts';
@@ -42,13 +43,17 @@ export interface Schedule {
   /** P2 · optional fixed date range (owner-local dates, inclusive). */
   available_from: string | null;
   available_until: string | null;
+  /** P5 · solo, or a team event drawing on event_hosts. */
+  scheduling_kind: 'solo' | 'round_robin' | 'collective';
+  org_id: string | null;
 }
 
 const SCHEDULE_COLS = `sc.schedule_id, sc.owner_id, sc.slug, sc.title, o.timezone AS owner_timezone,
             sc.duration_minutes, sc.granularity_minutes, sc.buffer_before_minutes,
             sc.buffer_after_minutes, sc.minimum_notice_minutes, sc.maximum_horizon_days,
             sc.max_bookings_per_day, sc.availability_set_id, sc.description, sc.color,
-            sc.location_kind, sc.location_value, sc.available_from, sc.available_until`;
+            sc.location_kind, sc.location_value, sc.available_from, sc.available_until,
+            sc.scheduling_kind, sc.org_id`;
 
 function toSchedule(r: Record<string, unknown>): Schedule {
   const opt = (v: unknown) => (v === null || v === undefined ? null : s(v));
@@ -72,6 +77,8 @@ function toSchedule(r: Record<string, unknown>): Schedule {
     location_value: opt(r['location_value']),
     available_from: opt(r['available_from']),
     available_until: opt(r['available_until']),
+    scheduling_kind: (opt(r['scheduling_kind']) ?? 'solo') as Schedule['scheduling_kind'],
+    org_id: opt(r['org_id']),
   };
 }
 
@@ -193,6 +200,74 @@ function dailyCounts(busy: Interval[], timezone: string): Record<string, number>
     counts[d] = (counts[d] ?? 0) + 1;
   }
   return counts;
+}
+
+// ── P5 · multi-host ─────────────────────────────────────────────────────────
+
+export interface EventHost {
+  owner_id: string;
+  priority: number;
+  display_name: string;
+  email: string;
+  timezone: string;
+}
+
+export async function loadHosts(sql: SqlClient, scheduleId: string): Promise<EventHost[]> {
+  const { rows } = await sql.query(
+    `SELECT h.owner_id, h.priority, o.display_name, o.email, o.timezone
+       FROM event_hosts h JOIN owners o ON o.owner_id = h.owner_id
+      WHERE h.schedule_id = $1 ORDER BY h.priority DESC, h.owner_id`,
+    [scheduleId],
+  );
+  return rows.map((r) => ({
+    owner_id: s(r['owner_id']),
+    priority: n(r['priority']),
+    display_name: s(r['display_name']),
+    email: s(r['email']),
+    timezone: s(r['timezone']),
+  }));
+}
+
+/**
+ * P5 · one host's answer to the TEAM event's question: the event type's
+ * constraints (duration, buffers, notice, horizon) applied to the HOST's own
+ * hours (their first availability set), bookings, and calendar busy.
+ */
+export async function hostSlots(
+  sql: SqlClient,
+  schedule: Schedule,
+  host: EventHost,
+  q: SlotQuery,
+  externalBusy: Interval[] = [],
+): Promise<ComputeSlotsResponse> {
+  const setRow = await sql.query(
+    `SELECT set_id FROM availability_sets WHERE owner_id = $1 ORDER BY created_at LIMIT 1`,
+    [host.owner_id],
+  );
+  const setId = setRow.rows[0] ? s(setRow.rows[0]['set_id']) : undefined;
+  const virtual: Schedule = {
+    ...schedule,
+    owner_id: host.owner_id,
+    owner_timezone: host.timezone,
+    availability_set_id: setId ?? null,
+  };
+  return availableSlots(sql, virtual, q, externalBusy);
+}
+
+/** P5 · the slots every listed answer agrees on (collective). */
+export function intersectSlots(lists: Slot[][]): Slot[] {
+  if (lists.length === 0) return [];
+  const [first, ...rest] = lists;
+  return first!.filter((slot) =>
+    rest.every((l) => l.some((x) => x.start === slot.start && x.end === slot.end)),
+  );
+}
+
+/** P5 · the slots ANY host can take (round-robin), deduplicated and ordered. */
+export function unionSlots(lists: Slot[][]): Slot[] {
+  const seen = new Map<string, Slot>();
+  for (const l of lists) for (const x of l) if (!seen.has(x.start)) seen.set(x.start, x);
+  return [...seen.values()].sort((a, b) => (a.start < b.start ? -1 : 1));
 }
 
 /** P2 · what "where" means for an event type, rendered for people. */
