@@ -20,6 +20,7 @@ nohup npx wrangler dev --local --port "$PORT" \
   --var BASE_URL:"http://127.0.0.1:$PORT" \
   --var BOOTSTRAP_INVITE:inv-e2e-boot \
   --var TOKEN_KEY:"$TK" \
+  --var PUBLIC_SIGNUP:true \
   --var GIT_COMMIT:e2e > "$LOG" 2>&1 &
 echo $! > /tmp/pumasi-e2e.pid
 

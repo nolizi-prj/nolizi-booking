@@ -515,18 +515,29 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
         return htmlResponse(400, signupPage(invite, message,
           { sso: ssoEnabled, publicSignup: config.publicSignup }));
       }
-      return forward(claim.tag, {
-        orgCookie: true,
-        trusted: {
-          'x-trusted-signup-email': email,
-          'x-trusted-name': (form['display_name'] ?? '').trim(),
-          'x-trusted-tz': (form['timezone'] ?? 'UTC').trim(),
-          'x-trusted-new-org': claim.newOrg ? '1' : '0',
-          // I7 · No invite vouched for this address, so the shard must mail a
-          // sign-in link instead of handing out a session.
-          ...(isPublic ? { 'x-trusted-verify-email': '1' } : {}),
-        },
-      });
+      const trusted = {
+        'x-trusted-signup-email': email,
+        'x-trusted-name': (form['display_name'] ?? '').trim(),
+        'x-trusted-tz': (form['timezone'] ?? 'UTC').trim(),
+        'x-trusted-new-org': claim.newOrg ? '1' : '0',
+      };
+      if (isPublic) {
+        // I8 · The shard creates the account and mails the sign-in link (I7),
+        // but the ROUTER authors the response — the same htmlResponse() as the
+        // already_registered branch above, so created and taken cannot differ
+        // in status, body, or headers. The org cookie is deliberately absent:
+        // it was the oracle a cross-family review caught (reviews/, grok) —
+        // the bodies matched while Set-Cookie: pumasi_org distinguished them
+        // and leaked the org tag. The sign-in link is tagged, and
+        // /auth/<tag>.<token> sets the cookie at redemption, so nothing needs
+        // it before the mailbox is proven.
+        const res = await forward(claim.tag, {
+          trusted: { ...trusted, 'x-trusted-verify-email': '1' },
+        });
+        if (res.status >= 500) return res; // a genuine failure stays visible
+        return htmlResponse(200, loginPage(true));
+      }
+      return forward(claim.tag, { orgCookie: true, trusted });
     }
 
     // "Continue with Google": the router seals the state and runs the
@@ -588,6 +599,32 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
           if (!claim.ok) {
             return htmlResponse(400, errorPage(400,
               'That invite is not valid, already used, or every seat is taken.'));
+          }
+          return forward(claim.tag, {
+            path: '/signup',
+            orgCookie: true,
+            trusted: {
+              'x-trusted-signup-email': email,
+              'x-trusted-name': email.split('@')[0] ?? 'user',
+              'x-trusted-tz': state['timezone'] || 'UTC',
+              'x-trusted-new-org': claim.newOrg ? '1' : '0',
+            },
+          });
+        }
+        if (config.publicSignup) {
+          // I2 · Public sign-up applies to the Google path too — the signup
+          // page shows the button, so refusing here would strand exactly the
+          // people it invited. Google asserted email_verified, so I7's mailbox
+          // proof is already met and the session may begin now. A taken
+          // address cannot reach here: the lookup above signs it in instead.
+          const claim = (await dir('claimSignupPublic', email)) as
+            | { ok: true; tag: string; newOrg: boolean }
+            | { ok: false; reason: string };
+          if (!claim.ok) {
+            // The ceiling is the one distinguishable refusal (I8): a fact
+            // about the deployment, not about any person.
+            return htmlResponse(400, errorPage(400,
+              'This service has reached its account limit and is not taking more.'));
           }
           return forward(claim.tag, {
             path: '/signup',

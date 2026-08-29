@@ -199,5 +199,36 @@ const rival = session();
   ok(badToken.status === 404, 'untagged manage token 404s');
 }
 
+// ── I8 through the real worker: created and taken must be byte-identical ──
+// A cross-family review caught the bodies matching while Set-Cookie
+// distinguished them, so this compares the WHOLE response, headers included.
+{
+  console.log('\nI8 · public signup is not an account-existence oracle');
+  const shape = async (form) => {
+    const res = await fetch(`${base}/signup`, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(form).toString(),
+    });
+    const headers = [...res.headers.entries()]
+      .filter(([k]) => !['date', 'cf-ray', 'server-timing'].includes(k))
+      .sort().map(([k, v]) => `${k}: ${v}`).join('\n');
+    return { status: res.status, headers, body: await res.text(),
+             cookies: res.headers.getSetCookie?.() ?? [] };
+  };
+  const form = { email: `i8-probe-${Date.now()}@example.com`,
+                 display_name: 'I8 Probe', timezone: 'UTC' };
+  const created = await shape(form);   // first: creates the account
+  const taken   = await shape(form);   // second: address is now taken
+
+  ok(created.status === 200 && taken.status === 200, 'both answers are 200');
+  ok(created.body === taken.body, 'bodies are byte-identical');
+  ok(created.headers === taken.headers,
+     'headers are identical (this is the line that catches the cookie oracle)');
+  ok(created.cookies.length === 0 && taken.cookies.length === 0,
+     'no Set-Cookie on either — no org tag leaks before the mailbox is proven');
+}
+
 console.log(failures === 0 ? '\nE2E: all green' : `\nE2E: ${failures} failure(s)`);
 process.exit(failures === 0 ? 0 : 1);

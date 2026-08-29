@@ -102,6 +102,12 @@ it becomes an account-enumeration oracle that answers "does this person use this
 service?" to anyone who asks. A ceiling refusal is the one distinguishable
 answer, because it is a fact about the deployment and not about any person.
 
+*"Identical" means the whole HTTP response — status, body, **and headers**.* A
+cross-family review (grok, 2026-08-29) found the bodies matching while a
+`Set-Cookie: pumasi_org` header distinguished created from taken and leaked the
+org tag. The assertion must therefore run **through the worker**, not only the
+unsharded handler, and must compare headers.
+
 *This one has to be enforced in the router.* `Directory.claimSignup` checks
 invite → ceiling → address, so while an invite was required the ordering hid the
 distinction: with no valid invite you always got `invalid_invite` first and never
@@ -289,9 +295,18 @@ and no converted value is ever sent back to the server or stored. This is the
 architecture the steward confirmed on 2026-08-01, and F2 is where it is kept
 honest.
 
-**F3 · Booking requires a name and an email address. Nothing else.** No phone, no
-address, no free-text notes in this version. Every additional field is personal
-data we would have to justify holding (D2).
+**F3 · Booking requires a name and an email address — and, where the organiser
+has added questions to their page, the answers to those.** Nothing else: no
+phone, no address, no service-invented fields. Organiser questions are the one
+recorded exception (amended 2026-08-29, with custom questions), and the
+organiser is the controller for what they collect (D2); every service-added
+field is personal data we would have to justify holding.
+
+*Frozen cases `F-003` and `D-001` predate this amendment and the D1 amendment
+respectively — F-003 still asserts name-and-email-only, D-001 still asserts
+signup stays blocked. Per the charter, the builder has not edited them; they
+need a re-freeze under a fresh cross-family spec review, and until then they
+are stale against the amended spec rather than binding.*
 
 **F4 · The page is a snapshot and says so.** A slot may be taken between render
 and submit. That returns `conflict` with the refreshed list, not an error page.
@@ -402,8 +417,10 @@ what `src/legal.ts` tells people.
 
 *Personal data stays minimal*, because it is the category where collection is
 hardest to justify and deletion has to actually work. Owner: email, display name,
-timezone, availability rules. Booker: name, email, the interval, and their
-timezone for display. No new **personal** field without a recorded reason.
+timezone, availability rules. Booker: name, email, the interval, their timezone
+for display, and their answers to any questions the organiser added (the
+organiser's data, held as their processor — see the custom-questions clause and
+F3). No new **personal** field without a recorded reason.
 
 *Operating and quality data is not held to that standard*, because it is not
 about a person. Feature usage, timings, error and crash detail, and the shape of
