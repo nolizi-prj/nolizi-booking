@@ -154,8 +154,8 @@ connect a calendar, the relevant parts of a booking reach **Google Calendar** or
 
 Every third party that can see personal data is named, with what they see and
 why, in our [subprocessor register](/subprocessors). That register is enforced by
-the software, not merely written down: the service refuses to start if configured
-to send mail through a provider that is not listed.
+the software, not merely written down: the service **will not send mail** through
+a provider that is not listed. Bookings still work; the confirmation waits.
 
 These providers operate globally, so data may be processed outside your country,
 including in the United States, under the transfer safeguards those providers
@@ -380,8 +380,8 @@ export const SUBPROCESSORS: LegalDoc = {
 Every third party that can see personal data held by this service, what they see,
 and why. An unnamed subprocessor is data shared without disclosure, whatever the
 intention — so this list is published, and it is **enforced by the software**:
-the service refuses to start if configured to send mail through a provider that
-is not on it.
+the service **will not send mail** through a provider that is not on it. The
+service keeps running and the booking still completes; only the message waits.
 
 ## In use now
 

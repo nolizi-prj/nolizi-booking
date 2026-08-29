@@ -448,7 +448,8 @@ The charter's merge gate applies in full and is **not restated here** — see
 3. tzdata assertion fails startup on mismatch (§5).
 4. The engine is called with an injected clock and performs no I/O — asserted by
    test across the boundary (P2).
-5. Public signup cannot be enabled while D-105 is open — asserted by test.
+5. Public signup is off by default, honoured when explicitly enabled, and treats
+   an unparseable value as off (I2) — asserted by test.
 6. Deletion is verified by absence, not by a flag (D3).
 7. Reporting exists, the opt-out works, and behaviour is identical with it on and
    off — the five gate checks in `CHARTER.md` Part 5.1.
@@ -498,8 +499,9 @@ Everything else in this specification is built and tested.
 **Implemented since — D3, D6, D7, O4, O5 (2026-08-02).** An owner can delete
 their account, removing their bookers' details with it — verified by absence
 across every table. The subprocessor list is **published and enforced**: the
-service refuses to start if configured to send through a host not named in
-`SUBPROCESSORS.md`, so the document is a control rather than a description. The
+service refuses to **send** through a host not named in `SUBPROCESSORS.md` — and
+says so loudly at startup, without taking the booking pages down — so the
+document is a control rather than a description. The
 retention statement says how far deletion actually reaches, including that sent
 mail cannot be recalled. The service refuses to start on a timezone-transition
 disagreement, and results are asserted identical under three different host

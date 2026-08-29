@@ -3,7 +3,9 @@
  *
  * A published list that nothing checks is a description of intentions. This is
  * the same list as SUBPROCESSORS.md in machine-readable form, and the service
- * refuses to start if configured to send through a host absent from it.
+ * refuses to SEND through a host absent from it, and says so loudly at startup.
+ * It does not refuse to start: the duty is that nobody's details reach an
+ * undisclosed party, and stopping the mail discharges that without an outage.
  *
  * The two must be edited together. That is deliberate friction: adding a party
  * who will see people's names, addresses and meeting times should require

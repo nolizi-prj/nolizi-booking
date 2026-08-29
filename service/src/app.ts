@@ -686,9 +686,8 @@ async function handleRoutes(
         body: '',
       };
     }
-    // I2 · public signup stays blocked while D-105 is open; an invite is the
-    // only way in. When the flag opens (steward review), the same page works
-    // without one.
+    // I2 · public signup is off unless the operator enables it; until then an
+    // invite is the only way in. With the flag on, the same page works without one.
     if (req.method === 'GET') {
       return html(200, signupPage(req.query?.['invite'] ?? '', undefined,
         { sso: Boolean(config.googleClientId), publicSignup: config.publicSignup }));
