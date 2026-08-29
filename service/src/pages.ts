@@ -49,32 +49,165 @@ ${FOOTER}
   );
 }
 
-const SHELL = (title: string, body: string): string => `<!doctype html>
+/**
+ * The design system.
+ *
+ * One stylesheet serves every page, so a token changed here changes the whole
+ * product. Structure follows what the category has taught people to expect: a
+ * persistent left rail for the signed-in application, a centred column for
+ * public pages. Owner pages opt into the rail by starting their body with a
+ * `<!--nav:key-->` sentinel, which keeps each page function's own markup about
+ * its own content.
+ *
+ * Constraints that outrank prettiness: the booking page still works with
+ * JavaScript off, colour is never the only signal, focus is always visible,
+ * and an owner's brand colour can override the accent without breaking
+ * contrast elsewhere.
+ */
+const NAV: { key: string; href: string; label: string; icon: string }[] = [
+  { key: 'scheduling', href: '/app', label: 'Event types', icon: 'M4 5h16M4 12h16M4 19h10' },
+  { key: 'meetings', href: '/app/meetings', label: 'Meetings', icon: 'M7 3v3M17 3v3M4 8h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z' },
+  { key: 'contacts', href: '/app/contacts', label: 'Contacts', icon: 'M12 11a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0' },
+  { key: 'team', href: '/app/team', label: 'Team', icon: 'M9 11a3 3 0 100-6 3 3 0 000 6zM2 20a7 7 0 0114 0M17 11a3 3 0 100-6M22 20a7 7 0 00-4-6.3' },
+  { key: 'routing', href: '/app/routing', label: 'Routing', icon: 'M6 3v6a3 3 0 003 3h9M18 8l3 4-3 4M6 12v9' },
+  { key: 'polls', href: '/app/polls', label: 'Polls', icon: 'M6 20V10M12 20V4M18 20v-6' },
+  { key: 'workflows', href: '/app/workflows', label: 'Workflows', icon: 'M5 7a2 2 0 100-4 2 2 0 000 4zM5 21a2 2 0 100-4 2 2 0 000 4zM19 14a2 2 0 100-4 2 2 0 000 4zM7 5h6a4 4 0 014 4v1M7 19h6a4 4 0 004-4' },
+  { key: 'webhooks', href: '/app/webhooks', label: 'Webhooks', icon: 'M10 8a4 4 0 116 3.5M8 13a4 4 0 105 5M12 12l3 6M12 12l-5 2' },
+  { key: 'api', href: '/app/api-keys', label: 'API keys', icon: 'M14 7a4 4 0 11-3.5 6H8v3H5v-3H3l3.5-3.5A4 4 0 0114 7z' },
+  { key: 'audit', href: '/app/audit', label: 'Audit log', icon: 'M9 5h9a1 1 0 011 1v13a1 1 0 01-1 1H6a1 1 0 01-1-1V8M9 5V3h6v2M8 12h8M8 16h5' },
+  { key: 'settings', href: '/app/settings', label: 'Settings', icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19 12a7 7 0 00-.1-1l2-1.5-2-3.4-2.3 1a7 7 0 00-1.7-1L14.5 3h-4l-.4 2.6a7 7 0 00-1.7 1l-2.3-1-2 3.4L6 11a7 7 0 000 2l-2 1.5 2 3.4 2.3-1a7 7 0 001.7 1l.4 2.6h4l.4-2.6a7 7 0 001.7-1l2.3 1 2-3.4-2-1.5a7 7 0 00.2-1z' },
+];
+
+const icon = (d: string): string =>
+  `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="${d}"/></svg>`;
+
+const sidebar = (active: string): string => `<a class="skip" href="#main">Skip to content</a>
+<nav class="rail" aria-label="Sections">
+  <a class="brand" href="/app">${esc(PRODUCT)}</a>
+  <ul>
+    ${NAV.map((n) => `<li><a href="${n.href}" class="${n.key === active ? 'on' : ''}"
+      ${n.key === active ? 'aria-current="page"' : ''}>${icon(n.icon)}<span>${n.label}</span></a></li>`).join('')}
+  </ul>
+  <form method="post" action="/logout" class="railout">
+    <button type="submit">${icon('M15 12H3m0 0l4-4m-4 4l4 4M13 4h6a1 1 0 011 1v14a1 1 0 01-1 1h-6')}<span>Sign out</span></button>
+  </form>
+</nav>`;
+
+const SHELL = (title: string, rawBody: string): string => {
+  const m = rawBody.match(/^\s*<!--nav:([a-z-]+)-->/);
+  const body = m ? rawBody.replace(m[0], '') : rawBody;
+  const inner = m
+    ? `<div class="app">${sidebar(m[1]!)}<main id="main" class="main">${body}</main></div>`
+    : `<main id="main" class="page">${body}</main>`;
+  return `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${title === PRODUCT ? PRODUCT : `${esc(title)} &middot; ${PRODUCT}`}</title>
 <style>
- :root{color-scheme:light dark;--fg:#111;--muted:#666;--line:#ddd;--accent:#1a56db}
- @media(prefers-color-scheme:dark){:root{--fg:#eee;--muted:#999;--line:#333;--accent:#7aa2f7}}
+ :root{color-scheme:light dark;
+   --bg:#fff;--surface:#fff;--rail:#f7f8fa;--fg:#101828;--muted:#667085;
+   --line:#e4e7ec;--line-soft:#f0f2f5;--accent:#1a56db;--accent-soft:#eef2ff;
+   --danger:#b42318;--ok:#067647;--radius:10px;
+   --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.04)}
+ @media(prefers-color-scheme:dark){:root{
+   --bg:#0f1117;--surface:#161922;--rail:#12141b;--fg:#e7eaf0;--muted:#98a2b3;
+   --line:#262b36;--line-soft:#1c2029;--accent:#7aa2f7;--accent-soft:#1b2440;
+   --danger:#f97066;--ok:#6fcf97;--shadow:none}}
  *{box-sizing:border-box}
- body{font:16px/1.5 system-ui,-apple-system,sans-serif;color:var(--fg);
-      max-width:34rem;margin:0 auto;padding:2rem 1rem}
- h1{font-size:1.5rem;margin:0 0 .25rem} .muted{color:var(--muted);font-size:.9rem}
- .day{margin:1.5rem 0 .5rem;font-weight:600;font-size:.95rem}
- .slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(7rem,1fr));gap:.5rem}
- button.slot{padding:.6rem;border:1px solid var(--line);border-radius:.4rem;
-   background:transparent;color:var(--fg);font:inherit;cursor:pointer}
- button.slot:hover,button.slot[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
- form{margin-top:1.5rem} .js form:not(.on){display:none}
- label{display:block;margin:.75rem 0 .25rem;font-size:.9rem}
- input{width:100%;padding:.55rem;border:1px solid var(--line);border-radius:.4rem;
-   background:transparent;color:var(--fg);font:inherit}
- .notice{font-size:.8rem;color:var(--muted);margin-top:.4rem}
- .submit{margin-top:1rem;padding:.65rem 1.2rem;border:0;border-radius:.4rem;
-   background:var(--accent);color:#fff;font:inherit;cursor:pointer}
- .err{border-left:3px solid #c33;padding:.5rem .75rem;margin:1rem 0}
- .ok{border-left:3px solid #2a2;padding:.5rem .75rem;margin:1rem 0}
-</style></head><body>${body}</body></html>`;
+ html{-webkit-text-size-adjust:100%}
+ body{margin:0;background:var(--bg);color:var(--fg);
+   font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+   -webkit-font-smoothing:antialiased}
+ .page{max-width:40rem;margin:0 auto;padding:2.5rem 1.25rem 4rem}
+ h1{font-size:1.55rem;line-height:1.25;letter-spacing:-.01em;margin:0 0 .35rem;font-weight:650}
+ h2{font-size:1.02rem;margin:0 0 .3rem;font-weight:620}
+ a{color:var(--accent)} a:hover{text-decoration:underline}
+ .muted{color:var(--muted);font-size:.9rem}
+ p{margin:.55rem 0}
+ :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+ .skip{position:absolute;left:-999px}
+ .skip:focus{left:.5rem;top:.5rem;background:var(--surface);padding:.5rem .75rem;
+   border:1px solid var(--line);border-radius:8px;z-index:10}
+
+ /* application shell */
+ .app{display:grid;grid-template-columns:15rem minmax(0,1fr);min-height:100vh}
+ .rail{background:var(--rail);border-right:1px solid var(--line);
+   display:flex;flex-direction:column;padding:1.1rem .75rem;gap:.15rem;position:sticky;top:0;height:100vh}
+ .brand{font-weight:680;letter-spacing:-.01em;color:var(--fg);text-decoration:none;
+   padding:.25rem .5rem 1rem;font-size:1.02rem}
+ .brand:hover{text-decoration:none}
+ .rail ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+ .rail a,.railout button{display:flex;align-items:center;gap:.6rem;width:100%;
+   padding:.5rem .6rem;border-radius:8px;color:var(--fg);text-decoration:none;
+   font:inherit;font-size:.92rem;background:none;border:0;cursor:pointer;text-align:left}
+ .rail a:hover,.railout button:hover{background:var(--line-soft);text-decoration:none}
+ .rail a.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+ .rail svg{width:17px;height:17px;flex:none;fill:none;stroke:currentColor;
+   stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;opacity:.85}
+ .railout{margin-top:auto;padding-top:.5rem;border-top:1px solid var(--line)}
+ .main{padding:2rem 2rem 4rem;max-width:56rem}
+ @media(max-width:52rem){
+   .app{grid-template-columns:1fr}
+   .rail{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;
+     border-right:0;border-bottom:1px solid var(--line);padding:.6rem}
+   .brand{padding:.25rem .5rem;width:100%}
+   .rail ul{flex-direction:row;flex-wrap:wrap}
+   .rail a span,.railout button span{font-size:.85rem}
+   .railout{margin:0;border:0;padding:0}
+   .main{padding:1.25rem 1rem 3rem}
+ }
+
+ /* surfaces */
+ .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+   padding:1.1rem 1.2rem;margin:1rem 0;box-shadow:var(--shadow)}
+ .card h2{font-size:1.02rem;margin:0 0 .3rem}
+ .ev{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);
+   border-radius:var(--radius);padding:1rem 1.15rem;margin:.75rem 0;box-shadow:var(--shadow)}
+ .ev h2{margin:0 0 .2rem}
+ .row{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
+ .spread{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+ .pill{display:inline-block;font-size:.74rem;font-weight:600;letter-spacing:.01em;
+   border:1px solid var(--line);border-radius:999px;padding:.15rem .55rem;color:var(--muted)}
+ .navrow{display:flex;gap:.85rem;align-items:center;margin:.25rem 0 1.25rem;flex-wrap:wrap}
+
+ /* controls */
+ label{display:block;margin:.8rem 0 .3rem;font-size:.88rem;font-weight:550;color:var(--fg)}
+ input,select,textarea{width:100%;padding:.55rem .7rem;border:1px solid var(--line);
+   border-radius:8px;background:var(--surface);color:var(--fg);font:inherit;font-size:.94rem}
+ input:hover,select:hover{border-color:var(--muted)}
+ input[type=checkbox],input[type=radio]{width:auto;accent-color:var(--accent)}
+ .submit{margin-top:1rem;padding:.55rem 1.05rem;border:0;border-radius:8px;
+   background:var(--accent);color:#fff;font:inherit;font-weight:600;font-size:.92rem;cursor:pointer}
+ .submit:hover{filter:brightness(1.07)}
+ .linkish{background:none;border:0;color:var(--accent);font:inherit;font-size:.88rem;
+   cursor:pointer;padding:0}
+ .linkish:hover{text-decoration:underline}
+ .notice{font-size:.82rem;color:var(--muted);margin-top:.4rem}
+ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.85em;
+   background:var(--line-soft);padding:.12em .38em;border-radius:5px;word-break:break-all}
+
+ /* slots and calendar */
+ .day{margin:1.25rem 0 .5rem;font-weight:620;font-size:.94rem}
+ .slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(6.5rem,1fr));gap:.5rem}
+ button.slot{padding:.6rem;border:1px solid var(--line);border-radius:8px;
+   background:var(--surface);color:var(--accent);font:inherit;font-weight:600;
+   font-size:.9rem;cursor:pointer}
+ button.slot:hover{border-color:var(--accent);background:var(--accent-soft)}
+ button.slot[aria-pressed=true]{background:var(--accent);color:#fff;border-color:var(--accent)}
+ form{margin-top:1.25rem} .js form:not(.on){display:none}
+
+ /* tables and states */
+ table.rows{border-collapse:collapse;width:100%}
+ table.rows td,table.rows th{padding:.5rem .6rem;border-bottom:1px solid var(--line);
+   text-align:left;font-size:.9rem}
+ table.rows th{color:var(--muted);font-weight:600;font-size:.78rem;text-transform:uppercase;
+   letter-spacing:.04em}
+ .err{border-left:3px solid var(--danger);background:var(--line-soft);
+   padding:.6rem .8rem;margin:1rem 0;border-radius:0 8px 8px 0}
+ .ok{border-left:3px solid var(--ok);background:var(--line-soft);
+   padding:.6rem .8rem;margin:1rem 0;border-radius:0 8px 8px 0}
+</style></head><body>${inner}</body></html>`;
+};
 
 export function bookingPage(
   schedule: Schedule,
@@ -135,8 +268,13 @@ ${err}${empty}
 </form>
 </div></div>
 <style>
- .book-grid{display:grid;grid-template-columns:1fr;gap:1rem}
- @media(min-width:44rem){.book-grid{grid-template-columns:16rem 1fr}}
+ .book-grid{display:grid;grid-template-columns:1fr;gap:0;background:var(--surface);
+   border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+ @media(min-width:46rem){.book-grid{grid-template-columns:17.5rem minmax(0,1fr)}}
+ .book-meta{padding:1.5rem;border-bottom:1px solid var(--line)}
+ @media(min-width:46rem){.book-meta{border-bottom:0;border-right:1px solid var(--line);
+   background:var(--rail);height:100%}}
+ .book-pick{padding:1.5rem}
  .cal-head{display:flex;align-items:center;justify-content:space-between;margin:.5rem 0}
  .navbtn{border:1px solid var(--line);background:transparent;color:var(--fg);
    border-radius:.4rem;padding:.2rem .7rem;font:inherit;cursor:pointer}
@@ -145,8 +283,9 @@ ${err}${empty}
  .cal-days button{aspect-ratio:1;border:0;border-radius:50%;background:transparent;
    color:var(--fg);font:inherit;cursor:pointer}
  .cal-days button:disabled{color:var(--muted);opacity:.35;cursor:default}
- .cal-days button.has{background:var(--accent);color:#fff;opacity:.85}
- .cal-days button.has:hover,.cal-days button[aria-pressed=true]{opacity:1;outline:2px solid var(--accent);outline-offset:2px}
+ .cal-days button.has{background:var(--accent-soft);color:var(--accent);font-weight:650}
+ .cal-days button.has:hover{background:var(--accent);color:#fff}
+ .cal-days button[aria-pressed=true]{background:var(--accent);color:#fff}
  .cal-days .blank{visibility:hidden}
  select{width:100%;padding:.45rem;border:1px solid var(--line);border-radius:.4rem;
    background:transparent;color:var(--fg);font:inherit}
@@ -415,7 +554,7 @@ export function settingsPage(
 ): string {
   return SHELL(
     'Settings',
-    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+    `<!--nav:settings-->
 <h1>Settings</h1>
 ${error ? `<p class="err">${esc(error)}</p>` : ''}
 <form method="post" action="/app/settings">
@@ -454,6 +593,8 @@ export interface ScheduleSummary {
   duration_minutes: number;
   rules: { weekday: string; start: string; end: string }[];
   upcoming: number;
+  /** The event type's accent, shown as the card's rail. */
+  color?: string;
 }
 
 const DAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const;
@@ -506,7 +647,7 @@ export function meetingsPage(
 
   return SHELL(
     'Meetings',
-    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+    `<!--nav:meetings-->
 <h1>Meetings</h1>
 <div class="navrow">
   <a href="/app/meetings" ${range !== 'past' ? 'style="font-weight:600"' : ''}>Upcoming</a>
@@ -549,7 +690,7 @@ export function contactsPage(
     .join('');
   return SHELL(
     'Contacts',
-    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+    `<!--nav:contacts-->
 <h1>Contacts</h1>
 <p class="muted">People who booked with you, newest first. Deleting a contact
   does not touch their bookings.</p>
@@ -576,7 +717,7 @@ export function snippetPage(
 ): string {
   return SHELL(
     'Offer times',
-    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+    `<!--nav:scheduling-->
 <h1>Offer times in an email</h1>
 <p class="muted">Copy this into a message. Times are in your timezone
   (${esc(timezone)}); the link lets them pick anything else.</p>
@@ -633,7 +774,7 @@ export function availabilityEditor(set: {
 
   return SHELL(
     set.name,
-    `<p class="muted"><a href="/app">&lsaquo; back</a></p>
+    `<!--nav:scheduling-->
 <h1>${esc(set.name)}</h1>
 <p class="muted">Times are in your own timezone (${esc(set.timezone)}). Every event
   type using this schedule follows what you save here.</p>
@@ -705,7 +846,7 @@ export function workflowsPage(
     .join('');
   return SHELL(
     'Workflows',
-    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+    `<!--nav:workflows-->
 <h1>Workflows</h1>
 <p class="muted">Emails that send themselves around the booking's life. Templates
   may use {{name}}, {{title}}, {{start}}, {{end}}, {{location}}.</p>
@@ -760,7 +901,7 @@ export function webhooksPage(
     .join('');
   return SHELL(
     'Webhooks',
-    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+    `<!--nav:webhooks-->
 <h1>Webhooks</h1>
 <p class="muted">Booking events, delivered as signed JSON POSTs with retries.
   Pick the Slack format to paste a Slack incoming-webhook URL directly.</p>
@@ -799,7 +940,7 @@ export function apiKeysPage(
     .join('');
   return SHELL(
     'API keys',
-    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+    `<!--nav:api-->
 <h1>API</h1>
 ${freshKey
     ? `<p class="ok">Your new key — copy it now, it is not shown again:<br><code>${esc(freshKey)}</code></p>`
@@ -834,7 +975,7 @@ export function auditPage(
     .join('');
   return SHELL(
     'Audit log',
-    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+    `<!--nav:audit-->
 <h1>Audit log</h1>
 <p class="muted">Sign-ins and administrative changes on your account and the
   teams you administer.</p>
@@ -897,7 +1038,7 @@ export function routingPage(
     .join('');
   return SHELL(
     'Routing',
-    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+    `<!--nav:routing-->
 <h1>Routing forms</h1>
 <p class="muted">Ask one question first; the answer sends people to the right
   booking page, an external link, or a message. Answers are not stored.</p>
@@ -960,7 +1101,7 @@ export function pollsPage(
     .join('');
   return SHELL(
     'Meeting polls',
-    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+    `<!--nav:polls-->
 <h1>Meeting polls</h1>
 <p class="muted">Propose times, let people vote, book the winner.</p>
 ${list || '<p class="muted">No polls yet.</p>'}
@@ -988,7 +1129,7 @@ export function pollDetailPage(
 ): string {
   return SHELL(
     poll.title,
-    `<p class="muted"><a href="/app/polls">&lsaquo; polls</a></p>
+    `<!--nav:polls-->
 <h1>${esc(poll.title)} <span class="pill">${esc(poll.status)}</span></h1>
 <p class="muted">Voting link: <code>${esc(baseUrl)}/p/${esc(poll.token)}</code></p>
 ${tally
@@ -1112,7 +1253,7 @@ export function teamPage(
     .join('');
   return SHELL(
     'Team',
-    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+    `<!--nav:team-->
 <h1>Team</h1>
 ${freshScimToken
     ? `<p class="ok">SCIM bearer token — copy it now, it is not shown again:<br>
@@ -1174,7 +1315,7 @@ export function eventTypeEditor(
 
   return SHELL(
     s.title,
-    `<p class="muted"><a href="/app">&lsaquo; back</a></p>
+    `<!--nav:scheduling-->
 <h1>${esc(s.title)}</h1>
 <p class="muted"><a href="${esc(url)}">${esc(url)}</a></p>
 <form method="post" action="/app/event/${esc(s.schedule_id)}">
@@ -1267,13 +1408,13 @@ export function ownerLanding(
     `${brandColor ? `<style>:root{--accent:${esc(brandColor)}}</style>` : ''}
 <h1>${esc(displayName)}</h1>
 <p class="muted">${welcome ? esc(welcome) : 'Pick a meeting to see available times.'}</p>
-${cards || '<p class="muted">No booking pages yet.</p>'}
+<div class="evlist">${cards || '<p class="muted">No booking pages yet.</p>'}</div>
 ${FOOTER}
 <style>
- .ev{display:flex;flex-direction:column;gap:.15rem;border:1px solid var(--line);
-   border-left:3px solid var(--accent);border-radius:.4rem;padding:.8rem 1rem;
-   margin:.6rem 0;text-decoration:none;color:var(--fg)}
- .ev:hover{border-color:var(--accent)}
+ .ev{display:flex;flex-direction:column;gap:.15rem;text-decoration:none;color:var(--fg);
+   transition:border-color .12s ease,transform .12s ease}
+ .ev:hover{border-color:var(--accent);text-decoration:none;transform:translateY(-1px)}
+ .ev b{font-size:1rem}
 </style>`,
   );
 }
@@ -1363,39 +1504,37 @@ export function ownerHome(
     linkSlug ? `${baseUrl}/${linkSlug}/${slug}` : `${baseUrl}/${slug}`;
   const list = schedules
     .map(
-      (s) => `<div class="card">
-  <h2>${esc(s.title)} <a class="linkish" href="/app/event/${esc(s.schedule_id)}" style="font-size:.85rem">settings</a></h2>
-  <p class="muted">${s.duration_minutes} min &middot;
-    <a href="${esc(pageUrl(s.slug))}">${esc(pageUrl(s.slug))}</a>
-    &middot; ${s.upcoming} upcoming</p>
-  <form method="post" action="/app/schedules/${esc(s.schedule_id)}/availability">
-    <table class="avail">
-      ${DAYS.map((d) => {
-        const r = s.rules.find((x) => x.weekday === d);
-        return `<tr><th>${d}</th>
-          <td><input name="${d}_start" value="${esc(r?.start ?? '')}" placeholder="09:00" size="5"></td>
-          <td><input name="${d}_end" value="${esc(r?.end ?? '')}" placeholder="17:00" size="5"></td></tr>`;
-      }).join('')}
-    </table>
-    <p class="notice">Times are in your own timezone (${esc(owner.timezone)}).
-      Leave a day blank to be unavailable.</p>
-    <button class="submit" type="submit">Save availability</button>
-  </form>
+      (s) => `<div class="ev" ${s.color ? `style="border-left-color:${esc(s.color)}"` : ''}>
+  <div class="spread">
+    <div>
+      <h2>${esc(s.title)}</h2>
+      <p class="muted">${s.duration_minutes} min &middot; ${s.upcoming} upcoming</p>
+      <p class="muted"><a href="${esc(pageUrl(s.slug))}">${esc(pageUrl(s.slug))}</a></p>
+    </div>
+    <div class="row">
+      <a class="linkish" href="/app/event/${esc(s.schedule_id)}">Settings</a>
+      <a class="linkish" href="/app/event/${esc(s.schedule_id)}/snippet">Offer times</a>
+      <a class="linkish" href="${esc(pageUrl(s.slug))}">View</a>
+    </div>
+  </div>
 </div>`,
     )
     .join('');
 
   return SHELL(
     'Your schedules',
-    `<h1>Your schedules</h1>
-<p class="muted">${esc(owner.display_name)} &middot; ${esc(owner.email)} &middot; ${esc(owner.timezone)}
-  &middot; <form method="post" action="/logout" style="display:inline">
-    <button type="submit" class="linkish">sign out</button></form></p>
+    `<!--nav:scheduling-->
+<div class="spread">
+  <div>
+    <h1>Your schedules</h1>
+    <p class="muted">${esc(owner.display_name)} &middot; ${esc(owner.email)} &middot; ${esc(owner.timezone)}</p>
+  </div>
+  <a class="submit" href="#new" style="text-decoration:none">+ New event type</a>
+</div>
 ${notice ? `<p class="ok">${esc(notice)}</p>` : ''}
-<p class="muted"><a href="/app/meetings">Meetings</a> &middot; <a href="/app/contacts">Contacts</a> &middot; <a href="/app/team">Team</a> &middot; <a href="/app/routing">Routing</a> &middot; <a href="/app/polls">Polls</a> &middot; <a href="/app/workflows">Workflows</a> &middot; <a href="/app/webhooks">Webhooks</a> &middot; <a href="/app/api-keys">API</a> &middot; <a href="/app/audit">Audit</a> &middot; <a href="/app/settings">Settings</a></p>
 ${setupBanner}
-${linkSlug ? `<p class="muted">Your page: <a href="${esc(baseUrl)}/${esc(linkSlug)}">${esc(baseUrl)}/${esc(linkSlug)}</a></p>` : ''}
-${schedules.length === 0 ? '<p class="muted">No booking pages yet.</p>' : list}
+${linkSlug ? `<p class="muted">Your public page: <a href="${esc(baseUrl)}/${esc(linkSlug)}">${esc(baseUrl)}/${esc(linkSlug)}</a></p>` : ''}
+${schedules.length === 0 ? '<p class="muted">No booking pages yet — create your first below.</p>' : list}
 <div class="card">
   <h2>Availability schedules</h2>
   <p class="muted">Named sets of hours; each event type follows one.</p>
@@ -1418,8 +1557,8 @@ ${connections ? calendarSection(connections) : ''}
     <button class="submit" type="submit">Delete my account</button>
   </form>
 </div>
-<div class="card">
-  <h2>New booking page</h2>
+<div class="card" id="new">
+  <h2>New event type</h2>
   <form method="post" action="/app/schedules">
     <label for="t">Title</label><input id="t" name="title" required placeholder="Intro call">
     <label for="sl">Link</label><input id="sl" name="slug" required placeholder="intro"

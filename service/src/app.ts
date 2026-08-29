@@ -2081,7 +2081,7 @@ async function handleRoutes(
     // I4 · every owner-scoped read is filtered by the session's account here,
     // not by hiding controls in the interface.
     const { rows } = await sql.query(
-      `SELECT s.schedule_id, s.slug, s.title, s.duration_minutes,
+      `SELECT s.schedule_id, s.slug, s.title, s.duration_minutes, s.color,
               (SELECT count(*)::int FROM bookings b
                 WHERE b.schedule_id = s.schedule_id AND b.status='confirmed'
                   AND b.starts_at > now()) AS upcoming
@@ -2101,6 +2101,7 @@ async function handleRoutes(
         title: String(r['title']),
         duration_minutes: Number(r['duration_minutes']),
         upcoming: Number(r['upcoming'] ?? 0),
+        color: r['color'] === null || r['color'] === undefined ? undefined : String(r['color']),
         rules: rules.rows.map((x) => ({
           weekday: String(x['weekday']),
           start: String(x['starts_local']),
