@@ -16,6 +16,7 @@ import { isPermittedMailHost, mailHostOf, PERMITTED_MAIL_HOSTS } from './subproc
 import { seedDemo } from './seed.ts';
 import { bootstrapInvite } from './bootstrap.ts';
 import { checkTransitions, checkTzdata } from '@pumasi/booking-core';
+import { processDueJobs } from './automation.ts';
 import { classifyWallTime } from '@pumasi/booking-core';
 
 export async function start(): Promise<{ close: () => Promise<void>; port: number }> {
@@ -124,6 +125,15 @@ export async function start(): Promise<{ close: () => Promise<void>; port: numbe
     ready: () => ready,
     calendars,
   };
+  // P7 · drain due jobs promptly after enqueue, and on a steady tick.
+  deps.pump = async () => {
+    await processDueJobs(db, deps.mail, deps.now());
+  };
+  const jobTimer = setInterval(() => {
+    processDueJobs(db, deps.mail, deps.now()).catch((e) =>
+      console.warn(`[jobs] tick failed: ${(e as Error).message}`));
+  }, 15_000);
+  jobTimer.unref?.();
 
   const trustProxy = process.env['TRUST_PROXY'] === 'true';
   if (!trustProxy) {
@@ -170,6 +180,7 @@ export async function start(): Promise<{ close: () => Promise<void>; port: numbe
         ip,
         form,
         cookie: req.headers.cookie,
+        authorization: req.headers.authorization,
         query: Object.fromEntries(url.searchParams),
       })
         .then((reply) => {

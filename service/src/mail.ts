@@ -7,7 +7,7 @@
  */
 
 export interface MailMessage {
-  kind: 'confirmed' | 'cancelled' | 'rescheduled' | 'signin';
+  kind: 'confirmed' | 'cancelled' | 'rescheduled' | 'signin' | 'custom';
   /** An address, or the literal 'owner' meaning the schedule's owner. */
   to: string;
   bookingId: string;
@@ -18,6 +18,9 @@ export interface MailMessage {
   location?: string;
   /** P3 · an iCalendar attachment (ics.ts), sent with confirmations. */
   ics?: string;
+  /** P7 · kind 'custom' only: the workflow's own rendered subject and body. */
+  subject?: string;
+  body?: string;
 }
 
 export interface MailPort {

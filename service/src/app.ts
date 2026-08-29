@@ -14,8 +14,9 @@ import {
 } from './schedules.ts';
 import {
   availabilityEditor, bookingPage, confirmedPage, contactsPage, errorPage, eventTypeEditor,
-  homePage, loginPage, managePage, meetingsPage, messagePage, ownerHome, ownerLanding,
-  pollDetailPage, pollsPage, pollVotePage, routeFormPage, routingPage, settingsPage, signupPage,
+  apiKeysPage, homePage, loginPage, managePage, meetingsPage, messagePage, ownerHome,
+  ownerLanding, pollDetailPage, pollsPage, pollVotePage, routeFormPage, routingPage, settingsPage,
+  signupPage, webhooksPage, workflowsPage,
   teamPage,
   snippetPage,
   type ScheduleSummary,
@@ -28,6 +29,7 @@ import { googleSsoExchange, googleSsoUrl } from './sso-google.ts';
 import { RATE_LIMITS, type Config } from './config.ts';
 import type { CalendarHub } from './calendars.ts';
 import { icsFor } from './ics.ts';
+import { cancelPendingJobs, fireTrigger, type BookingCtx } from './automation.ts';
 import type { MailPort } from './mail.ts';
 import type { Interval, Slot } from '@pumasi/booking-core';
 
@@ -51,6 +53,12 @@ const json = (status: number, body: unknown): Reply => ({
 /** L1 · At least 128 bits from a CSPRNG. Not a booking id, not a sequence. */
 export const newToken = (): string => randomBytes(32).toString('base64url');
 
+/** P7 · API keys are stored as digests; the raw key exists only in transit. */
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 /** SPEC-0003 · thrown when a connected calendar cannot be consulted. */
 export class CalendarBlindError extends Error {}
 
@@ -65,6 +73,8 @@ export interface AppDeps {
   ready: () => boolean;
   /** SPEC-0003 · absent means no calendar integration is configured. */
   calendars?: CalendarHub;
+  /** P7 · nudges the host's job runner after new jobs are enqueued. */
+  pump?: () => Promise<void>;
 }
 
 /** I6 · Per-IP and per-schedule limits, counted in the database. */
@@ -125,6 +135,7 @@ export async function handle(
     form?: Record<string, string>;
     cookie?: string;
     query?: Record<string, string>;
+    authorization?: string;
   },
 ): Promise<Reply> {
   try {
@@ -149,6 +160,7 @@ async function handleRoutes(
     form?: Record<string, string>;
     cookie?: string;
     query?: Record<string, string>;
+    authorization?: string;
   },
 ): Promise<Reply> {
   const { sql, config, mail } = deps;
@@ -172,6 +184,100 @@ async function handleRoutes(
       commit: config.commit,
       tzdata: (process.versions as { tz?: string }).tz ?? 'unknown',
     });
+  }
+
+  // ── the public API, v1 (P7) ──────────────────────────────────────────────
+  // Bearer key auth; form-encoded writes; JSON out. The API calls the same
+  // paths the pages do, so F1/B3 hold identically.
+  if (parts[0] === 'api' && parts[1] === 'v1') {
+    const raw = (req.authorization ?? '').replace(/^Bearer\s+/i, '').trim();
+    if (!raw) return json(401, { error: 'missing bearer token' });
+    const digest = await sha256Hex(raw);
+    const keyRow = await sql.query(
+      `SELECT owner_id FROM api_keys WHERE key_hash = $1`, [digest]);
+    if (!keyRow.rows[0]) return json(401, { error: 'invalid token' });
+    const apiOwner = String(keyRow.rows[0]['owner_id']);
+
+    if (req.method === 'GET' && parts[2] === 'event-types') {
+      const { rows } = await sql.query(
+        `SELECT schedule_id, slug, title, duration_minutes, scheduling_kind
+           FROM schedules WHERE owner_id = $1 ORDER BY slug`, [apiOwner]);
+      return json(200, { event_types: rows });
+    }
+
+    if (req.method === 'GET' && parts[2] === 'slots') {
+      const slug = (req.query?.['event_type'] ?? '').trim();
+      const schedule = await findScheduleBySlug(sql, slug);
+      if (!schedule || schedule.owner_id !== apiOwner) {
+        return json(404, { error: 'no such event type' });
+      }
+      const r = await slotsFor(deps, schedule, now);
+      return json(200, { slots: r.slots });
+    }
+
+    if (req.method === 'GET' && parts[2] === 'bookings') {
+      const { rows } = await sql.query(
+        `SELECT b.booking_id, b.starts_at, b.ends_at, b.status, b.booker_name, b.booker_email,
+                s.slug AS event_type
+           FROM bookings b LEFT JOIN schedules s ON s.schedule_id = b.schedule_id
+          WHERE b.owner_id = $1 AND b.starts_at > $2 AND b.status = 'confirmed'
+          ORDER BY b.starts_at LIMIT 100`,
+        [apiOwner, now]);
+      return json(200, { bookings: rows });
+    }
+
+    if (req.method === 'POST' && parts[2] === 'bookings' && !parts[3]) {
+      const f = req.form ?? {};
+      const schedule = await findScheduleBySlug(sql, (f['event_type'] ?? '').trim());
+      if (!schedule || schedule.owner_id !== apiOwner) {
+        return json(404, { error: 'no such event type' });
+      }
+      const reply = await bookHandler(deps, schedule, req, now);
+      if (reply.status !== 200 || !reply.body.includes('confirmed')) {
+        return json(reply.status === 200 ? 409 : reply.status,
+          { error: 'not booked', status: reply.status });
+      }
+      const made = await sql.query(
+        `SELECT booking_id, starts_at, ends_at FROM bookings
+          WHERE owner_id = $1 AND status = 'confirmed' AND starts_at = $2
+          ORDER BY id DESC LIMIT 1`,
+        [apiOwner, f['start'] ?? '']);
+      return json(201, { booking: made.rows[0] ?? null });
+    }
+
+    if (req.method === 'POST' && parts[2] === 'bookings' && parts[3] && parts[4] === 'cancel') {
+      const found = await sql.query(
+        `SELECT booking_id, starts_at, status, group_id FROM bookings
+          WHERE booking_id = $1 AND owner_id = $2 ORDER BY id DESC LIMIT 1`,
+        [parts[3], apiOwner]);
+      const b = found.rows[0];
+      if (!b) return json(404, { error: 'no such booking' });
+      if (String(b['status']) === 'confirmed') {
+        const store = new PostgresBookingStore(sql, apiOwner, deps.tx);
+        const actx = await automationCtx(sql, String(b['booking_id']));
+        if (actx) {
+          await fireTrigger(sql, 'booking_cancelled', actx, actx.ownerEmail, actx.ownerTz, now);
+          await cancelPendingJobs(sql, String(b['booking_id']), now);
+          await deps.pump?.();
+        }
+        const gid = b['group_id'] === null ? undefined : String(b['group_id']);
+        const ids = gid
+          ? await store.cancelGroup(gid, `api-cancel:${gid}`)
+          : (await store.cancel(String(b['booking_id']), `api-cancel:${String(b['booking_id'])}`),
+             [String(b['booking_id'])]);
+        for (const id of ids) await deps.calendars?.onCancelled(sql, id);
+        const booker = await bookerFor(sql, String(b['booking_id']));
+        if (booker?.email) {
+          await mail.send({ kind: 'cancelled', to: booker.email,
+            bookingId: String(b['booking_id']),
+            start: new Date(String(b['starts_at'])).toISOString().replace('.000Z', 'Z'),
+            timezone: booker.timezone });
+        }
+      }
+      return json(200, { cancelled: true });
+    }
+
+    return json(404, { error: 'no such endpoint' });
   }
 
   // ── manage a booking by bearer token (L1, L2) ────────────────────────────
@@ -250,6 +356,15 @@ async function handleRoutes(
       }
       // SPEC-0003 · the owner's calendar follows the move (never fatal, M3).
       await deps.calendars?.onMoved(sql, bookingId, newStart, newEnd);
+      // P7 · reminders re-anchor to the new time; the rescheduled trigger fires.
+      await cancelPendingJobs(sql, bookingId, now);
+      {
+        const actx = await automationCtx(sql, bookingId);
+        if (actx) {
+          await fireTrigger(sql, 'booking_rescheduled', actx, actx.ownerEmail, actx.ownerTz, now);
+          await deps.pump?.();
+        }
+      }
       // M5 · both parties learn the meeting moved.
       const owner = await ownerForBooking(sql, bookingId);
       const booker = await bookerFor(sql, bookingId);
@@ -269,6 +384,13 @@ async function handleRoutes(
       const existing = await store.findById(bookingId);
       // B5 · cancelling is idempotent and total; re-cancelling is `cancelled`.
       if (existing?.status === 'confirmed') {
+        // P7 · automations first, while the row still answers questions.
+        const actx = await automationCtx(sql, bookingId);
+        if (actx) {
+          await fireTrigger(sql, 'booking_cancelled', actx, actx.ownerEmail, actx.ownerTz, now);
+          await cancelPendingJobs(sql, bookingId, now);
+          await deps.pump?.();
+        }
         // P5 · a group cancels as one: every host's row, every host's calendar,
         // every host's inbox.
         const cancelledIds = groupId
@@ -628,6 +750,90 @@ async function handleRoutes(
         }
       });
       return { status: 303, headers: { location: '/app' }, body: '' };
+    }
+
+    // ── workflows, webhooks, API keys (P7) ───────────────────────────────
+    if (parts[1] === 'workflows') {
+      if (req.method === 'POST' && parts[2] === 'delete') {
+        await sql.query(`DELETE FROM workflows WHERE workflow_id = $1 AND owner_id = $2`,
+          [req.form?.['id'] ?? '', owner.owner_id]);
+        return { status: 303, headers: { location: '/app/workflows' }, body: '' };
+      }
+      if (req.method === 'POST') {
+        const f = req.form ?? {};
+        const trigger = ['booking_created', 'booking_cancelled', 'booking_rescheduled',
+          'before_event', 'after_event'].includes(f['trigger'] ?? '')
+          ? f['trigger']! : 'booking_created';
+        const offset = Math.max(0, Number(f['offset_minutes'] ?? 0) || 0);
+        const recipient = f['recipient'] === 'owner' ? 'owner' : 'booker';
+        await sql.query(
+          `INSERT INTO workflows (workflow_id, owner_id, title, trigger, offset_minutes,
+             recipient, subject, body)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [randomUUID(), owner.owner_id, (f['title'] ?? 'Workflow').trim(), trigger, offset,
+           recipient, (f['subject'] ?? 'About your booking').trim(),
+           (f['body'] ?? '').trim() || 'Hi {{name}}, a note about {{title}} at {{start}}.']);
+        return { status: 303, headers: { location: '/app/workflows' }, body: '' };
+      }
+      const { rows } = await sql.query(
+        `SELECT workflow_id, title, trigger, offset_minutes, recipient, subject
+           FROM workflows WHERE owner_id = $1 ORDER BY created_at`, [owner.owner_id]);
+      return html(200, workflowsPage(rows.map((r) => ({
+        workflow_id: String(r['workflow_id']), title: String(r['title']),
+        trigger: String(r['trigger']), offset_minutes: Number(r['offset_minutes']),
+        recipient: String(r['recipient']), subject: String(r['subject']),
+      }))));
+    }
+
+    if (parts[1] === 'webhooks') {
+      if (req.method === 'POST' && parts[2] === 'delete') {
+        await sql.query(`DELETE FROM webhooks WHERE webhook_id = $1 AND owner_id = $2`,
+          [req.form?.['id'] ?? '', owner.owner_id]);
+        return { status: 303, headers: { location: '/app/webhooks' }, body: '' };
+      }
+      if (req.method === 'POST') {
+        const f = req.form ?? {};
+        const url = (f['url'] ?? '').trim();
+        if (!/^https:\/\//.test(url)) {
+          return html(400, errorPage(400, 'A webhook URL starts with https://.'));
+        }
+        await sql.query(
+          `INSERT INTO webhooks (webhook_id, owner_id, url, secret, format)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [randomUUID(), owner.owner_id, url, newToken(),
+           f['format'] === 'slack' ? 'slack' : 'json']);
+        return { status: 303, headers: { location: '/app/webhooks' }, body: '' };
+      }
+      const { rows } = await sql.query(
+        `SELECT webhook_id, url, secret, format FROM webhooks
+          WHERE owner_id = $1 ORDER BY created_at`, [owner.owner_id]);
+      return html(200, webhooksPage(rows.map((r) => ({
+        webhook_id: String(r['webhook_id']), url: String(r['url']),
+        secret: String(r['secret']), format: String(r['format']),
+      }))));
+    }
+
+    if (parts[1] === 'api-keys') {
+      if (req.method === 'POST' && parts[2] === 'delete') {
+        await sql.query(`DELETE FROM api_keys WHERE key_hash = $1 AND owner_id = $2`,
+          [req.form?.['hash'] ?? '', owner.owner_id]);
+        return { status: 303, headers: { location: '/app/api-keys' }, body: '' };
+      }
+      let freshKey: string | undefined;
+      if (req.method === 'POST') {
+        freshKey = `pk_${newToken()}`;
+        await sql.query(
+          `INSERT INTO api_keys (key_hash, owner_id, name) VALUES ($1, $2, $3)`,
+          [await sha256Hex(freshKey), owner.owner_id,
+           (req.form?.['name'] ?? 'API key').trim()]);
+      }
+      const { rows } = await sql.query(
+        `SELECT key_hash, name, created_at FROM api_keys
+          WHERE owner_id = $1 ORDER BY created_at`, [owner.owner_id]);
+      return html(200, apiKeysPage(rows.map((r) => ({
+        key_hash: String(r['key_hash']), name: String(r['name']),
+        created_at: String(r['created_at']).slice(0, 10),
+      })), config.baseUrl, freshKey));
     }
 
     // ── routing forms (P6) ───────────────────────────────────────────────
@@ -1026,6 +1232,13 @@ async function handleRoutes(
 
         if (parts[3] === 'cancel' && String(b['status']) === 'confirmed') {
           const store = new PostgresBookingStore(sql, owner.owner_id, deps.tx);
+          // P7 · automations before the row changes state.
+          const actx = await automationCtx(sql, bookingId);
+          if (actx) {
+            await fireTrigger(sql, 'booking_cancelled', actx, actx.ownerEmail, actx.ownerTz, now);
+            await cancelPendingJobs(sql, bookingId, now);
+            await deps.pump?.();
+          }
           // P5 · cancelling any host's row of a collective meeting cancels the
           // whole meeting — half-cancelled groups help nobody.
           const cancelledIds = groupId
@@ -1683,6 +1896,37 @@ async function bookerFor(sql: SqlClient, bookingId: string): Promise<Contact | u
   return r ? { email: String(r['email']), timezone: String(r['timezone']) } : undefined;
 }
 
+/** P7 · everything an automation needs to speak about one booking. */
+async function automationCtx(
+  sql: SqlClient,
+  bookingId: string,
+): Promise<(BookingCtx & { ownerEmail: string; ownerTz: string }) | undefined> {
+  const { rows } = await sql.query(
+    `SELECT b.booking_id, b.starts_at, b.ends_at, b.booker_name, b.booker_email, b.booker_tz,
+            s.title, s.owner_id AS event_owner, b.owner_id AS row_owner
+       FROM bookings b LEFT JOIN schedules s ON s.schedule_id = b.schedule_id
+      WHERE b.booking_id = $1 ORDER BY b.id DESC LIMIT 1`,
+    [bookingId],
+  );
+  const r = rows[0];
+  if (!r) return undefined;
+  const ownerId = r['event_owner'] === null ? String(r['row_owner']) : String(r['event_owner']);
+  const who = await ownerContact(sql, ownerId);
+  if (!who) return undefined;
+  return {
+    bookingId,
+    ownerId,
+    title: String(r['title'] ?? 'Booking'),
+    start: new Date(String(r['starts_at'])).toISOString().replace('.000Z', 'Z'),
+    end: new Date(String(r['ends_at'])).toISOString().replace('.000Z', 'Z'),
+    bookerName: r['booker_name'] === null ? '' : String(r['booker_name']),
+    bookerEmail: r['booker_email'] === null ? '' : String(r['booker_email']),
+    bookerTz: r['booker_tz'] === null ? 'UTC' : String(r['booker_tz']),
+    ownerEmail: who.email,
+    ownerTz: who.timezone,
+  };
+}
+
 async function ownerForBooking(sql: SqlClient, bookingId: string): Promise<Contact | undefined> {
   const { rows } = await sql.query(
     `SELECT o.email, o.timezone FROM bookings b
@@ -1961,6 +2205,19 @@ async function bookHandler(
     const host = await ownerContact(sql, o.ownerId);
     if (host) {
       await mail.send({ kind: 'confirmed', to: host.email, bookingId, start, timezone: host.timezone, location });
+    }
+  }
+
+  // P7 · automations fire for the event type's owner: immediate workflows and
+  // webhooks now, before/after reminders at the meeting's edges.
+  {
+    const wfOwner = await ownerContact(sql, schedule.owner_id);
+    if (wfOwner) {
+      await fireTrigger(sql, 'booking_created', {
+        bookingId, ownerId: schedule.owner_id, title: schedule.title,
+        start, end, bookerName: name, bookerEmail: email, bookerTz, location,
+      }, wfOwner.email, wfOwner.timezone, now);
+      await deps.pump?.();
     }
   }
 

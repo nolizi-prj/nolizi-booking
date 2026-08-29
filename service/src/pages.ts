@@ -647,6 +647,148 @@ export function availabilityEditor(set: {
 }
 
 /** P2 — the editor for one event type. */
+/** P7 — workflows: booking-lifecycle automations. */
+export function workflowsPage(
+  flows: {
+    workflow_id: string; title: string; trigger: string; offset_minutes: number;
+    recipient: string; subject: string;
+  }[],
+): string {
+  const label = (t: string, o: number) =>
+    t === 'before_event' ? `${o} min before the meeting`
+    : t === 'after_event' ? `${o} min after the meeting`
+    : t.replace('booking_', 'when a booking is ').replace('_', ' ');
+  const list = flows
+    .map(
+      (w) => `<div class="card">
+  <h2>${esc(w.title)}</h2>
+  <p class="muted">${esc(label(w.trigger, w.offset_minutes))} → email the ${esc(w.recipient)}:
+    “${esc(w.subject)}”</p>
+  <form method="post" action="/app/workflows/delete">
+    <input type="hidden" name="id" value="${esc(w.workflow_id)}">
+    <button class="linkish" type="submit">delete</button>
+  </form>
+</div>`,
+    )
+    .join('');
+  return SHELL(
+    'Workflows',
+    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+<h1>Workflows</h1>
+<p class="muted">Emails that send themselves around the booking's life. Templates
+  may use {{name}}, {{title}}, {{start}}, {{end}}, {{location}}.</p>
+${list || '<p class="muted">No workflows yet.</p>'}
+<div class="card">
+  <h2>New workflow</h2>
+  <form method="post" action="/app/workflows">
+    <label for="wt">Name</label><input id="wt" name="title" required placeholder="Reminder">
+    <label for="wg">When</label>
+    <select id="wg" name="trigger">
+      <option value="before_event">Before the meeting</option>
+      <option value="after_event">After the meeting</option>
+      <option value="booking_created">When a booking is created</option>
+      <option value="booking_cancelled">When a booking is cancelled</option>
+      <option value="booking_rescheduled">When a booking is rescheduled</option>
+    </select>
+    <label for="wo">Offset (minutes, for before/after)</label>
+    <input id="wo" name="offset_minutes" type="number" min="0" value="60">
+    <label for="wr">Send to</label>
+    <select id="wr" name="recipient">
+      <option value="booker">The booker</option>
+      <option value="owner">Me</option>
+    </select>
+    <label for="ws">Subject</label>
+    <input id="ws" name="subject" value="Reminder: {{title}} at {{start}}">
+    <label for="wb">Body</label>
+    <input id="wb" name="body" value="Hi {{name}}, see you at {{start}}. {{location}}">
+    <button class="submit" type="submit">Create workflow</button>
+  </form>
+</div>
+${CARD_CSS}
+<style>select{width:100%;padding:.55rem;border:1px solid var(--line);border-radius:.4rem;background:transparent;color:var(--fg);font:inherit}</style>`,
+  );
+}
+
+/** P7 — outbound webhooks (a Slack incoming-webhook URL works directly). */
+export function webhooksPage(
+  hooks: { webhook_id: string; url: string; secret: string; format: string }[],
+): string {
+  const list = hooks
+    .map(
+      (h) => `<div class="card">
+  <p><code>${esc(h.url.slice(0, 70))}</code> <span class="pill">${esc(h.format)}</span></p>
+  <p class="muted">Signing secret: <code>${esc(h.secret)}</code> — verify
+    X-Pumasi-Signature (HMAC-SHA256 of the body, hex).</p>
+  <form method="post" action="/app/webhooks/delete">
+    <input type="hidden" name="id" value="${esc(h.webhook_id)}">
+    <button class="linkish" type="submit">delete</button>
+  </form>
+</div>`,
+    )
+    .join('');
+  return SHELL(
+    'Webhooks',
+    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+<h1>Webhooks</h1>
+<p class="muted">Booking events, delivered as signed JSON POSTs with retries.
+  Pick the Slack format to paste a Slack incoming-webhook URL directly.</p>
+${list || '<p class="muted">No webhooks yet.</p>'}
+<div class="card">
+  <h2>New webhook</h2>
+  <form method="post" action="/app/webhooks">
+    <label for="hu">URL</label><input id="hu" name="url" type="url" required placeholder="https://…">
+    <label for="hf">Format</label>
+    <select id="hf" name="format">
+      <option value="json">JSON (event + data)</option>
+      <option value="slack">Slack message</option>
+    </select>
+    <button class="submit" type="submit">Add webhook</button>
+  </form>
+</div>
+${CARD_CSS}
+<style>code{font-size:.85em;background:var(--line);padding:.1em .3em;border-radius:.25rem}
+select{width:100%;padding:.55rem;border:1px solid var(--line);border-radius:.4rem;background:transparent;color:var(--fg);font:inherit}</style>`,
+  );
+}
+
+/** P7 — API keys: shown once, stored as digests. */
+export function apiKeysPage(
+  keys: { key_hash: string; name: string; created_at: string }[],
+  baseUrl: string,
+  freshKey?: string,
+): string {
+  const list = keys
+    .map(
+      (k) => `<p>${esc(k.name)} <span class="muted">· ${esc(k.created_at)}</span>
+  <form method="post" action="/app/api-keys/delete" style="display:inline">
+    <input type="hidden" name="hash" value="${esc(k.key_hash)}">
+    <button class="linkish" type="submit">revoke</button></form></p>`,
+    )
+    .join('');
+  return SHELL(
+    'API keys',
+    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+<h1>API</h1>
+${freshKey
+    ? `<p class="ok">Your new key — copy it now, it is not shown again:<br><code>${esc(freshKey)}</code></p>`
+    : ''}
+<p class="muted">Send it as <code>Authorization: Bearer &lt;key&gt;</code>. Endpoints:
+  GET ${esc(baseUrl)}/api/v1/event-types · GET /api/v1/slots?event_type=&lt;slug&gt; ·
+  GET /api/v1/bookings · POST /api/v1/bookings (form fields event_type, start, end,
+  name, email) · POST /api/v1/bookings/&lt;id&gt;/cancel</p>
+${list || '<p class="muted">No keys yet.</p>'}
+<div class="card">
+  <h2>New key</h2>
+  <form method="post" action="/app/api-keys">
+    <label for="kn">Name</label><input id="kn" name="name" placeholder="Zapier">
+    <button class="submit" type="submit">Create key</button>
+  </form>
+</div>
+${CARD_CSS}
+<style>code{font-size:.85em;background:var(--line);padding:.1em .3em;border-radius:.25rem;word-break:break-all}</style>`,
+  );
+}
+
 /** P6 — a plain page carrying one message, for routing/poll endpoints. */
 export function messagePage(title: string, message: string): string {
   return SHELL(title, `<h1>${esc(title)}</h1>\n<p class="ok">${esc(message)}</p>`);
@@ -1150,7 +1292,7 @@ export function ownerHome(
   &middot; <form method="post" action="/logout" style="display:inline">
     <button type="submit" class="linkish">sign out</button></form></p>
 ${notice ? `<p class="ok">${esc(notice)}</p>` : ''}
-<p class="muted"><a href="/app/meetings">Meetings</a> &middot; <a href="/app/contacts">Contacts</a> &middot; <a href="/app/team">Team</a> &middot; <a href="/app/routing">Routing</a> &middot; <a href="/app/polls">Polls</a> &middot; <a href="/app/settings">Settings</a></p>
+<p class="muted"><a href="/app/meetings">Meetings</a> &middot; <a href="/app/contacts">Contacts</a> &middot; <a href="/app/team">Team</a> &middot; <a href="/app/routing">Routing</a> &middot; <a href="/app/polls">Polls</a> &middot; <a href="/app/workflows">Workflows</a> &middot; <a href="/app/webhooks">Webhooks</a> &middot; <a href="/app/api-keys">API</a> &middot; <a href="/app/settings">Settings</a></p>
 ${setupBanner}
 ${linkSlug ? `<p class="muted">Your page: <a href="${esc(baseUrl)}/${esc(linkSlug)}">${esc(baseUrl)}/${esc(linkSlug)}</a></p>` : ''}
 ${schedules.length === 0 ? '<p class="muted">No booking pages yet.</p>' : list}

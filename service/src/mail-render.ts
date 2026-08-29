@@ -49,6 +49,9 @@ export function renderMessage(m: MailMessage, baseUrl: string): RenderedMail {
   const where = m.location ? `Where: ${m.location}\n` : '';
 
   switch (m.kind) {
+    case 'custom':
+      // P7 · a workflow authored this; rendering already happened there.
+      return { subject: m.subject ?? '(no subject)', text: m.body ?? '' };
     case 'confirmed':
       return {
         subject: `Booked: ${when}`,

@@ -27,6 +27,7 @@ import { Serialiser } from './driver.ts';
 import { bindable, normalizeDbError, translateSql } from './sqlite-dialect.ts';
 import { CalendarHub } from './calendars.ts';
 import { GoogleCalendarProvider } from './calendar-google.ts';
+import { processDueJobs } from './automation.ts';
 // Bundled as text via the `rules` entry in wrangler.jsonc.
 // @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema001 from '../migrations-sqlite/001_schema.sql';
@@ -42,6 +43,8 @@ import schema005 from '../migrations-sqlite/005_profile.sql';
 import schema006 from '../migrations-sqlite/006_teams.sql';
 // @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema007 from '../migrations-sqlite/007_routing_polls.sql';
+// @ts-expect-error — .sql imports exist only under wrangler's bundler
+import schema008 from '../migrations-sqlite/008_automation.sql';
 
 /** Mirrors server.ts: a form here is a name, an address and two timestamps. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -95,6 +98,7 @@ export class PumasiService extends DurableObject {
           { name: '005_profile.sql', sql: schema005 as string },
           { name: '006_teams.sql', sql: schema006 as string },
           { name: '007_routing_polls.sql', sql: schema007 as string },
+          { name: '008_automation.sql', sql: schema008 as string },
         ],
       }),
     );
@@ -144,8 +148,30 @@ export class PumasiService extends DurableObject {
       now: () => new Date().toISOString().replace('.000Z', 'Z'),
       ready: () => true, // init completes before any request is handled
       calendars,
+      // P7 · nudge the alarm so newly enqueued jobs run when due. The DO holds
+      // one alarm; the earliest pending job owns it.
+      pump: async () => {
+        const next = await client.query(
+          `SELECT run_at FROM jobs WHERE status = 'pending' ORDER BY run_at LIMIT 1`);
+        if (next.rows[0]) {
+          const at = Math.max(Date.parse(String(next.rows[0]['run_at'])), Date.now() + 500);
+          await (this.ctx as unknown as { storage: { setAlarm(t: number): Promise<void> } })
+            .storage.setAlarm(at);
+        }
+      },
     };
     return this.#deps;
+  }
+
+  /** P7 · the alarm drains due jobs and re-arms for the next one. */
+  override async alarm(): Promise<void> {
+    const deps = await this.#init();
+    const next = await processDueJobs(deps.sql, deps.mail, deps.now());
+    if (next) {
+      const at = Math.max(Date.parse(next), Date.now() + 1000);
+      await (this.ctx as unknown as { storage: { setAlarm(t: number): Promise<void> } })
+        .storage.setAlarm(at);
+    }
   }
 
   override async fetch(request: Request): Promise<Response> {
@@ -181,6 +207,7 @@ export class PumasiService extends DurableObject {
       ip: request.headers.get('cf-connecting-ip') ?? 'unknown',
       form,
       cookie: request.headers.get('cookie') ?? undefined,
+      authorization: request.headers.get('authorization') ?? undefined,
       query: Object.fromEntries(url.searchParams),
     });
     return new Response(reply.body, { status: reply.status, headers: reply.headers });
