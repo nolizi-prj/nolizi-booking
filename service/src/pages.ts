@@ -212,7 +212,7 @@ const SHELL = (title: string, rawBody: string): string => {
 export function bookingPage(
   schedule: Schedule,
   slots: Slot[],
-  opts: { error?: string; csrf?: string; action?: string } = {},
+  opts: { error?: string; csrf?: string; action?: string; recurrence?: string } = {},
 ): string {
   const err = opts.error ? `<p class="err">${esc(opts.error)}</p>` : '';
   // Rendered server-side so the page works without JavaScript. The script
@@ -236,6 +236,7 @@ export function bookingPage(
   <h1>${esc(schedule.title)}</h1>
   <p class="muted">${schedule.duration_minutes} minutes${where ? ` &middot; ${esc(where)}` : ''}</p>
   ${schedule.description ? `<p>${esc(schedule.description)}</p>` : ''}
+  ${opts.recurrence ? `<p class="muted">Repeats ${esc(opts.recurrence)}</p>` : ''}
   <p class="muted">Times shown in <span id="tzname"></span></p>
   <div id="tzwrap" hidden><label for="tzsel">Timezone</label><select id="tzsel"></select></div>
 </div>
@@ -265,6 +266,9 @@ ${err}${empty}
     can meet you. Nobody else sees them. The confirmation email has a link that
     cancels the booking and deletes these details. <a href="/privacy">What we keep</a>.</p>
   <input type="hidden" name="booker_tz" id="btz">
+  ${opts.recurrence ? `<label style="display:flex;gap:.5rem;align-items:flex-start;margin-top:.9rem">
+    <input type="checkbox" name="repeat" checked>
+    <span>Book the whole series — ${esc(opts.recurrence)}</span></label>` : ''}
   <button class="submit" type="submit">Confirm booking</button>
 </form>
 </div></div>
@@ -1353,6 +1357,11 @@ export function eventTypeEditor(
     : '<p class="notice">Create a team under /app/team to host with others.</p>'}
 </div>
 <div class="card"><h2>When</h2>
+  <label for="rr">Repeats (RFC 5545 rule, blank = single meetings)</label>
+  <input id="rr" name="recurrence_rule" value="${esc(s.recurrence_rule ?? '')}"
+    placeholder="FREQ=WEEKLY;COUNT=4">
+  <p class="notice">A booker may take the whole series in one go; it is booked
+    all-or-nothing and cancels as one. Up to 12 occurrences.</p>
   <label for="av">Availability schedule</label>
   <select id="av" name="availability_set_id">${setOptions}</select>
   <label for="gr">Start-time spacing (minutes)</label><input id="gr" name="granularity_minutes" type="number" min="1" value="${s.granularity_minutes}">

@@ -55,6 +55,8 @@ export interface Schedule {
   available_until: string | null;
   /** P5 · solo, or a team event drawing on event_hosts. */
   scheduling_kind: 'solo' | 'round_robin' | 'collective';
+  /** An RFC 5545 RRULE, when this event type may be booked as a series. */
+  recurrence_rule: string | null;
   org_id: string | null;
 }
 
@@ -64,7 +66,7 @@ const SCHEDULE_COLS = `sc.schedule_id, sc.owner_id, sc.slug, sc.title, o.timezon
             sc.max_bookings_per_day, sc.max_bookings_per_week, sc.max_bookings_per_month,
             sc.max_minutes_per_day, sc.max_minutes_per_week, sc.availability_set_id, sc.description, sc.color,
             sc.location_kind, sc.location_value, sc.available_from, sc.available_until,
-            sc.scheduling_kind, sc.org_id`;
+            sc.scheduling_kind, sc.org_id, sc.recurrence_rule`;
 
 function toSchedule(r: Record<string, unknown>): Schedule {
   const opt = (v: unknown) => (v === null || v === undefined ? null : s(v));
@@ -95,6 +97,7 @@ function toSchedule(r: Record<string, unknown>): Schedule {
     available_until: opt(r['available_until']),
     scheduling_kind: (opt(r['scheduling_kind']) ?? 'solo') as Schedule['scheduling_kind'],
     org_id: opt(r['org_id']),
+    recurrence_rule: opt(r['recurrence_rule']),
   };
 }
 
@@ -356,6 +359,8 @@ export async function availableSlots(
   q: SlotQuery,
   /** SPEC-0003: calendar busy intervals arrive as plain intervals, nothing more. */
   externalBusy: Interval[] = [],
+  /** Validating a recurring series needs a window longer than the default. */
+  maxQuerySpanDays?: number,
 ): Promise<ComputeSlotsResponse> {
   const [availability, dateOverrides, busy] = await Promise.all([
     loadRules(sql, schedule),
@@ -381,6 +386,7 @@ export async function availableSlots(
     bookings_per_local_date: counts,
     booking_limits: limitsOf(schedule),
     booked_by_period: periodUsage(busy, schedule.owner_timezone),
+    ...(maxQuerySpanDays ? { max_query_span_days: maxQuerySpanDays } : {}),
     query: { from: q.from, to: q.to },
     // P2b — the clock is supplied here. The engine never reads one.
     now: q.now,

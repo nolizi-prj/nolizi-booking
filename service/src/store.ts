@@ -268,6 +268,50 @@ export class PostgresBookingStore {
     );
   }
 
+  /**
+   * Recurrence · one owner, N intervals, one group: the whole series commits
+   * or none of it does. Built on the same lock-then-insert shape as the
+   * collective path, so the per-owner exclusivity trigger still guards every
+   * row and a clash anywhere rolls the series back.
+   */
+  async insertConfirmedSeries(
+    groupId: string,
+    entries: { bookingId: string; start: string; end: string }[],
+    key: string,
+    booker: { name: string; email: string; timezone: string; token: string },
+  ): Promise<{ ok: true } | { ok: false; reason: 'conflict' }> {
+    return withRetry(() =>
+      this.#tx.transaction(async (tx) => {
+        try {
+          await lockOwner(tx, this.ownerId);
+          for (const [i, e] of entries.entries()) {
+            await tx.query(
+              `INSERT INTO bookings
+                 (booking_id, owner_id, starts_at, ends_at, status, booker_name, booker_email,
+                  booker_tz, token, group_id)
+               VALUES ($1, $2, $3, $4, 'confirmed', $5, $6, $7, $8, $9)`,
+              [e.bookingId, this.ownerId, e.start, e.end, booker.name, booker.email,
+               booker.timezone, i === 0 ? booker.token : null, groupId],
+            );
+          }
+          const claimed = await tx.query(
+            `INSERT INTO idempotency_keys (key, booking_id) VALUES ($1, $2)
+               ON CONFLICT (key) DO NOTHING
+             RETURNING key`,
+            [key, entries[0]!.bookingId],
+          );
+          if (!claimed.rows[0]) throw new KeyTaken();
+          return { ok: true as const };
+        } catch (err) {
+          if (err instanceof KeyTaken || isConflict(err)) {
+            return { ok: false as const, reason: 'conflict' as const };
+          }
+          throw err;
+        }
+      }),
+    );
+  }
+
   /** P5 · cancelling a group releases every host's interval at once. */
   async cancelGroup(groupId: string, key: string): Promise<string[]> {
     return withRetry(() =>

@@ -32,6 +32,7 @@ import { RATE_LIMITS, type Config } from './config.ts';
 import type { CalendarHub } from './calendars.ts';
 import { icsFor } from './ics.ts';
 import { LEGAL_DOCS } from './legal.ts';
+import { describeRecurrence, expandRecurrence, isValidRecurrence } from './recurrence.ts';
 import { cancelPendingJobs, fireTrigger, type BookingCtx } from './automation.ts';
 import type { MailPort } from './mail.ts';
 import type { Interval, Slot } from '@pumasi/booking-core';
@@ -1989,7 +1990,8 @@ async function handleRoutes(
                   location_kind = $11, location_value = $12, availability_set_id = $13,
                   available_from = $14, available_until = $15, color = $16,
                   max_bookings_per_week = $18, max_bookings_per_month = $19,
-                  max_minutes_per_day = $20, max_minutes_per_week = $21
+                  max_minutes_per_day = $20, max_minutes_per_week = $21,
+                  recurrence_rule = $22
             WHERE schedule_id = $1 AND owner_id = $17`,
           [sched.schedule_id,
            (f['title'] ?? sched.title).trim() || sched.title,
@@ -2008,7 +2010,11 @@ async function handleRoutes(
            // S9b · blank means no limit; a nonsense value means no limit too,
            // because a cap nobody can explain is worse than none.
            cap(f['max_bookings_per_week']), cap(f['max_bookings_per_month']),
-           cap(f['max_minutes_per_day']), cap(f['max_minutes_per_week'])],
+           cap(f['max_minutes_per_day']), cap(f['max_minutes_per_week']),
+           // A rule we cannot parse is refused rather than stored: an event
+           // type that promises a series it cannot expand is worse than none.
+           (f['recurrence_rule'] ?? '').trim() && isValidRecurrence(f['recurrence_rule']!.trim())
+             ? f['recurrence_rule']!.trim() : null],
         );
 
         // P5 · scheduling kind and hosts. A chosen host must share an org with
@@ -2292,7 +2298,8 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
     const bookAction = `/${slug}/${parts[1]}/book`;
     if (req.method === 'GET' && parts.length === 2) {
       const slots = await slotsFor(deps, schedule, now);
-      return html(200, bookingPage(schedule, slots.slots, { action: bookAction }));
+      return html(200, bookingPage(schedule, slots.slots, { action: bookAction,
+        recurrence: schedule.recurrence_rule ? describeRecurrence(schedule.recurrence_rule) : undefined }));
     }
     if (req.method === 'POST' && parts[2] === 'book') {
       return bookHandler(deps, schedule, req, now, undefined, bookAction);
@@ -2331,7 +2338,8 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
     const schedule = await findScheduleBySlug(sql, slug);
     if (!schedule) return html(404, errorPage(404, 'No such booking page.'));
     const slots = await slotsFor(deps, schedule, now);
-    return html(200, bookingPage(schedule, slots.slots));
+    return html(200, bookingPage(schedule, slots.slots, {
+      recurrence: schedule.recurrence_rule ? describeRecurrence(schedule.recurrence_rule) : undefined }));
   }
 
   if (req.method === 'POST' && parts[1] === 'book') {
@@ -2433,9 +2441,14 @@ interface SlotsResult {
   team?: { hosts: EventHost[]; perHost: Map<string, Slot[]> };
 }
 
-async function slotsFor(deps: AppDeps, schedule: Schedule, now: string): Promise<SlotsResult> {
-  let from = Temporal.Instant.from(now).toString();
-  let to = Temporal.Instant.from(now).add({ hours: 24 * 14 }).toString();
+async function slotsFor(
+  deps: AppDeps,
+  schedule: Schedule,
+  now: string,
+  window?: { from: string; to: string },
+): Promise<SlotsResult> {
+  let from = window?.from ?? Temporal.Instant.from(now).toString();
+  let to = window?.to ?? Temporal.Instant.from(now).add({ hours: 24 * 14 }).toString();
   // P2 · a fixed date range clamps the window. The dates are owner-local,
   // inclusive; outside them the page simply has no times.
   if (schedule.available_from) {
@@ -2489,7 +2502,7 @@ async function slotsFor(deps: AppDeps, schedule: Schedule, now: string): Promise
     if (!answer.ok) throw new CalendarBlindError(answer.reason);
     externalBusy = answer.intervals;
   }
-  const solo = await availableSlots(deps.sql, schedule, q, externalBusy);
+  const solo = await availableSlots(deps.sql, schedule, q, externalBusy, window ? 400 : undefined);
   return { slots: solo.slots };
 }
 
@@ -2581,8 +2594,8 @@ async function bookHandler(
   const bookingId = randomUUID();
   const token = newToken();
   const booker = { name, email, timezone: bookerTz, token };
-  /** every owner this meeting occupies, with each one's own booking row id */
-  let occupied: { ownerId: string; bookingId: string }[];
+  /** every row this booking creates: who it is for, and when */
+  let occupied: { ownerId: string; bookingId: string; start: string; end: string }[];
 
   if (schedule.scheduling_kind === 'round_robin' && offered.team) {
     // P5 · fairness: fewest upcoming bookings first, then declared priority.
@@ -2610,7 +2623,7 @@ async function bookHandler(
       const slots = await slotsFor(deps, schedule, now);
       return html(409, bookingPage(schedule, slots.slots, { action, error: 'Someone just took that time. Here are the rest.' }));
     }
-    occupied = [{ ownerId: winner, bookingId }];
+    occupied = [{ ownerId: winner, bookingId, start, end }];
   } else if (schedule.scheduling_kind === 'collective' && offered.team) {
     // P5 · every host, or nobody: one transaction, one group.
     const groupId = randomUUID();
@@ -2625,14 +2638,50 @@ async function bookHandler(
     }
     await sql.query(`UPDATE bookings SET schedule_id = $1 WHERE group_id = $2`,
       [schedule.schedule_id, groupId]);
-    occupied = entries;
+    occupied = entries.map((e) => ({ ...e, start, end }));
+  } else if (schedule.recurrence_rule && form['repeat'] === 'on') {
+    // A series is all-or-nothing: every occurrence must be a time the engine
+    // offers, and one clash refuses the whole thing rather than booking a
+    // partial series someone has to unpick.
+    const expanded = expandRecurrence({
+      rule: schedule.recurrence_rule,
+      firstStart: start,
+      durationMinutes: schedule.duration_minutes,
+      timezone: schedule.owner_timezone,
+    });
+    if (expanded.skipped.length > 0) {
+      const slots = await slotsFor(deps, schedule, now);
+      return html(409, bookingPage(schedule, slots.slots, { action,
+        error: 'One date in that series falls in a daylight-saving gap, where the time does not exist. Pick another time.' }));
+    }
+    const last = expanded.occurrences[expanded.occurrences.length - 1]!;
+    const seriesOffer = await slotsFor(deps, schedule, now, { from: start, to: last.end });
+    const unavailable = expanded.occurrences.filter(
+      (o) => !offeredSlot(seriesOffer.slots, o.start, o.end));
+    if (unavailable.length > 0) {
+      const slots = await slotsFor(deps, schedule, now);
+      return html(409, bookingPage(schedule, slots.slots, { action,
+        error: `Not every date in that series is free (${unavailable.length} of ${expanded.occurrences.length} taken). Pick another time, or book a single meeting.` }));
+    }
+    const groupId = randomUUID();
+    const entries = expanded.occurrences.map((o, i) => ({
+      bookingId: i === 0 ? bookingId : randomUUID(), start: o.start, end: o.end,
+    }));
+    const made = await store.insertConfirmedSeries(groupId, entries, idempotencyKey, booker);
+    if (!made.ok) {
+      const slots = await slotsFor(deps, schedule, now);
+      return html(409, bookingPage(schedule, slots.slots, { action, error: 'Someone just took one of those times. Here are the rest.' }));
+    }
+    await sql.query(`UPDATE bookings SET schedule_id = $1 WHERE group_id = $2`,
+      [schedule.schedule_id, groupId]);
+    occupied = entries.map((e) => ({ ownerId: schedule.owner_id, ...e }));
   } else {
     const inserted = await store.insertConfirmed(bookingId, start, end, idempotencyKey, booker);
     if (!inserted.ok) {
       const slots = await slotsFor(deps, schedule, now);
       return html(409, bookingPage(schedule, slots.slots, { action, error: 'Someone just took that time. Here are the rest.' }));
     }
-    occupied = [{ ownerId: schedule.owner_id, bookingId }];
+    occupied = [{ ownerId: schedule.owner_id, bookingId, start, end }];
   }
   await sql.query(`UPDATE bookings SET schedule_id = $1 WHERE booking_id = $2`, [
     schedule.schedule_id,
@@ -2673,8 +2722,8 @@ async function bookHandler(
     const written = await deps.calendars?.writeBack(sql, o.ownerId, o.bookingId, {
       title: `${schedule.title} — ${name}`,
       description: `Booked via ${config.baseUrl}/${schedule.slug}\nWith: ${name} <${email}>`,
-      start,
-      end,
+      start: o.start,
+      end: o.end,
       conference: i === 0 && schedule.location_kind === 'meet',
     });
     if (i === 0) meetUrl = written?.meetUrl;
@@ -2694,7 +2743,7 @@ async function bookHandler(
   });
   // M5/P5 · every occupied host learns of the meeting; none gets the booker's
   // management token — it is the booker's credential.
-  for (const o of occupied) {
+  for (const o of [...new Map(occupied.map((x) => [x.ownerId, x])).values()]) {
     const host = await ownerContact(sql, o.ownerId);
     if (host) {
       await mail.send({ kind: 'confirmed', to: host.email, bookingId, start, timezone: host.timezone, location });
