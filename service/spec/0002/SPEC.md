@@ -125,11 +125,17 @@ caller's to have. Each one therefore returns the **same** response for "yes" and
 | `POST /login` | address has an account · does not | the same 200 "link is on its way" |
 | `POST /signup`, public path (I8) | created · `already_registered` | the same 200 page |
 | Management link lookup (L3, L4) | expired · wrong · never existed | "not found" |
-| `/v/` booking verification | expired · already used · never existed | a byte-identical 404 |
+| `/v/` booking verification | expired · already consumed · never existed | a byte-identical 404 page |
 
-Two rules that make this survive maintenance. **A ceiling refusal may differ**,
-on any surface: it is a fact about the deployment, not about a person. And
-**adding a surface of this shape means adding a row here** — the property is
+**`/v/` carries a second property that belongs with it: the token is consumed
+*before* the booking is attempted.** So a booking that then fails on a race
+leaves the token spent, and the link cannot be replayed. This reads as a bug
+until you think about replay, which is exactly why it is written down — it is the
+part of `/v/` a future change is most likely to "fix" and thereby break.
+
+Two more rules that make all of this survive maintenance. **A ceiling refusal may
+differ**, on any surface: it is a fact about the deployment, not about a person.
+And **adding a surface of this shape means adding a row here** — the property is
 stated once precisely so that changing one endpoint cannot quietly drop it from
 the others, which is the failure mode a rule repeated in four places always
 eventually has ([L-007](https://github.com/pumasi-ai/governance/blob/main/lessons/L-007-restating-a-rule-forks-it.md)).
