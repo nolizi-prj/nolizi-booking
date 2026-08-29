@@ -396,3 +396,41 @@ export async function availableSlots(
     now: q.now,
   });
 }
+
+/**
+ * A question an owner adds to their booking page.
+ *
+ * `kind` is one of 'text', 'textarea' or 'select'; anything else is treated as
+ * 'text' when rendering, so a value that predates a future kind degrades to a
+ * usable field rather than an empty one. `options` is newline-separated and
+ * only meaningful for 'select'.
+ */
+export interface EventQuestion {
+  question_id: string;
+  label: string;
+  kind: string;
+  required: boolean;
+  options: string[];
+}
+
+/** The questions on one event type, in the order the owner arranged them. */
+export async function loadQuestions(
+  sql: SqlClient,
+  scheduleId: string,
+): Promise<EventQuestion[]> {
+  const { rows } = await sql.query(
+    `SELECT question_id, label, kind, required, options FROM event_questions
+      WHERE schedule_id = $1 ORDER BY position, question_id`,
+    [scheduleId],
+  );
+  return rows.map((r) => ({
+    question_id: String(r['question_id']),
+    label: String(r['label']),
+    kind: String(r['kind']),
+    required: Number(r['required'] ?? 0) === 1,
+    options: String(r['options'] ?? '')
+      .split('\n')
+      .map((o) => o.trim())
+      .filter(Boolean),
+  }));
+}

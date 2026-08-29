@@ -10,7 +10,7 @@ import { Temporal } from '@js-temporal/polyfill';
 import { PostgresBookingStore, type SqlClient, type Transactor } from './store.ts';
 import {
   availableSlots, findScheduleById, findScheduleByOwnerSlug, findScheduleBySlug, hostSlots,
-  intersectSlots, loadHosts, locationText, unionSlots, type EventHost, type Schedule,
+  intersectSlots, loadHosts, loadQuestions, locationText, unionSlots, type EventHost, type Schedule,
 } from './schedules.ts';
 import {
   availabilityEditor, bookingPage, confirmedPage, contactsPage, errorPage, eventTypeEditor,
@@ -139,6 +139,12 @@ export interface DirectoryPort {
  * would only widen the gap between confirming and finding the slot gone.
  */
 const VERIFY_TTL_MINUTES = 30;
+
+/**
+ * How much of one answer is kept. Generous for a sentence, far short of making
+ * a booking form a place to store arbitrary text about a third party.
+ */
+const MAX_ANSWER_CHARS = 2000;
 
 /** Sharding · public tokens carry the org tag so the router needs no lookup. */
 const tagged = (deps: AppDeps, token: string): string =>
@@ -620,6 +626,10 @@ async function handleRoutes(
         );
         // Queued workflow mail and webhook payloads embed the booker's details.
         await tx.query(`DELETE FROM jobs WHERE booking_id = $1`, [bookingId]);
+        // Answers to custom questions are the most sensitive thing a booking
+        // holds — free text the booker wrote. A deletion that reached the name
+        // but not the answer would make the promise on this page false.
+        await tx.query(`DELETE FROM booking_answers WHERE booking_id = $1`, [bookingId]);
         if (goneEmail && goneOwner) {
           await tx.query(`DELETE FROM contacts WHERE owner_id = $1 AND email = $2`,
             [goneOwner, String(goneEmail).toLowerCase()]);
@@ -1051,6 +1061,10 @@ async function handleRoutes(
         await tx.query(`DELETE FROM booking_blocks WHERE owner_id = $1`, [owner.owner_id]);
         // Unredeemed intents hold a booker's name and address; they go too.
         await tx.query(`DELETE FROM booking_intents WHERE owner_id = $1`, [owner.owner_id]);
+        await tx.query(
+          `DELETE FROM booking_answers WHERE question_id IN
+             (SELECT question_id FROM event_questions WHERE owner_id = $1)`, [owner.owner_id]);
+        await tx.query(`DELETE FROM event_questions WHERE owner_id = $1`, [owner.owner_id]);
         await tx.query(
           `DELETE FROM single_use_links WHERE schedule_id IN
              (SELECT schedule_id FROM schedules WHERE owner_id = $1)`, [owner.owner_id]);
@@ -1715,7 +1729,25 @@ async function handleRoutes(
             title: String(r['title'] ?? 'Booking'),
           }))
           .filter((m) => !q || m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q));
-        return html(200, meetingsPage(items, range, q, owner.timezone));
+        // Answers for the page's bookings, in one query rather than one each.
+        // Fetched after the filter so a search does not read answers for rows
+        // it is about to discard.
+        const withAnswers = items.length > 0
+          ? await sql.query(
+              `SELECT booking_id, label, answer FROM booking_answers
+                WHERE booking_id IN (${items.map((_, i) => `$${i + 1}`).join(', ')})`,
+              items.map((m) => m.booking_id))
+          : { rows: [] as Record<string, unknown>[] };
+        const answersFor = new Map<string, { label: string; answer: string }[]>();
+        for (const r of withAnswers.rows) {
+          const key = String(r['booking_id']);
+          const list = answersFor.get(key) ?? [];
+          list.push({ label: String(r['label']), answer: String(r['answer']) });
+          answersFor.set(key, list);
+        }
+        return html(200, meetingsPage(
+          items.map((m) => ({ ...m, answers: answersFor.get(m.booking_id) ?? [] })),
+          range, q, owner.timezone));
       }
 
       // Owner actions on one booking — scoped at the query (I4).
@@ -1846,6 +1878,50 @@ async function handleRoutes(
     }
 
     // ── sharing (P3): single-use links and the times snippet ─────────────
+    // Per-event questions. Saved by their own form so that adding a question
+    // never silently writes the rest of the settings form as a side effect.
+    if (parts[1] === 'event' && parts[2] && parts[3] === 'questions' && req.method === 'POST') {
+      const sched = await findScheduleById(sql, parts[2]);
+      if (!sched || sched.owner_id !== owner.owner_id) {
+        return html(404, errorPage(404, 'No such booking page.'));
+      }
+      const f = req.form ?? {};
+      if (f['remove']) {
+        // The question goes; answers already given do NOT, because they are
+        // the record of what someone was asked and said. They carry their own
+        // label, so they stay readable with the question gone, and they are
+        // deleted with the booking they belong to.
+        await sql.query(
+          `DELETE FROM event_questions WHERE question_id = $1 AND owner_id = $2`,
+          [f['remove'], owner.owner_id]);
+        return { status: 303, headers: { location: `/app/event/${parts[2]}` }, body: '' };
+      }
+      const label = (f['label'] ?? '').trim().slice(0, 200);
+      if (label) {
+        const kind = ['text', 'textarea', 'select'].includes(f['kind'] ?? '')
+          ? f['kind']! : 'text';
+        const options = kind === 'select'
+          ? (f['options'] ?? '').split('\n').map((o) => o.trim()).filter(Boolean).slice(0, 40).join('\n')
+          : null;
+        // A list with no choices is an unanswerable required field, so it
+        // falls back to a plain line rather than shipping a dead control.
+        const finalKind = kind === 'select' && !options ? 'text' : kind;
+        const { rows: posRows } = await sql.query(
+          `SELECT count(*)::int AS c FROM event_questions WHERE schedule_id = $1`,
+          [sched.schedule_id]);
+        await sql.query(
+          `INSERT INTO event_questions
+             (question_id, schedule_id, owner_id, position, label, kind, required, options)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [randomUUID(), sched.schedule_id, owner.owner_id,
+           Number(posRows[0]?.['c'] ?? 0), label, finalKind,
+           f['required'] === 'on' ? 1 : 0, options]);
+        await audit(sql, { ownerId: owner.owner_id, actor: owner.email,
+          action: 'question.added', detail: label });
+      }
+      return { status: 303, headers: { location: `/app/event/${parts[2]}` }, body: '' };
+    }
+
     if (parts[1] === 'event' && parts[2] && parts[3] === 'single-use' && req.method === 'POST') {
       const sched = await findScheduleById(sql, parts[2]);
       if (!sched || sched.owner_id !== owner.owner_id) {
@@ -2022,7 +2098,8 @@ async function handleRoutes(
         return html(200, eventTypeEditor(sched, sets.rows.map((r) => ({
           set_id: String(r['set_id']), name: String(r['name']),
         })), linkSlug, config.baseUrl, su.rows.map((r) => tagged(deps, String(r['token']))),
-          choices, hosts.map((h) => h.owner_id)));
+          choices, hosts.map((h) => h.owner_id),
+          await loadQuestions(sql, sched.schedule_id)));
       }
       if (req.method === 'POST') {
         const f = req.form ?? {};
@@ -2229,7 +2306,8 @@ async function handleRoutes(
         return html(429, errorPage(429, 'Too many requests. Try again shortly.'));
       }
       const slots = await slotsFor(deps, schedule, now);
-      return html(200, bookingPage(schedule, slots.slots, { action: `/s/${tagged(deps, parts[1])}/book` }));
+      return html(200, bookingPage(schedule, slots.slots, { action: `/s/${tagged(deps, parts[1])}/book`,
+        questions: await loadQuestions(sql, schedule.schedule_id) }));
     }
     if (req.method === 'POST' && parts[2] === 'book') {
       return bookHandler(deps, schedule, req, now, parts[1], `/s/${tagged(deps, parts[1])}/book`);
@@ -2400,6 +2478,7 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
     if (req.method === 'GET' && parts.length === 2) {
       const slots = await slotsFor(deps, schedule, now);
       return html(200, bookingPage(schedule, slots.slots, { action: bookAction,
+        questions: await loadQuestions(sql, schedule.schedule_id),
         recurrence: schedule.recurrence_rule ? describeRecurrence(schedule.recurrence_rule) : undefined }));
     }
     if (req.method === 'POST' && parts[2] === 'book') {
@@ -2440,6 +2519,7 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
     if (!schedule) return html(404, errorPage(404, 'No such booking page.'));
     const slots = await slotsFor(deps, schedule, now);
     return html(200, bookingPage(schedule, slots.slots, {
+      questions: await loadQuestions(sql, schedule.schedule_id),
       recurrence: schedule.recurrence_rule ? describeRecurrence(schedule.recurrence_rule) : undefined }));
   }
 
@@ -2649,17 +2729,29 @@ async function bookHandler(
     return html(429, errorPage(429, 'This page has taken too many bookings recently.'));
   }
 
+  // The owner's own questions, and whatever the booker typed into them. Loaded
+  // before the first re-render so a failed submit hands the answers back
+  // instead of making someone retype them.
+  const questions = await loadQuestions(sql, schedule.schedule_id);
+  const answers: Record<string, string> = {};
+  for (const q of questions) {
+    const given = (form[`q:${q.question_id}`] ?? '').trim();
+    if (given) answers[q.question_id] = given.slice(0, MAX_ANSWER_CHARS);
+  }
+  const rerender = (status: number, offer: { slots: Slot[] }, error?: string) =>
+    html(status, bookingPage(schedule, offer.slots, { action, error, questions, answers }));
+
   const start = form['start'];
   const end = form['end'];
-  // F3 · name and email, and nothing else. Any other field is discarded here
-  // rather than stored and justified later.
+  // F3 · name and email, plus any answers to the owner's own questions. A
+  // field that belongs to neither is discarded here rather than stored and
+  // justified later.
   const name = (form['name'] ?? '').trim();
   const email = (form['email'] ?? '').trim();
   const bookerTz = (form['booker_tz'] ?? 'UTC').trim();
 
   if (!start || !end || !name || !email) {
-    const slots = await slotsFor(deps, schedule, now);
-    return html(400, bookingPage(schedule, slots.slots, { action, error: 'Pick a time and give a name and email.' }));
+    return rerender(400, await slotsFor(deps, schedule, now), 'Pick a time and give a name and email.');
   }
 
   // Blocked sources · refused before any work is done for them, and before the
@@ -2669,6 +2761,15 @@ async function bookHandler(
   // why — that is the owner's business, not the caller's.
   if (await blockedSource(sql, schedule.owner_id, email)) {
     return html(403, errorPage(403, 'This booking page is not accepting bookings from that address.'));
+  }
+
+  // A required question must be answered. Checked before the verification mail
+  // goes out, so nobody is asked to confirm a submission that will be refused
+  // the moment they do.
+  const missing = questions.filter((q) => q.required && !answers[q.question_id]);
+  if (missing.length > 0) {
+    return rerender(400, await slotsFor(deps, schedule, now),
+      `Answer ${missing.length === 1 ? 'the question' : 'the questions'}: ${missing.map((q) => q.label).join(', ')}.`);
   }
 
   // Email verification · prove the address before a meeting exists.
@@ -2733,21 +2834,14 @@ async function bookHandler(
   // a fresh computation rather than against whatever the form claimed.
   const offered = await slotsFor(deps, schedule, now);
   if (!offeredSlot(offered.slots, start, end)) {
-    return html(
-      409,
-      bookingPage(schedule, offered.slots, {
-        action,
-        error: 'That time is not available. Here are the times that are.',
-      }),
-    );
+    return rerender(409, offered, 'That time is not available. Here are the times that are.');
   }
 
   // B3 · revalidate at commit, against the commit-time clock, with the
   // constraint the slot was computed under. Omitting it would revalidate
   // against nothing and confirm a slot that should have expired.
   if (noticeExpired(start, now, schedule.minimum_notice_minutes)) {
-    const slots = await slotsFor(deps, schedule, now);
-    return html(409, bookingPage(schedule, slots.slots, { action, error: 'That time has passed. Pick another.' }));
+    return rerender(409, await slotsFor(deps, schedule, now), 'That time has passed. Pick another.');
   }
 
   // F4 · the page is a snapshot. Losing the race is normal operation.
@@ -2780,8 +2874,7 @@ async function bookHandler(
       if (r.ok) { winner = h.owner_id; break; }
     }
     if (!winner) {
-      const slots = await slotsFor(deps, schedule, now);
-      return html(409, bookingPage(schedule, slots.slots, { action, error: 'Someone just took that time. Here are the rest.' }));
+      return rerender(409, await slotsFor(deps, schedule, now), 'Someone just took that time. Here are the rest.');
     }
     occupied = [{ ownerId: winner, bookingId, start, end }];
   } else if (schedule.scheduling_kind === 'collective' && offered.team) {
@@ -2793,8 +2886,7 @@ async function bookHandler(
     }));
     const r = await store.insertConfirmedGroup(groupId, entries, start, end, idempotencyKey, booker);
     if (!r.ok) {
-      const slots = await slotsFor(deps, schedule, now);
-      return html(409, bookingPage(schedule, slots.slots, { action, error: 'Someone just took that time. Here are the rest.' }));
+      return rerender(409, await slotsFor(deps, schedule, now), 'Someone just took that time. Here are the rest.');
     }
     await sql.query(`UPDATE bookings SET schedule_id = $1 WHERE group_id = $2`,
       [schedule.schedule_id, groupId]);
@@ -2810,18 +2902,16 @@ async function bookHandler(
       timezone: schedule.owner_timezone,
     });
     if (expanded.skipped.length > 0) {
-      const slots = await slotsFor(deps, schedule, now);
-      return html(409, bookingPage(schedule, slots.slots, { action,
-        error: 'One date in that series falls in a daylight-saving gap, where the time does not exist. Pick another time.' }));
+      return rerender(409, await slotsFor(deps, schedule, now),
+        'One date in that series falls in a daylight-saving gap, where the time does not exist. Pick another time.');
     }
     const last = expanded.occurrences[expanded.occurrences.length - 1]!;
     const seriesOffer = await slotsFor(deps, schedule, now, { from: start, to: last.end });
     const unavailable = expanded.occurrences.filter(
       (o) => !offeredSlot(seriesOffer.slots, o.start, o.end));
     if (unavailable.length > 0) {
-      const slots = await slotsFor(deps, schedule, now);
-      return html(409, bookingPage(schedule, slots.slots, { action,
-        error: `Not every date in that series is free (${unavailable.length} of ${expanded.occurrences.length} taken). Pick another time, or book a single meeting.` }));
+      return rerender(409, await slotsFor(deps, schedule, now),
+        `Not every date in that series is free (${unavailable.length} of ${expanded.occurrences.length} taken). Pick another time, or book a single meeting.`);
     }
     const groupId = randomUUID();
     const entries = expanded.occurrences.map((o, i) => ({
@@ -2829,8 +2919,7 @@ async function bookHandler(
     }));
     const made = await store.insertConfirmedSeries(groupId, entries, idempotencyKey, booker);
     if (!made.ok) {
-      const slots = await slotsFor(deps, schedule, now);
-      return html(409, bookingPage(schedule, slots.slots, { action, error: 'Someone just took one of those times. Here are the rest.' }));
+      return rerender(409, await slotsFor(deps, schedule, now), 'Someone just took one of those times. Here are the rest.');
     }
     await sql.query(`UPDATE bookings SET schedule_id = $1 WHERE group_id = $2`,
       [schedule.schedule_id, groupId]);
@@ -2838,8 +2927,7 @@ async function bookHandler(
   } else {
     const inserted = await store.insertConfirmed(bookingId, start, end, idempotencyKey, booker);
     if (!inserted.ok) {
-      const slots = await slotsFor(deps, schedule, now);
-      return html(409, bookingPage(schedule, slots.slots, { action, error: 'Someone just took that time. Here are the rest.' }));
+      return rerender(409, await slotsFor(deps, schedule, now), 'Someone just took that time. Here are the rest.');
     }
     occupied = [{ ownerId: schedule.owner_id, bookingId, start, end }];
   }
@@ -2848,6 +2936,27 @@ async function bookHandler(
     bookingId,
   ]);
   const primaryOwnerId = occupied[0]!.ownerId;
+
+  // Answers are written against every booking row this created, not just the
+  // first. A recurring series is a dozen rows and a collective meeting is one
+  // per host; an owner opening the third occurrence should see what was
+  // answered, and — more importantly — deleting any one row must take its own
+  // copy of the answer with it, which a single shared row would not allow.
+  // The label is stored ALONGSIDE the answer, so editing the question later
+  // cannot relabel what somebody already said.
+  if (questions.length > 0) {
+    const byId = new Map(questions.map((q) => [q.question_id, q]));
+    for (const o of occupied) {
+      for (const [questionId, answer] of Object.entries(answers)) {
+        await sql.query(
+          `INSERT INTO booking_answers (booking_id, question_id, label, answer)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (booking_id, question_id) DO UPDATE SET answer = excluded.answer`,
+          [o.bookingId, questionId, byId.get(questionId)?.label ?? '', answer],
+        );
+      }
+    }
+  }
 
   // SPEC-0003 · the booking lands in the owner's calendar (never fatal, M3),
   // BEFORE the mails so a minted Meet link can ride along in them.

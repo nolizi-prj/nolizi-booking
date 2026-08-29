@@ -8,7 +8,7 @@
  */
 
 import type { Slot } from '@pumasi/booking-core';
-import { locationText, type Schedule } from './schedules.ts';
+import { locationText, type EventQuestion, type Schedule } from './schedules.ts';
 import { renderLegalBody, LEGAL_STATUS_LINE, type LegalDoc } from './legal.ts';
 
 const esc = (s: string): string =>
@@ -212,9 +212,46 @@ const SHELL = (title: string, rawBody: string): string => {
 export function bookingPage(
   schedule: Schedule,
   slots: Slot[],
-  opts: { error?: string; csrf?: string; action?: string; recurrence?: string } = {},
+  opts: {
+    error?: string; csrf?: string; action?: string; recurrence?: string;
+    questions?: EventQuestion[];
+    /** What the booker already typed, so a failed submit does not lose it. */
+    answers?: Record<string, string>;
+  } = {},
 ): string {
   const err = opts.error ? `<p class="err">${esc(opts.error)}</p>` : '';
+  const qs = opts.questions ?? [];
+  const prior = opts.answers ?? {};
+  // Built as one string rather than interpolated inline, so the no-questions
+  // wording stays byte-identical to what it has always been.
+  const collectsLine = qs.length
+    ? 'We store your name, email, your answers above and the meeting time so the '
+      + 'organiser can meet you. Nobody else sees them. The questions above were '
+      + 'written by the organiser, who decides what they are for. The confirmation '
+      + 'email has a link that cancels the booking and deletes these details.'
+    : 'We store your name, email and the meeting time so the organiser can meet '
+      + 'you. Nobody else sees them. The confirmation email has a link that '
+      + 'cancels the booking and deletes these details.';
+  const questionFields = qs
+    .map((q) => {
+      const id = `q_${esc(q.question_id)}`;
+      const name = `q:${esc(q.question_id)}`;
+      const was = prior[q.question_id] ?? '';
+      const req = q.required ? ' required' : '';
+      const label = `<label for="${id}">${esc(q.label)}${q.required ? '' : ' <span class="muted">(optional)</span>'}</label>`;
+      if (q.kind === 'textarea') {
+        return `${label}<textarea id="${id}" name="${name}"${req} rows="3">${esc(was)}</textarea>`;
+      }
+      if (q.kind === 'select' && q.options.length > 0) {
+        const opts2 = q.options
+          .map((o) => `<option${o === was ? ' selected' : ''}>${esc(o)}</option>`)
+          .join('');
+        return `${label}<select id="${id}" name="${name}"${req}>
+          <option value="">Choose…</option>${opts2}</select>`;
+      }
+      return `${label}<input id="${id}" name="${name}" value="${esc(was)}"${req}>`;
+    })
+    .join('\n  ');
   // Rendered server-side so the page works without JavaScript. The script
   // below replaces this with a month calendar in the viewer's timezone —
   // enhancement, not the only path to a booking.
@@ -261,10 +298,15 @@ ${err}${empty}
   <input type="hidden" name="start" id="start"><input type="hidden" name="end" id="end">
   <label for="name">Your name</label><input id="name" name="name" required autocomplete="name">
   <label for="email">Your email</label><input id="email" name="email" type="email" required autocomplete="email">
-  <!-- D9 · told at the point of collection, next to the field, not behind a link -->
-  <p class="notice">We store your name, email and the meeting time so the organiser
-    can meet you. Nobody else sees them. The confirmation email has a link that
-    cancels the booking and deletes these details. <a href="/privacy">What we keep</a>.</p>
+  ${questionFields}
+  <!-- D9 · told at the point of collection, next to the field, not behind a link.
+       The wording tracks what is actually collected: with questions of the
+       organiser's own on the page, a sentence naming only the name and email
+       would be false, and a false privacy line is worse than none. With no
+       questions the sentence is unchanged, word for word, from before they
+       existed — so the promise this page has always made still reads exactly
+       the same to everyone it was already made to. -->
+  <p class="notice">${collectsLine} <a href="/privacy">What we keep</a>.</p>
   <input type="hidden" name="booker_tz" id="btz">
   ${opts.recurrence ? `<label style="display:flex;gap:.5rem;align-items:flex-start;margin-top:.9rem">
     <input type="checkbox" name="repeat" checked>
@@ -622,6 +664,7 @@ export function meetingsPage(
   items: {
     booking_id: string; start: string; end: string; status: string;
     name: string; email: string; no_show: boolean; note: string; title: string;
+    answers?: { label: string; answer: string }[];
   }[],
   range: string,
   q: string,
@@ -634,6 +677,8 @@ export function meetingsPage(
     ${m.status === 'cancelled' ? '<span class="pill">cancelled</span>' : ''}
     ${m.no_show ? '<span class="pill">no-show</span>' : ''}</p>
   <p class="muted">${esc(m.name)} &middot; ${esc(m.email)}</p>
+  ${(m.answers ?? []).length > 0 ? `<dl class="answers">${(m.answers ?? [])
+      .map((a) => `<dt>${esc(a.label)}</dt><dd>${esc(a.answer)}</dd>`).join('')}</dl>` : ''}
   <form method="post" action="/app/meetings/${esc(m.booking_id)}/note" class="noterow">
     <input type="hidden" name="range" value="${esc(range)}">
     <input name="note" value="${esc(m.note)}" placeholder="Private note (only you see this)">
@@ -1325,7 +1370,17 @@ export function eventTypeEditor(
   singleUseTokens: string[] = [],
   hostChoices: { owner_id: string; label: string }[] = [],
   currentHosts: string[] = [],
+  questions: EventQuestion[] = [],
 ): string {
+  const questionRows = questions
+    .map(
+      (q) => `<tr><td>${esc(q.label)}</td>
+  <td class="muted">${esc(q.kind)}${q.required ? ' · required' : ''}</td>
+  <td><form method="post" action="/app/event/${esc(s.schedule_id)}/questions" style="margin:0">
+    <input type="hidden" name="remove" value="${esc(q.question_id)}">
+    <button class="linkish" type="submit">remove</button></form></td></tr>`,
+    )
+    .join('');
   const setOptions = sets
     .map(
       (x) =>
@@ -1410,6 +1465,30 @@ export function eventTypeEditor(
 </div>
 <button class="submit" type="submit">Save event type</button>
 </form>
+<!-- Its own form, not part of the settings form above: a half-typed question
+     must not be lost when the owner saves an unrelated setting, and HTML has
+     no nested forms. -->
+<div class="card"><h2>Questions you ask</h2>
+  <p class="muted">Asked on the booking page, under name and email. You choose
+    what these collect and what you use it for; bookers are told that the
+    questions are yours. Answers are deleted when the booking is.</p>
+  ${questionRows ? `<table class="rows"><tr><th>Question</th><th>Type</th><th></th></tr>${questionRows}</table>` : '<p class="muted">No questions — bookers give a name and email only.</p>'}
+  <form method="post" action="/app/event/${esc(s.schedule_id)}/questions">
+    <label for="ql">Question</label>
+    <input id="ql" name="label" placeholder="What would you like to cover?" required>
+    <label for="qk">Answer type</label>
+    <select id="qk" name="kind">
+      <option value="text">One line</option>
+      <option value="textarea">Several lines</option>
+      <option value="select">Pick from a list</option>
+    </select>
+    <label for="qo">Choices, one per line (only for a list)</label>
+    <textarea id="qo" name="options" rows="3"></textarea>
+    <label style="display:flex;gap:.5rem;align-items:center">
+      <input type="checkbox" name="required" style="width:auto"> Must be answered</label>
+    <button class="submit" type="submit">Add question</button>
+  </form>
+</div>
 <div class="card"><h2>Share</h2>
   <p class="muted"><a href="/app/event/${esc(s.schedule_id)}/snippet">Offer times in an email</a> —
     a paste-ready list of your next openings.</p>

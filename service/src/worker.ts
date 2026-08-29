@@ -64,6 +64,7 @@ import schema010 from '../migrations-sqlite/010_limits.sql';
 import schema011 from '../migrations-sqlite/011_recurrence.sql';
 import schema012 from '../migrations-sqlite/012_blocked_sources.sql';
 import schema013 from '../migrations-sqlite/013_email_verification.sql';
+import schema014 from '../migrations-sqlite/014_custom_questions.sql';
 
 /** Mirrors server.ts: a form here is a name, an address and two timestamps. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -198,6 +199,7 @@ export class PumasiService extends DurableObject {
           { name: '011_recurrence.sql', sql: schema011 as string },
           { name: '012_blocked_sources.sql', sql: schema012 as string },
           { name: '013_email_verification.sql', sql: schema013 as string },
+          { name: '014_custom_questions.sql', sql: schema014 as string },
         ],
       }),
     );
