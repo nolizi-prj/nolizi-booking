@@ -33,6 +33,7 @@ import { Serialiser } from './driver.ts';
 import { bindable, normalizeDbError, translateSql } from './sqlite-dialect.ts';
 import { CalendarHub } from './calendars.ts';
 import { GoogleCalendarProvider } from './calendar-google.ts';
+import { MicrosoftCalendarProvider } from './calendar-microsoft.ts';
 import { processDueJobs } from './automation.ts';
 import { Directory, dispatchDirectoryCall, type DirectoryCall } from './directory.ts';
 import { googleSsoExchange, googleSsoUrl } from './sso-google.ts';
@@ -227,7 +228,12 @@ export class PumasiService extends DurableObject {
     let calendars: CalendarHub | undefined;
     if (config.googleClientId && config.googleClientSecret && config.tokenKey) {
       calendars = new CalendarHub(
-        { google: new GoogleCalendarProvider(config.googleClientId, config.googleClientSecret) },
+        {
+          google: new GoogleCalendarProvider(config.googleClientId, config.googleClientSecret),
+          ...(config.msClientId && config.msClientSecret
+            ? { microsoft: new MicrosoftCalendarProvider(config.msClientId, config.msClientSecret) }
+            : {}),
+        },
         config.tokenKey,
       );
     } else {

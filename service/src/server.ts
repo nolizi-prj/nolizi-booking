@@ -8,6 +8,7 @@ import { loadConfig, refusals } from './config.ts';
 import { migrate } from './db.ts';
 import { CalendarHub } from './calendars.ts';
 import { GoogleCalendarProvider } from './calendar-google.ts';
+import { MicrosoftCalendarProvider } from './calendar-microsoft.ts';
 import { createDatabase, type Database } from './driver.ts';
 import { handle, type AppDeps } from './app.ts';
 import { RecordingMail, RetryingMail, type MailPort } from './mail.ts';
@@ -108,7 +109,12 @@ export async function start(): Promise<{ close: () => Promise<void>; port: numbe
   let calendars: CalendarHub | undefined;
   if (config.googleClientId && config.googleClientSecret && config.tokenKey) {
     calendars = new CalendarHub(
-      { google: new GoogleCalendarProvider(config.googleClientId, config.googleClientSecret) },
+      {
+        google: new GoogleCalendarProvider(config.googleClientId, config.googleClientSecret),
+        ...(config.msClientId && config.msClientSecret
+          ? { microsoft: new MicrosoftCalendarProvider(config.msClientId, config.msClientSecret) }
+          : {}),
+      },
       config.tokenKey,
     );
     console.log('[calendar] Google Calendar integration active');

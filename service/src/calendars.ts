@@ -13,7 +13,9 @@ import { randomUUID } from 'node:crypto';
 import type { Interval } from '@pumasi/booking-core';
 import type { SqlClient } from './store.ts';
 import { importSealKey, open, seal, type SealKey } from './seal.ts';
-import { TokenRevokedError } from './calendar-google.ts';
+
+/** 401/invalid_grant/410 mean the grant is gone, not that the provider is down. */
+export class TokenRevokedError extends Error {}
 
 export type ScopeLevel = 'freebusy' | 'events';
 

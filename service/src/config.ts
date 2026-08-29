@@ -31,6 +31,8 @@ export interface Config {
   /** SPEC-0003 · calendar OAuth. All three absent means no integration. */
   googleClientId: string | undefined;
   googleClientSecret: string | undefined;
+  msClientId: string | undefined;
+  msClientSecret: string | undefined;
   /** 32 random bytes, base64 — seals calendar credentials at rest (seal.ts). */
   tokenKey: string | undefined;
 }
@@ -79,6 +81,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     mailDir: env['MAIL_DIR'],
     googleClientId: env['GOOGLE_OAUTH_CLIENT_ID'],
     googleClientSecret: env['GOOGLE_OAUTH_CLIENT_SECRET'],
+    msClientId: env['MS_OAUTH_CLIENT_ID'],
+    msClientSecret: env['MS_OAUTH_CLIENT_SECRET'],
     tokenKey: env['TOKEN_KEY'],
   };
 }

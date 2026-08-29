@@ -10,6 +10,7 @@
  * Nothing outside this file knows Google's wire format.
  */
 
+import { TokenRevokedError } from './calendars.ts';
 import type {
   BookingEvent,
   CalendarProvider,
@@ -32,8 +33,7 @@ const SCOPES: Record<ScopeLevel, string> = {
     'openid email https://www.googleapis.com/auth/calendar.freebusy https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/calendar.events',
 };
 
-/** 401/403-invalid_grant/410 mean the grant is gone, not that Google is down. */
-export class TokenRevokedError extends Error {}
+export { TokenRevokedError } from './calendars.ts';
 
 async function expectOk(res: Response, what: string): Promise<Response> {
   if (res.ok) return res;

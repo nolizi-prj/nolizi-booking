@@ -1296,8 +1296,11 @@ function calendarSection(connections: ConnectionView[]): string {
     pages. While a connection is broken, no times are offered — the service
     refuses rather than double-books.</p>
   ${rows || '<p class="muted">No calendar connected. Times are offered from your weekly hours alone.</p>'}
-  <form method="post" action="/app/calendar/google/connect">
+  <form method="post" action="/app/calendar/google/connect" style="display:inline">
     <button class="submit" type="submit">Connect Google Calendar</button>
+  </form>
+  <form method="post" action="/app/calendar/microsoft/connect" style="display:inline">
+    <button class="submit" type="submit">Connect Microsoft 365 / Outlook</button>
   </form>
 </div>`;
 }
