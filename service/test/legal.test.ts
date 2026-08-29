@@ -173,3 +173,55 @@ test('the notice says who controls what custom questions collect', () => {
   assert.match(dpa, /whatever those questions collect/i,
     'the DPA must put the organiser-chosen categories in scope');
 });
+
+/**
+ * The notice claims "There is no other field on the form, and no hidden one."
+ * The test above asserts what the notice SAYS; this one asserts the claim is
+ * still TRUE, which is a different thing and the one that rots.
+ *
+ * A peer session found the live form does carry a hidden input, `booker_tz`,
+ * and checked by hand that the notice covers it as "the timezone your browser
+ * reported". It does. This is that check, made automatic — because the next
+ * hidden field will be added by someone who never read this conversation.
+ *
+ * Every field is mapped to the words in the notice that disclose it. A new
+ * field fails here until someone adds a mapping, and adding a mapping means
+ * opening the notice and looking. That is the entire point: the guard is not
+ * the assertion, it is being forced to look.
+ */
+const FIELD_DISCLOSED_AS: Record<string, string> = {
+  start: 'the **time you chose**',
+  end: 'its **end**',
+  name: 'your **name**',
+  email: '**email address**',
+  booker_tz: 'the **timezone your browser reported**',
+  repeat: 'the **time you chose**', // books the same details as a series
+};
+
+test('every field the booking form actually posts is disclosed in the notice', async () => {
+  await ownerWithPage();
+  const page = await call('GET', '/intro');
+  const form = page.body.slice(page.body.indexOf('<form'), page.body.indexOf('</form>'));
+  assert.ok(form.length > 0, 'the booking page still renders a form');
+
+  const fields = [...form.matchAll(/name="([a-zA-Z_0-9-]+)"/g)].map((m) => m[1]!);
+  assert.ok(fields.includes('booker_tz'), 'the hidden timezone field is still the one to watch');
+
+  const privacy = LEGAL_DOCS.find((d) => d.slug === 'privacy')!.body;
+  for (const field of new Set(fields)) {
+    // Organiser-written questions are dynamic and are disclosed as a category,
+    // not one by one -- that is what the custom-questions paragraph is for.
+    if (field.startsWith('q_')) continue;
+    const disclosedAs = FIELD_DISCLOSED_AS[field];
+    assert.ok(
+      disclosedAs,
+      `the booking form posts "${field}" and the notice does not account for it. ` +
+      'Add it to the notice and map it here -- or if it is genuinely not personal ' +
+      'data, map it and say why. Do not delete this assertion.',
+    );
+    assert.ok(
+      privacy.includes(disclosedAs),
+      `the notice no longer contains ${disclosedAs}, which is how "${field}" was disclosed`,
+    );
+  }
+});
