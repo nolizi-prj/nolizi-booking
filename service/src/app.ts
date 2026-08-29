@@ -629,6 +629,17 @@ async function handleRoutes(
       return { status: 303, headers: { location: '/app' }, body: '' };
     }
 
+    // ── invites (P5): any owner may mint one while seats remain ──────────
+    if (parts[1] === 'invites' && req.method === 'POST') {
+      const seats = await sql.query(`SELECT count(*)::int AS c FROM owners`);
+      if (Number(seats.rows[0]?.['c'] ?? 0) >= config.maxOwnerAccounts) {
+        return html(400, errorPage(400, 'Every seat is taken (D-105 holds the ceiling).'));
+      }
+      const code = `inv-${newToken().slice(0, 12)}`;
+      await sql.query(`INSERT INTO invites (code) VALUES ($1)`, [code]);
+      return { status: 303, headers: { location: '/app/team' }, body: '' };
+    }
+
     // ── team (P5): organizations and members ─────────────────────────────
     if (parts[1] === 'team') {
       if (req.method === 'POST' && !parts[2]) {
@@ -694,7 +705,10 @@ async function handleRoutes(
           })),
         });
       }
-      return html(200, teamPage(orgs, owner.owner_id));
+      const openInvites = await sql.query(
+        `SELECT code FROM invites WHERE consumed_at IS NULL ORDER BY code`);
+      return html(200, teamPage(orgs, owner.owner_id,
+        openInvites.rows.map((r) => String(r['code'])), config.baseUrl));
     }
 
     // ── settings (P4): profile, brand, my link ───────────────────────────

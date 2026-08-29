@@ -654,6 +654,8 @@ export function teamPage(
     members: { owner_id: string; role: string; display_name: string; email: string }[];
   }[],
   myOwnerId: string,
+  openInvites: string[] = [],
+  baseUrl = '',
 ): string {
   const list = orgs
     .map(
@@ -690,7 +692,16 @@ ${list || '<p class="muted">No teams yet.</p>'}
     <button class="submit" type="submit">Create team</button>
   </form>
 </div>
-${CARD_CSS}`,
+<div class="card">
+  <h2>Invites</h2>
+  <p class="muted">An account is created from an invite link; each works once.</p>
+  ${openInvites.map((c) => `<p><code>${esc(baseUrl)}/signup?invite=${esc(c)}</code></p>`).join('')}
+  <form method="post" action="/app/invites">
+    <button class="submit" type="submit">Mint an invite</button>
+  </form>
+</div>
+${CARD_CSS}
+<style>code{font-size:.85em;background:var(--line);padding:.1em .3em;border-radius:.25rem}</style>`,
   );
 }
 
