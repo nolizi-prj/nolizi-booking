@@ -136,8 +136,15 @@ the self-hosted build lacks.
 
 ## Mail
 
-SMTP, not a provider SDK — every provider speaks it, so the choice is a URL and
-switching costs nothing.
+**On the self-hosted build: SMTP, not a provider SDK** — every provider speaks
+it, so the choice is a URL and switching costs nothing. Everything in this
+section describes that build.
+
+**The Workers build does not use SMTP at all.** It sends through the Gmail API
+(`service/src/mail-gmail.ts`), because Workers cannot open SMTP connections, and
+the subprocessor check below governs only the SMTP path.
+[`SUBPROCESSORS.md`](SUBPROCESSORS.md) is explicit about which path is enforced
+and which is reviewed.
 
     SMTP_URL=smtp://user:pass@host:587   # real delivery
     MAIL_DIR=./tmp/mail                  # write messages to files instead
