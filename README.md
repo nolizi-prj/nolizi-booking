@@ -85,6 +85,17 @@ product is one repository.
 |---|---|---|
 | **PGlite** (default) | no `DATABASE_URL` | Genuine PostgreSQL in-process, including `btree_gist`, so the exclusion constraints are really enforced. Nothing survives a restart. |
 | **PostgreSQL** | `DATABASE_URL` set | Any reachable instance — local, container, or managed. A pooled connection per transaction. |
+| **SQLite** | the Workers build | One database per tenant organisation, inside a Durable Object. This is what the hosted deployment runs. |
+
+**No-double-booking holds on every one of them, and by the same kind of
+mechanism.** PostgreSQL and PGlite use an `EXCLUDE USING gist` constraint.
+SQLite has no exclusion constraints, so the Workers build uses `BEFORE INSERT`
+and `BEFORE UPDATE` triggers that `RAISE(ABORT)` — still **inside the database
+and atomic with the write**, which is the property `SPEC-0002` P1 actually
+requires, rather than a check in application code that P1 exists to forbid. The
+abort message deliberately carries the PostgreSQL wording so one conflict path
+handles both. A partial unique index enforces one confirmed row per booking on
+both dialects.
 
 The distinction that matters is transactions. A transaction needs a connection
 to itself: `BEGIN` and `COMMIT` issued as separate statements onto a shared
@@ -94,7 +105,10 @@ PGlite, having one connection, serialises instead.
 
 ## Deploying
 
-Anywhere that runs a container or Node 22.
+Two builds, and this section used to describe only the first one while the
+second was the one actually running.
+
+**Self-hosted — anywhere that runs a container or Node 22.**
 
     docker compose up          # service + PostgreSQL, locally
     docker build -t pumasi .   # then run it wherever
@@ -102,6 +116,17 @@ Anywhere that runs a container or Node 22.
 `railway.json` is present as one convenience among several, not a dependency.
 Set `PORT`, and `DATABASE_URL` for anything that must outlive the process.
 `PGSSL=require` if your provider needs TLS.
+
+**Cloudflare Workers — what `booking.pumasi.ai` runs.** `service/src/worker.ts`,
+one Durable Object per tenant organisation with its own SQLite database, and a
+directory DO mapping public identifiers to tenants. Mail goes through the Gmail
+API rather than SMTP, because Workers cannot open SMTP connections — see
+[`SUBPROCESSORS.md`](SUBPROCESSORS.md), which is explicit about which mail path
+the subprocessor check does and does not cover.
+
+**Neither build is the real one.** Self-hosting is first-class permanently: the
+hosted deployment is convenience, never capability, and never carries a feature
+the self-hosted build lacks.
 
 ## Mail
 
