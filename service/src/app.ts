@@ -1019,6 +1019,7 @@ async function handleRoutes(
         // P3 · contacts and sharing artefacts go with the account (D3).
         await tx.query(`DELETE FROM contacts WHERE owner_id = $1`, [owner.owner_id]);
         await tx.query(`DELETE FROM contact_exclusions WHERE owner_id = $1`, [owner.owner_id]);
+        await tx.query(`DELETE FROM booking_blocks WHERE owner_id = $1`, [owner.owner_id]);
         await tx.query(
           `DELETE FROM single_use_links WHERE schedule_id IN
              (SELECT schedule_id FROM schedules WHERE owner_id = $1)`, [owner.owner_id]);
@@ -1759,6 +1760,28 @@ async function handleRoutes(
         }
         return { status: 303, headers: { location: '/app/contacts' }, body: '' };
       }
+      if (req.method === 'POST' && parts[2] === 'blocks') {
+        const f = req.form ?? {};
+        if (f['remove']) {
+          await sql.query(`DELETE FROM booking_blocks WHERE owner_id = $1 AND pattern = $2`,
+            [owner.owner_id, f['remove']]);
+          await audit(sql, { ownerId: owner.owner_id, actor: owner.email,
+            action: 'block.removed', detail: f['remove'] });
+        } else {
+          const pattern = (f['pattern'] ?? '').trim().toLowerCase();
+          // An owner blocking their own address would lock themselves out of
+          // their own test bookings and read as a bug, not a choice.
+          if (pattern && pattern !== owner.email.toLowerCase()) {
+            await sql.query(
+              `INSERT INTO booking_blocks (owner_id, pattern, note) VALUES ($1, $2, $3)
+               ON CONFLICT (owner_id, pattern) DO UPDATE SET note = excluded.note`,
+              [owner.owner_id, pattern, (f['note'] ?? '').trim() || null]);
+            await audit(sql, { ownerId: owner.owner_id, actor: owner.email,
+              action: 'block.added', detail: pattern });
+          }
+        }
+        return { status: 303, headers: { location: '/app/contacts' }, body: '' };
+      }
       if (req.method === 'POST' && parts[2] === 'delete') {
         await sql.query(`DELETE FROM contacts WHERE owner_id = $1 AND email = $2`,
           [owner.owner_id, (req.form?.['email'] ?? '').toLowerCase()]);
@@ -1773,6 +1796,10 @@ async function handleRoutes(
         `SELECT pattern FROM contact_exclusions WHERE owner_id = $1 ORDER BY pattern`,
         [owner.owner_id],
       );
+      const blocks = await sql.query(
+        `SELECT pattern, note FROM booking_blocks WHERE owner_id = $1 ORDER BY pattern`,
+        [owner.owner_id],
+      );
       return html(200, contactsPage(
         contacts.rows.map((r) => ({
           email: String(r['email']), name: String(r['name']),
@@ -1780,6 +1807,10 @@ async function handleRoutes(
           last_booked_at: String(r['last_booked_at']).slice(0, 10),
         })),
         exclusions.rows.map((r) => String(r['pattern'])),
+        blocks.rows.map((r) => ({
+          pattern: String(r['pattern']),
+          note: r['note'] === null ? '' : String(r['note']),
+        })),
       ));
     }
 
@@ -2356,6 +2387,26 @@ interface Contact {
   timezone: string;
 }
 
+/**
+ * Is this address blocked from booking `ownerId`?
+ *
+ * Matches the full address or its bare domain, both lowercased. Kept beside
+ * the other booking-path helpers rather than inside the handler so the same
+ * rule is available to any future path that creates a booking — a block that
+ * only one entry point honours is not a block.
+ */
+async function blockedSource(sql: SqlClient, ownerId: string, email: string): Promise<boolean> {
+  const address = email.trim().toLowerCase();
+  const at = address.indexOf('@');
+  if (at < 0) return false;
+  const domain = address.slice(at + 1);
+  const { rows } = await sql.query(
+    `SELECT 1 FROM booking_blocks WHERE owner_id = $1 AND (pattern = $2 OR pattern = $3)`,
+    [ownerId, address, domain],
+  );
+  return rows.length > 0;
+}
+
 async function ownerContact(sql: SqlClient, ownerId: string): Promise<Contact | undefined> {
   const { rows } = await sql.query(`SELECT email, timezone FROM owners WHERE owner_id = $1`, [ownerId]);
   const r = rows[0];
@@ -2537,6 +2588,15 @@ async function bookHandler(
   if (!start || !end || !name || !email) {
     const slots = await slotsFor(deps, schedule, now);
     return html(400, bookingPage(schedule, slots.slots, { action, error: 'Pick a time and give a name and email.' }));
+  }
+
+  // Blocked sources · refused before any work is done for them, and before the
+  // slot is held. The refusal is plain rather than a fake success: pretending
+  // to book a meeting that will never happen wastes the person's time and
+  // guarantees they turn up to nothing. It does not say who blocked them or
+  // why — that is the owner's business, not the caller's.
+  if (await blockedSource(sql, schedule.owner_id, email)) {
+    return html(403, errorPage(403, 'This booking page is not accepting bookings from that address.'));
   }
 
   // D1 · the ceiling is enforced, not intended.

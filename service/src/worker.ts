@@ -62,6 +62,7 @@ import schema009 from '../migrations-sqlite/009_enterprise.sql';
 import schema010 from '../migrations-sqlite/010_limits.sql';
 // @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema011 from '../migrations-sqlite/011_recurrence.sql';
+import schema012 from '../migrations-sqlite/012_blocked_sources.sql';
 
 /** Mirrors server.ts: a form here is a name, an address and two timestamps. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -194,6 +195,7 @@ export class PumasiService extends DurableObject {
           { name: '009_enterprise.sql', sql: schema009 as string },
           { name: '010_limits.sql', sql: schema010 as string },
           { name: '011_recurrence.sql', sql: schema011 as string },
+          { name: '012_blocked_sources.sql', sql: schema012 as string },
         ],
       }),
     );

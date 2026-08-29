@@ -673,10 +673,11 @@ ${CARD_CSS}
   );
 }
 
-/** P3 — contacts accreted from bookings, with exclusions. */
+/** P3 — contacts accreted from bookings, with exclusions and blocks. */
 export function contactsPage(
   contacts: { email: string; name: string; times_booked: number; last_booked_at: string }[],
   exclusions: string[],
+  blocks: { pattern: string; note: string }[] = [],
 ): string {
   const rows = contacts
     .map(
@@ -694,6 +695,14 @@ export function contactsPage(
   <button class="linkish" type="submit">remove</button></form></li>`,
     )
     .join('');
+  const bl = blocks
+    .map(
+      (b) => `<tr><td>${esc(b.pattern)}</td><td class="muted">${esc(b.note)}</td>
+  <td><form method="post" action="/app/contacts/blocks" style="margin:0">
+    <input type="hidden" name="remove" value="${esc(b.pattern)}">
+    <button class="linkish" type="submit">unblock</button></form></td></tr>`,
+    )
+    .join('');
   return SHELL(
     'Contacts',
     `<!--nav:contacts-->
@@ -708,6 +717,19 @@ ${rows ? `<table class="rows"><tr><th>Name</th><th>Email</th><th>Bookings</th><t
   <form method="post" action="/app/contacts/exclusions">
     <input name="pattern" placeholder="person@company.com or company.com">
     <button class="submit" type="submit">Exclude</button>
+  </form>
+</div>
+<div class="card">
+  <h2>Blocked from booking</h2>
+  <p class="muted">Addresses or whole domains that cannot book you at all. They
+    are told the page is not taking bookings from their address — not who
+    blocked them. This is separate from exclusions above: excluding someone
+    keeps them out of your contacts, it does not stop them booking.</p>
+  ${bl ? `<table class="rows"><tr><th>Address or domain</th><th>Note</th><th></th></tr>${bl}</table>` : ''}
+  <form method="post" action="/app/contacts/blocks">
+    <input name="pattern" placeholder="person@company.com or company.com">
+    <input name="note" placeholder="Note for yourself (optional)">
+    <button class="submit" type="submit">Block</button>
   </form>
 </div>
 ${CARD_CSS}`,
