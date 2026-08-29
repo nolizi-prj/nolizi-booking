@@ -74,7 +74,6 @@ type DoStorage = {
   sql: { exec(q: string, ...b: unknown[]): { toArray(): Record<string, unknown>[] } };
   transaction<T>(fn: () => Promise<T>): Promise<T>;
   setAlarm(t: number): Promise<void>;
-  deleteAll(): Promise<void>;
 };
 
 function sqlClientOver(storage: DoStorage): SqlClient {
@@ -114,12 +113,6 @@ export class PumasiDirectory extends DurableObject {
   }
 
   override async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.pathname === '/__wipe' && request.method === 'POST') {
-      await (this.ctx.storage as unknown as DoStorage).deleteAll();
-      this.#dir = undefined;
-      return new Response('wiped\n');
-    }
     const dir = await this.#init();
     const call = (await request.json()) as DirectoryCall;
     const result = await dispatchDirectoryCall(dir, call);
@@ -296,14 +289,6 @@ export class PumasiService extends DurableObject {
   override async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
-    // Development-phase escape hatch (router-authenticated): wipe this org.
-    if (url.pathname === '/__wipe' && request.method === 'POST') {
-      await (this.ctx.storage as unknown as DoStorage).deleteAll();
-      this.#deps = undefined;
-      this.#tag = undefined;
-      return new Response('wiped\n');
-    }
-
     await this.#adoptTag(request.headers.get('x-org-tag') ?? undefined);
     const deps = await this.#init();
 
@@ -452,19 +437,6 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
         headers: { 'content-type': 'application/javascript; charset=utf-8',
                    'cache-control': 'public, max-age=3600' },
       });
-    }
-
-    // ── development wipe (router level): org by tag, or the directory ──────
-    if (url.pathname === '/__wipe' && request.method === 'POST') {
-      const wipeToken = env['WIPE_TOKEN'];
-      if (!wipeToken || request.headers.get('authorization') !== `Bearer ${wipeToken}`) {
-        return new Response('not found', { status: 404 });
-      }
-      const target = url.searchParams.get('target') ?? 'directory';
-      const stub = target === 'directory'
-        ? env.DIRECTORY.get(env.DIRECTORY.idFromName('main'))
-        : orgStub(target);
-      return stub.fetch(new Request(`${url.origin}/__wipe`, { method: 'POST' }));
     }
 
     // ── sign-in and sign-up, orchestrated with the directory ───────────────
