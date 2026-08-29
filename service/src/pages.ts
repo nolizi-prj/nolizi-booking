@@ -388,7 +388,7 @@ ${FOOTER}
     document.getElementById('next').onclick = function(){ view = monthKeys[i+1]; render(); };
 
     var dow = document.getElementById('dow'); dow.textContent='';
-    ['S','M','T','W','T','F','S'].forEach(function(d){ var c=document.createElement('div'); c.textContent=d; dow.appendChild(c); });
+    ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(function(d){ var c=document.createElement('div'); c.textContent=d; dow.appendChild(c); });
 
     var days = document.getElementById('days'); days.textContent='';
     var first = new Date(view + '-01T00:00:00Z');
@@ -642,11 +642,30 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
 </div>
 <button class="submit" type="submit">Save settings</button>
 </form>
+<div class="card risk">
+  <h2>Your account</h2>
+  <p class="muted">Deleting removes your account, your booking pages, and every
+    booking on them — including the names and email addresses of people who
+    booked with you. It cannot be undone.</p>
+  <form method="post" action="/app/delete">
+    <label><input type="checkbox" name="confirm" value="yes" required style="width:auto">
+      I understand this deletes everything, permanently</label>
+    <button class="danger" type="submit">Delete my account</button>
+  </form>
+</div>
+
 <style>
  .card{border:1px solid var(--line);border-radius:.5rem;padding:1rem;margin:1rem 0}
  .card h2{font-size:1.1rem;margin:0 0 .25rem}
  .logopv{max-height:4rem;border:1px solid var(--line);border-radius:.4rem;padding:.3rem;
    background:var(--surface)}
+ /* The only destructive control in the product. It must not wear the same
+    blue as Create: colour is the fastest signal a person reads, and the
+    token existed while nothing used it. */
+ .card.risk{border-color:var(--danger)}
+ .danger{background:var(--danger);color:#fff;border:1px solid var(--danger);
+   border-radius:var(--radius);padding:.55rem .9rem;font:inherit;font-weight:600;cursor:pointer}
+ .danger:hover{filter:brightness(.94)}
 </style>
 <script>
 // The resize is a courtesy to the owner, not a control: the server checks the
@@ -1723,17 +1742,6 @@ ${schedules.length === 0 ? '<p class="muted">No booking pages yet — create you
   </form>
 </div>
 ${connections ? calendarSection(connections) : ''}
-<div class="card">
-  <h2>Your account</h2>
-  <p class="muted">Deleting removes your account, your booking pages, and every
-    booking on them — including the names and email addresses of people who
-    booked with you. It cannot be undone.</p>
-  <form method="post" action="/app/delete">
-    <label><input type="checkbox" name="confirm" value="yes" required style="width:auto">
-      I understand this deletes everything, permanently</label>
-    <button class="submit" type="submit">Delete my account</button>
-  </form>
-</div>
 <div class="card" id="new">
   <h2>New event type</h2>
   <form method="post" action="/app/schedules">
