@@ -519,15 +519,18 @@ document.querySelectorAll('#mv .slot').forEach(function(b){
  * broken to anyone who typed the bare domain. It explains what lives here and
  * where the doors are; the real surfaces are the owners' booking pages.
  */
-export function homePage(): string {
+export function homePage(publicSignup = false): string {
   return SHELL(
     PRODUCT,
     `<h1>${PRODUCT}</h1>
 <p class="muted">Share a link; people pick a time.</p>
 <p>Booking pages live at their own links. If someone sent you one,
 use that link to pick a time — this page cannot list them.</p>
-<p><a href="/login">Sign in</a> to manage your booking pages.
-Accounts are invite-only while the service stays small.</p>
+<p>${publicSignup
+      ? `<a href="/signup">Create your booking page</a> — free, sign-up takes a
+minute — or <a href="/login">sign in</a> to manage the pages you have.`
+      : `<a href="/login">Sign in</a> to manage your booking pages.
+Accounts are invite-only while the service stays small.`}</p>
 ${FOOTER}`,
   );
 }

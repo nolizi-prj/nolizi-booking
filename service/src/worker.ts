@@ -427,7 +427,7 @@ export default {
       return Response.json({ status: 'ready', owners });
     }
     if (url.pathname === '/' && request.method === 'GET') {
-      return htmlResponse(200, homePage());
+      return htmlResponse(200, homePage(config.publicSignup));
     }
     if (url.pathname === '/login' && request.method === 'GET') {
       return htmlResponse(200, loginPage(undefined, undefined, ssoEnabled));

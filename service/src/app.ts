@@ -2581,7 +2581,7 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
   // /<owner>/<event>    a booking page (the parity route)
   // /<event>            legacy: a bare event slug still resolves
   const slug = parts[0];
-  if (!slug) return html(200, homePage());
+  if (!slug) return html(200, homePage(config.publicSignup));
 
   if (await overLimit(sql, `view:${req.ip}`, RATE_LIMITS.page_views_per_ip_per_minute, 60, now)) {
     return html(429, errorPage(429, 'Too many requests. Try again shortly.'));
