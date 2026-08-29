@@ -23,7 +23,7 @@
  */
 
 import { DurableObject } from 'cloudflare:workers';
-import { loadConfig } from './config.ts';
+import { loadConfig, RATE_LIMITS } from './config.ts';
 import { handle, type AppDeps, type DirectoryPort } from './app.ts';
 import { migrate } from './db.ts';
 import { RecordingMail, RetryingMail, type MailPort } from './mail.ts';
@@ -316,6 +316,7 @@ export class PumasiService extends DurableObject {
       t('x-trusted-signup-email') || t('x-trusted-sso-email')
         ? {
             signupEmail: t('x-trusted-signup-email'),
+            verifyEmail: t('x-trusted-verify-email') === '1',
             displayName: t('x-trusted-name'),
             timezone: t('x-trusted-tz'),
             newOrg: t('x-trusted-new-org') === '1',
@@ -468,17 +469,46 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
 
     if (url.pathname === '/signup' && request.method === 'POST') {
       const email = (form['email'] ?? '').trim();
-      const claim = (await dir('claimSignup', (form['invite'] ?? '').trim(), email)) as
+      const invite = (form['invite'] ?? '').trim();
+      // I7 · THE GATE IS HERE, not in app.ts. The shard only ever sees a signup
+      // that this router already authorised, so anything that decides who may
+      // create an account has to be decided on this line.
+      const isPublic = !invite && config.publicSignup;
+
+      if (isPublic) {
+        const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
+        if (await dir('overSignupLimit', ip, RATE_LIMITS.signups_per_ip_per_hour, 3600)) {
+          return htmlResponse(429, errorPage(429, 'Too many sign-up attempts. Try again later.'));
+        }
+      }
+
+      const claim = (await (isPublic
+        ? dir('claimSignupPublic', email)
+        : dir('claimSignup', invite, email))) as
         | { ok: true; tag: string; newOrg: boolean }
         | { ok: false; reason: string };
+
       if (!claim.ok) {
+        // I8 · On the public path the ONLY distinguishable refusal is the
+        // ceiling, which is a fact about the deployment. 'already_registered'
+        // must look exactly like success, or this endpoint answers "does this
+        // person have an account here?" to anyone who asks. The invite path
+        // keeps its specific messages: holding a valid invite is authorisation.
+        if (isPublic) {
+          if (claim.reason === 'ceiling') {
+            return htmlResponse(400, signupPage('',
+              'This service has reached its account limit and is not taking more.',
+              { sso: ssoEnabled, publicSignup: config.publicSignup }));
+          }
+          return htmlResponse(200, loginPage(true));
+        }
         const message =
           claim.reason === 'ceiling'
             ? 'This service has reached its account limit and is not taking more.'
             : claim.reason === 'already_registered'
               ? 'That address already has an account. Sign in instead.'
               : 'That invite is not valid or has already been used.';
-        return htmlResponse(400, signupPage((form['invite'] ?? '').trim(), message,
+        return htmlResponse(400, signupPage(invite, message,
           { sso: ssoEnabled, publicSignup: config.publicSignup }));
       }
       return forward(claim.tag, {
@@ -488,6 +518,9 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
           'x-trusted-name': (form['display_name'] ?? '').trim(),
           'x-trusted-tz': (form['timezone'] ?? 'UTC').trim(),
           'x-trusted-new-org': claim.newOrg ? '1' : '0',
+          // I7 · No invite vouched for this address, so the shard must mail a
+          // sign-in link instead of handing out a session.
+          ...(isPublic ? { 'x-trusted-verify-email': '1' } : {}),
         },
       });
     }

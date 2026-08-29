@@ -47,6 +47,13 @@ CREATE TABLE IF NOT EXISTS dir_invites (
   tag         TEXT,
   consumed_at TEXT
 );
+-- I9 · public signup creates rows and sends mail to a caller-chosen address.
+-- The counter is global because the directory is the only global view there is.
+CREATE TABLE IF NOT EXISTS dir_signup_attempts (
+  ip TEXT NOT NULL,
+  at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS dir_signup_attempts_ip ON dir_signup_attempts (ip, at);
 `;
 
 export type ClaimResult =
@@ -133,6 +140,51 @@ export class Directory {
     return { ok: true, tag, newOrg };
   }
 
+  /**
+   * I7 · Public signup: the same claim, without an invite.
+   *
+   * Kept as a separate method rather than a flag on claimSignup, because the
+   * invite check in that one is load-bearing in a way worth not making
+   * conditional by accident. Every OTHER guard still runs: the global ceiling,
+   * and the uniqueness of the address.
+   *
+   * The caller must NOT surface the difference between ok and
+   * already_registered. Ordering used to hide it -- without an invite you
+   * always got invalid_invite first -- and public signup removes exactly that
+   * accident, turning the distinct message into an account-existence oracle on
+   * an unauthenticated endpoint. See worker.ts and I8.
+   */
+  async claimSignupPublic(email: string): Promise<ClaimResult> {
+    if ((await this.ownerCount()) >= this.maxOwners) return { ok: false, reason: 'ceiling' };
+    const existing = await this.sql.query(
+      `SELECT 1 FROM dir_emails WHERE email = $1`, [email.toLowerCase()]);
+    if (existing.rows[0]) return { ok: false, reason: 'already_registered' };
+    const tag = newTag();
+    await this.sql.query(`INSERT INTO dir_orgs (tag, created_at) VALUES ($1, $2)`,
+      [tag, nowIso()]);
+    await this.sql.query(`INSERT INTO dir_emails (email, tag) VALUES ($1, $2)`,
+      [email.toLowerCase(), tag]);
+    return { ok: true, tag, newOrg: true };
+  }
+
+  /**
+   * I9 · Records the attempt and reports whether this IP is over its hourly
+   * budget. Recorded before the claim, so refused attempts count too -- a
+   * limiter that only counts successes is not a limiter.
+   */
+  async overSignupLimit(ip: string, max: number, windowSeconds: number): Promise<boolean> {
+    const now = Date.now();
+    const cutoff = new Date(now - windowSeconds * 1000).toISOString().replace(/\.\d+Z$/, 'Z');
+    await this.sql.query(`DELETE FROM dir_signup_attempts WHERE at < $1`, [cutoff]);
+    const { rows } = await this.sql.query(
+      `SELECT count(*)::int AS c FROM dir_signup_attempts WHERE ip = $1 AND at >= $2`,
+      [ip, cutoff]);
+    if (Number(rows[0]?.['c'] ?? 0) >= max) return true;
+    await this.sql.query(`INSERT INTO dir_signup_attempts (ip, at) VALUES ($1, $2)`,
+      [ip, nowIso()]);
+    return false;
+  }
+
   /** SSO JIT provisioning claims an email without an invite (ceiling holds). */
   async claimEmailForOrg(email: string, tag: string): Promise<ClaimResult> {
     if ((await this.ownerCount()) >= this.maxOwners) return { ok: false, reason: 'ceiling' };
@@ -213,7 +265,8 @@ export class Directory {
  */
 export interface DirectoryCall {
   method:
-    | 'ensure' | 'lookup' | 'claimSignup' | 'claimEmailForOrg' | 'mintInvite'
+    | 'ensure' | 'lookup' | 'claimSignup' | 'claimSignupPublic' | 'overSignupLimit'
+    | 'claimEmailForOrg' | 'mintInvite'
     | 'registerLink' | 'registerForm' | 'releaseForm' | 'registerDomain'
     | 'releaseOwner' | 'ownerCount';
   args: unknown[];

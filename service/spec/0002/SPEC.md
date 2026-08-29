@@ -69,6 +69,16 @@ operator, and the service honours it. It is no longer refused unconditionally:
 the basis D1 refers to is written and in force, so this is a deployment decision
 rather than a governance block.
 
+**Where these three clauses are enforced, because the answer is not obvious.**
+In the sharded deployment — which is what runs in production — `POST /signup` is
+handled by the **router** (`src/worker.ts`), which calls the directory and only
+then forwards to an org's shard. The shard therefore never sees a signup the
+router did not already authorise. **Any rule about who may create an account
+lives in the router and the directory, not in `src/app.ts`.** The unsharded
+single-tenant path in `app.ts` enforces the same rules for the deployments that
+use it, but it is not the production gate, and a reviewer reading only `app.ts`
+would draw the wrong conclusion about whether the service is exposed.
+
 **I7 · A public signup never yields a session until the address is proven.** An
 invite was the proof that a claimed address belonged to the claimant; public
 signup removes that proof and nothing else supplies it. So on the public path the
@@ -92,10 +102,23 @@ it becomes an account-enumeration oracle that answers "does this person use this
 service?" to anyone who asks. A ceiling refusal is the one distinguishable
 answer, because it is a fact about the deployment and not about any person.
 
+*This one has to be enforced in the router.* `Directory.claimSignup` checks
+invite → ceiling → address, so while an invite was required the ordering hid the
+distinction: with no valid invite you always got `invalid_invite` first and never
+reached the `already_registered` branch. Removing the invite requirement removes
+that accident, and the router's own error text becomes the oracle. So the public
+path in `worker.ts` maps both success and `already_registered` to the **same**
+response, and the shard returns a byte-identical page on the success side. The
+invite path keeps its specific messages: holding a valid invite is authorisation
+to learn that the invite was already spent.
+
 **I9 · Public signup is rate-limited per IP**, at **5 sign-ups per hour**. It
 creates database rows and sends mail to an address the caller chose, which is the
-mail-amplification surface I6 names — and unlike a booking it had no limit at
-all while it was invite-gated.
+mail-amplification surface I6 names — and unlike a booking it had no limit at all
+while it was invite-gated. The counter lives in the **directory**, because that
+is the only component with a global view; a per-shard limit would be no limit at
+all when every public signup founds its own shard. Refused attempts are counted,
+since a limiter that only counts successes is not a limiter.
 
 **I3 · Sessions** are opaque server-side references in an `HttpOnly`, `Secure`,
 `SameSite=Lax` cookie. Never a token containing claims the client can read, and

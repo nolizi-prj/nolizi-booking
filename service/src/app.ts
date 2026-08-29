@@ -205,7 +205,7 @@ export async function handle(
     authorization?: string;
     rawBody?: string;
     /** Set ONLY by the worker router after a directory claim — never by users. */
-    trusted?: { signupEmail?: string; displayName?: string; timezone?: string;
+    trusted?: { signupEmail?: string; displayName?: string; timezone?: string; verifyEmail?: boolean;
       newOrg?: boolean; ssoEmail?: string };
   },
 ): Promise<Reply> {
@@ -234,7 +234,7 @@ async function handleRoutes(
     authorization?: string;
     rawBody?: string;
     /** Set ONLY by the worker router after a directory claim — never by users. */
-    trusted?: { signupEmail?: string; displayName?: string; timezone?: string;
+    trusted?: { signupEmail?: string; displayName?: string; timezone?: string; verifyEmail?: boolean;
       newOrg?: boolean; ssoEmail?: string };
   },
 ): Promise<Reply> {
@@ -679,6 +679,20 @@ async function handleRoutes(
         }
       }
       await registerOwnerLink(deps, sql, made.owner.owner_id);
+
+      // I7 · No invite vouched for this address and no identity provider
+      // asserted it, so nothing here proves the person typing it can read that
+      // mailbox. The account exists; the session does not, until they follow a
+      // link only that mailbox receives. The router marked this case.
+      if (req.trusted.verifyEmail) {
+        const token = await issueSignInToken(sql, made.owner.owner_id, now);
+        await mail.send({ kind: 'signin', to: input.email, bookingId: '', start: now,
+          token: tagged(deps, token) });
+        // I8 · Byte-identical to what the router returns when the address was
+        // already taken. If these two ever diverge, the pair becomes an oracle.
+        return html(200, loginPage(true));
+      }
+
       const sid = await createSession(sql, made.owner.owner_id, now, config.sessionTtlHours);
       return {
         status: 303,

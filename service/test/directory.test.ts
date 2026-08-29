@@ -28,7 +28,7 @@ after(async () => { await db?.close(); await pg?.stop(); });
 beforeEach(async () => {
   dir = new Directory(db, 5);
   await dir.ensure('inv-boot');
-  await db.query(`TRUNCATE dir_orgs, dir_emails, dir_links, dir_forms, dir_domains, dir_invites`);
+  await db.query(`TRUNCATE dir_orgs, dir_emails, dir_links, dir_forms, dir_domains, dir_invites, dir_signup_attempts`);
   await dir.ensure('inv-boot'); // re-mint the bootstrap invite after the wipe
 });
 
@@ -117,4 +117,43 @@ test('releasing an owner frees the email, the link, and a ceiling seat', async (
   assert.equal(await dir.lookup('email', 'gone@x.example'), undefined);
   assert.equal(await dir.lookup('link', 'gone'), undefined);
   assert.equal(await dir.ownerCount(), 0);
+});
+
+test('I7 public signup claims an email and founds an org without an invite', async () => {
+  const claim = await dir.claimSignupPublic('open@example.com');
+  assert.ok(claim.ok, 'no invite is required on the public path');
+  assert.equal(claim.newOrg, true, 'a public signup founds its own tenant');
+  assert.equal(await dir.lookup('email', 'open@example.com'), claim.tag);
+});
+
+test('I7 public signup still honours the global ceiling', async () => {
+  const small = new Directory(db, 2);
+  await small.ensure('inv-boot');
+  assert.ok((await small.claimSignupPublic('a@example.com')).ok);
+  assert.ok((await small.claimSignupPublic('b@example.com')).ok);
+  assert.deepEqual(
+    await small.claimSignupPublic('c@example.com'),
+    { ok: false, reason: 'ceiling' },
+    'the ceiling is a deployment fact and still applies without an invite',
+  );
+});
+
+test('I8 a taken address is reported to the CALLER, which must not pass it on', async () => {
+  assert.ok((await dir.claimSignupPublic('taken@example.com')).ok);
+  assert.deepEqual(
+    await dir.claimSignupPublic('taken@example.com'),
+    { ok: false, reason: 'already_registered' },
+    'the directory tells the truth; worker.ts is what flattens it to a neutral page',
+  );
+  const { rows } = await db.query(
+    `SELECT count(*)::int AS c FROM dir_emails WHERE email = 'taken@example.com'`);
+  assert.equal(Number(rows[0]!['c']), 1, 'and the second attempt claims nothing');
+});
+
+test('I9 the signup limiter counts refused attempts, not just successful ones', async () => {
+  for (let i = 0; i < 3; i++) {
+    assert.equal(await dir.overSignupLimit('1.2.3.4', 3, 3600), false, `attempt ${i + 1} allowed`);
+  }
+  assert.equal(await dir.overSignupLimit('1.2.3.4', 3, 3600), true, 'the fourth is refused');
+  assert.equal(await dir.overSignupLimit('5.6.7.8', 3, 3600), false, 'a different IP is unaffected');
 });
