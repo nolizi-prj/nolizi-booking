@@ -59,9 +59,9 @@ steward of this service, reachable at **admin@pumasi.ai**.
 ## What is collected
 
 Nothing about *you* is collected that the meeting does not require. This is the
-complete list of what the service stores about a person; the software's own
-self-reporting, which is about the software and not about you, is described at
-the end of this section.
+complete list of what the service stores about a person. The software's own
+self-reporting is described at the end of this section, and today it sends
+nothing at all.
 
 **If you book a meeting**, the booking page asks for and stores:
 - your **name** and **email address**, because the person you are meeting needs
@@ -86,22 +86,22 @@ which proposed times you accepted, until the poll is deleted.
 right booking page — your answer is **not stored at all**. It selects a
 destination and is gone.
 
-**Separately from all of the above, the software reports on itself.** It sends us
-how it behaved — which features were used, what was slow, what crashed, and the
-shape of the operator's configuration — so we can find defects and fix them. That
-stream is deliberately kept apart from everything on this page:
+**The software does not currently report anything about itself.** We are saying
+so because the governing document (**REPORTING.md**) describes a self-reporting
+mechanism, and a reader who found it would reasonably assume this service uses
+it. It does not: no such data leaves this deployment today, and there is no code
+here that sends any.
 
-- It carries **no name, no email address, no meeting time, no note contents**,
-  and nothing a booker typed. It is about the software, not about you.
-- It is **not published**. The operator's own conformance result is published and
-  signed, as it always has been; this operating detail is not, and never carries
-  your details in either case.
-- It is kept to a stated retention period and can be deleted on request.
-- The operator can turn all of it off in one step, and nothing about the service
-  changes when they do.
+When it is built, it will send how the software behaved — which features were
+used, what was slow, what crashed, and the shape of the operator's configuration
+— so that defects can be found and fixed. It will carry **no name, no email
+address, no meeting time, no note contents**, and nothing a booker typed; it will
+not be published; it will be kept to a stated retention period and be deletable
+on request; and the operator will be able to turn it off in one step. The basis
+for it is our legitimate interest in operating and improving software we give
+away.
 
-The basis for it is our legitimate interest in operating and improving software
-we give away. Full detail is in **REPORTING.md**.
+This paragraph changes when the mechanism ships, and not before.
 
 **If you hold an account**, we store your email address, display name, timezone,
 your public link name, an optional welcome message and accent colour, your
