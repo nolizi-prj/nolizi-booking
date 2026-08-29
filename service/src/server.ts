@@ -6,6 +6,8 @@
 import { createServer } from 'node:http';
 import { loadConfig, refusals } from './config.ts';
 import { migrate } from './db.ts';
+import { CalendarHub } from './calendars.ts';
+import { GoogleCalendarProvider } from './calendar-google.ts';
 import { createDatabase, type Database } from './driver.ts';
 import { handle, type AppDeps } from './app.ts';
 import { RecordingMail, RetryingMail, type MailPort } from './mail.ts';
@@ -101,6 +103,18 @@ export async function start(): Promise<{ close: () => Promise<void>; port: numbe
     console.warn('[mail] no SMTP_URL and no MAIL_DIR — messages are recorded in memory and discarded.');
   }
 
+  // SPEC-0003 · calendar integration only when fully configured.
+  let calendars: CalendarHub | undefined;
+  if (config.googleClientId && config.googleClientSecret && config.tokenKey) {
+    calendars = new CalendarHub(
+      { google: new GoogleCalendarProvider(config.googleClientId, config.googleClientSecret) },
+      config.tokenKey,
+    );
+    console.log('[calendar] Google Calendar integration active');
+  } else {
+    console.warn('[calendar] GOOGLE_OAUTH_CLIENT_ID/SECRET/TOKEN_KEY unset — calendar integration off.');
+  }
+
   const deps: AppDeps = {
     sql: db,
     tx: db,
@@ -108,6 +122,7 @@ export async function start(): Promise<{ close: () => Promise<void>; port: numbe
     mail: new RetryingMail(inner),
     now: () => new Date().toISOString().replace('.000Z', 'Z'),
     ready: () => ready,
+    calendars,
   };
 
   const trustProxy = process.env['TRUST_PROXY'] === 'true';

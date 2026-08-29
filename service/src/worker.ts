@@ -25,9 +25,13 @@ import { GmailMail } from './mail-gmail.ts';
 import type { SqlClient, Transactor } from './store.ts';
 import { Serialiser } from './driver.ts';
 import { bindable, normalizeDbError, translateSql } from './sqlite-dialect.ts';
+import { CalendarHub } from './calendars.ts';
+import { GoogleCalendarProvider } from './calendar-google.ts';
 // Bundled as text via the `rules` entry in wrangler.jsonc.
 // @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema001 from '../migrations-sqlite/001_schema.sql';
+// @ts-expect-error — .sql imports exist only under wrangler's bundler
+import schema002 from '../migrations-sqlite/002_calendar.sql';
 
 /** Mirrors server.ts: a form here is a name, an address and two timestamps. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -69,7 +73,10 @@ export class PumasiService extends DurableObject {
     const config = loadConfig(env as never);
 
     const applied = await migrate(client, {
-      files: [{ name: '001_schema.sql', sql: schema001 as string }],
+      files: [
+        { name: '001_schema.sql', sql: schema001 as string },
+        { name: '002_calendar.sql', sql: schema002 as string },
+      ],
     });
     if (applied.length > 0) console.log(`[db] migrations applied: ${applied.join(', ')}`);
 
@@ -97,6 +104,18 @@ export class PumasiService extends DurableObject {
     }
     const mail = new RetryingMail(inner);
 
+    // SPEC-0003 · calendar integration only when fully configured.
+    let calendars: CalendarHub | undefined;
+    if (config.googleClientId && config.googleClientSecret && config.tokenKey) {
+      calendars = new CalendarHub(
+        { google: new GoogleCalendarProvider(config.googleClientId, config.googleClientSecret) },
+        config.tokenKey,
+      );
+      console.log('[calendar] Google Calendar integration active');
+    } else {
+      console.warn('[calendar] GOOGLE_OAUTH_CLIENT_ID/SECRET/TOKEN_KEY unset — calendar integration off.');
+    }
+
     this.#deps = {
       sql: client,
       tx,
@@ -104,6 +123,7 @@ export class PumasiService extends DurableObject {
       mail,
       now: () => new Date().toISOString().replace('.000Z', 'Z'),
       ready: () => true, // init completes before any request is handled
+      calendars,
     };
     return this.#deps;
   }

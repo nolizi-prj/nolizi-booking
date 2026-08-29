@@ -278,11 +278,69 @@ export interface ScheduleSummary {
 
 const DAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const;
 
+export interface ConnectionView {
+  connection_id: string;
+  provider: string;
+  account_email: string;
+  scope_level: 'freebusy' | 'events';
+  status: 'active' | 'error';
+  error_reason?: string;
+  calendars: { calendar_id: string; name: string; check_conflicts: boolean; is_destination: boolean }[];
+}
+
+/** SPEC-0003 — the calendar section of the dashboard. */
+function calendarSection(connections: ConnectionView[]): string {
+  const rows = connections
+    .map((c) => {
+      const cals = c.calendars
+        .map(
+          (cal) => `<tr>
+  <td><label><input type="checkbox" name="check:${esc(cal.calendar_id)}" ${cal.check_conflicts ? 'checked' : ''} style="width:auto"> ${esc(cal.name)}</label></td>
+  <td><label><input type="radio" name="destination" value="${esc(cal.calendar_id)}" ${cal.is_destination ? 'checked' : ''} style="width:auto"> bookings land here</label></td>
+</tr>`,
+        )
+        .join('');
+      return `<div class="conn">
+  <p><b>${esc(c.account_email)}</b> <span class="muted">(${esc(c.provider)})</span>
+    ${c.status === 'error'
+      ? `<span class="err-inline">needs attention: ${esc(c.error_reason ?? 'reconnect')}</span>`
+      : c.scope_level === 'events'
+        ? '<span class="muted">· checks conflicts and receives bookings</span>'
+        : '<span class="muted">· checks conflicts only</span>'}</p>
+  <form method="post" action="/app/calendar/${esc(c.connection_id)}/calendars">
+    <table class="avail">${cals}</table>
+    <button class="submit" type="submit">Save calendar choices</button>
+  </form>
+  ${c.scope_level !== 'events'
+    ? `<form method="post" action="/app/calendar/${esc(c.provider)}/upgrade" style="display:inline">
+    <input type="hidden" name="account" value="${esc(c.account_email)}">
+    <button class="submit" type="submit">Also add bookings to this calendar</button></form>`
+    : ''}
+  <form method="post" action="/app/calendar/${esc(c.connection_id)}/delete" style="display:inline">
+    <button class="linkish" type="submit">Disconnect (deletes what we hold)</button>
+  </form>
+</div>`;
+    })
+    .join('');
+
+  return `<div class="card">
+  <h2>Calendar</h2>
+  <p class="muted">Connected calendars block their busy times from your booking
+    pages. While a connection is broken, no times are offered — the service
+    refuses rather than double-books.</p>
+  ${rows || '<p class="muted">No calendar connected. Times are offered from your weekly hours alone.</p>'}
+  <form method="post" action="/app/calendar/google/connect">
+    <button class="submit" type="submit">Connect Google Calendar</button>
+  </form>
+</div>`;
+}
+
 export function ownerHome(
   owner: { display_name: string; email: string; timezone: string },
   schedules: ScheduleSummary[],
   baseUrl: string,
   notice?: string,
+  connections?: ConnectionView[],
 ): string {
   const list = schedules
     .map(
@@ -316,6 +374,7 @@ export function ownerHome(
     <button type="submit" class="linkish">sign out</button></form></p>
 ${notice ? `<p class="ok">${esc(notice)}</p>` : ''}
 ${schedules.length === 0 ? '<p class="muted">No booking pages yet.</p>' : list}
+${connections ? calendarSection(connections) : ''}
 <div class="card">
   <h2>Your account</h2>
   <p class="muted">Deleting removes your account, your booking pages, and every
@@ -343,6 +402,8 @@ ${schedules.length === 0 ? '<p class="muted">No booking pages yet.</p>' : list}
  table.avail{border-collapse:collapse} table.avail th{text-align:left;padding-right:.5rem;font-weight:600}
  table.avail td{padding:.15rem .25rem}
  .linkish{background:none;border:0;color:var(--accent);font:inherit;cursor:pointer;padding:0}
+ .conn{border-top:1px solid var(--line);padding-top:.75rem;margin-top:.75rem}
+ .err-inline{color:#c33;font-size:.9rem}
 </style>`,
   );
 }

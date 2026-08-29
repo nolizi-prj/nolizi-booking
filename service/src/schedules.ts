@@ -171,6 +171,8 @@ export async function availableSlots(
   sql: SqlClient,
   schedule: Schedule,
   q: SlotQuery,
+  /** SPEC-0003: calendar busy intervals arrive as plain intervals, nothing more. */
+  externalBusy: Interval[] = [],
 ): Promise<ComputeSlotsResponse> {
   const [availability, dateOverrides, busy, counts] = await Promise.all([
     loadRules(sql, schedule.schedule_id),
@@ -183,7 +185,7 @@ export async function availableSlots(
     owner_timezone: schedule.owner_timezone,
     availability,
     date_overrides: dateOverrides,
-    busy,
+    busy: [...busy, ...externalBusy],
     duration_minutes: schedule.duration_minutes,
     granularity_minutes: schedule.granularity_minutes,
     buffer_before_minutes: schedule.buffer_before_minutes,

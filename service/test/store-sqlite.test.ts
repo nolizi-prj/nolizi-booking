@@ -20,7 +20,7 @@ let db: Database;
 before(async () => {
   db = await createSqliteDriver();
   const applied = await migrate(db, { dir: 'migrations-sqlite' });
-  assert.deepEqual(applied, ['001_schema.sql']);
+  assert.deepEqual(applied, ['001_schema.sql', '002_calendar.sql']);
   // The ledger makes a second run a no-op (P6).
   assert.deepEqual(await migrate(db, { dir: 'migrations-sqlite' }), []);
 });

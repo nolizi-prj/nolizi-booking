@@ -18,8 +18,9 @@ import {
   ownerForSession, readCookie, redeemInvite, sessionCookie,
 } from './identity.ts';
 import { RATE_LIMITS, type Config } from './config.ts';
+import type { CalendarHub } from './calendars.ts';
 import type { MailPort } from './mail.ts';
-import type { Slot } from '@pumasi/booking-core';
+import type { Interval, Slot } from '@pumasi/booking-core';
 
 export interface Reply {
   status: number;
@@ -41,6 +42,9 @@ const json = (status: number, body: unknown): Reply => ({
 /** L1 · At least 128 bits from a CSPRNG. Not a booking id, not a sequence. */
 export const newToken = (): string => randomBytes(32).toString('base64url');
 
+/** SPEC-0003 · thrown when a connected calendar cannot be consulted. */
+export class CalendarBlindError extends Error {}
+
 export interface AppDeps {
   sql: SqlClient;
   /** Supplies a connection per transaction (driver.ts). */
@@ -50,6 +54,8 @@ export interface AppDeps {
   /** Injected so tests control it and the service never reads an ambient clock. */
   now: () => string;
   ready: () => boolean;
+  /** SPEC-0003 · absent means no calendar integration is configured. */
+  calendars?: CalendarHub;
 }
 
 /** I6 · Per-IP and per-schedule limits, counted in the database. */
@@ -102,6 +108,30 @@ function noticeExpired(startIso: string, nowIso: string, noticeMinutes: number):
 }
 
 export async function handle(
+  deps: AppDeps,
+  req: {
+    method: string;
+    path: string;
+    ip: string;
+    form?: Record<string, string>;
+    cookie?: string;
+    query?: Record<string, string>;
+  },
+): Promise<Reply> {
+  try {
+    return await handleRoutes(deps, req);
+  } catch (err) {
+    // SPEC-0003 · fail closed: while a connected calendar cannot be consulted,
+    // no path may offer or accept a time. Refusing beats double-booking.
+    if (err instanceof CalendarBlindError) {
+      return html(503, errorPage(503,
+        'This page cannot offer times right now: a connected calendar cannot be reached. Try again shortly.'));
+    }
+    throw err;
+  }
+}
+
+async function handleRoutes(
   deps: AppDeps,
   req: {
     method: string;
@@ -201,6 +231,8 @@ export async function handle(
         return html(409, managePage({ title, start: startIso, token, status,
           slots: await moveOptions(), error: 'Someone just took that time. Here are the rest.' }));
       }
+      // SPEC-0003 · the owner's calendar follows the move (never fatal, M3).
+      await deps.calendars?.onMoved(sql, bookingId, newStart, newEnd);
       // M5 · both parties learn the meeting moved.
       const owner = await ownerForBooking(sql, bookingId);
       const booker = await bookerFor(sql, bookingId);
@@ -221,6 +253,8 @@ export async function handle(
       // B5 · cancelling is idempotent and total; re-cancelling is `cancelled`.
       if (existing?.status === 'confirmed') {
         await store.cancel(bookingId, `cancel:${token}`);
+        // SPEC-0003 · the owner's calendar follows the cancellation.
+        await deps.calendars?.onCancelled(sql, bookingId);
         const ownerRow = await ownerForBooking(sql, bookingId);
         if (ownerRow) {
           await mail.send({
@@ -309,6 +343,31 @@ export async function handle(
     };
   }
 
+  // ── OAuth callback for calendar connections (SPEC-0003) ──────────────────
+  // Unauthenticated by necessity: the browser arrives from the provider. The
+  // sealed state, not the session, says whose connection this is.
+  if (parts[0] === 'oauth' && parts[2] === 'callback' && req.method === 'GET') {
+    const hub = deps.calendars;
+    const provider = hub?.provider(parts[1] ?? '');
+    if (!hub || !provider) return html(404, errorPage(404, 'Calendar integration is not configured.'));
+    if (req.query?.['error']) {
+      return html(400, errorPage(400, 'The calendar connection was declined. Nothing was stored.'));
+    }
+    const state = await hub.openState(req.query?.['state'] ?? '');
+    const code = req.query?.['code'];
+    if (!state || !state['owner_id'] || !code) {
+      return html(400, errorPage(400, 'This connection attempt is stale or invalid. Start again from your dashboard.'));
+    }
+    try {
+      const tokens = await provider.exchangeCode(code, `${config.baseUrl}/oauth/${provider.id}/callback`);
+      await hub.saveConnection(sql, state['owner_id'], provider, tokens);
+    } catch (err) {
+      console.warn(`[calendar] connect failed: ${(err as Error).message}`);
+      return html(502, errorPage(502, 'The calendar provider did not complete the connection. Try again.'));
+    }
+    return { status: 303, headers: { location: '/app' }, body: '' };
+  }
+
   if (parts[0] === 'logout' && req.method === 'POST') {
     if (sessionId) await destroySession(sql, sessionId);
     return { status: 303, headers: { location: '/login', 'set-cookie': clearedCookie(secure) }, body: '' };
@@ -328,6 +387,14 @@ export async function handle(
       }
       await deps.tx.transaction(async (tx) => {
         await tx.query(`DELETE FROM bookings WHERE owner_id = $1`, [owner.owner_id]);
+        // D3 · calendar credentials are the most protected datum; deletion of
+        // the account deletes them in the same transaction.
+        await tx.query(
+          `DELETE FROM connection_calendars WHERE connection_id IN
+             (SELECT connection_id FROM calendar_connections WHERE owner_id = $1)`,
+          [owner.owner_id],
+        );
+        await tx.query(`DELETE FROM calendar_connections WHERE owner_id = $1`, [owner.owner_id]);
         await tx.query(`DELETE FROM owners WHERE owner_id = $1`, [owner.owner_id]);
       });
       return {
@@ -383,6 +450,54 @@ export async function handle(
       return { status: 303, headers: { location: '/app' }, body: '' };
     }
 
+    // ── calendar connections (SPEC-0003) ─────────────────────────────────
+    if (parts[1] === 'calendar' && req.method === 'POST' && deps.calendars) {
+      const hub = deps.calendars;
+      // /app/calendar/<provider>/connect  |  /app/calendar/<provider>/upgrade
+      const provider = hub.provider(parts[2] ?? '');
+      if (provider && (parts[3] === 'connect' || parts[3] === 'upgrade')) {
+        const scopeLevel = parts[3] === 'upgrade' ? 'events' : 'freebusy';
+        const state = await hub.sealState({ owner_id: owner.owner_id, level: scopeLevel });
+        const location = provider.authUrl({
+          state,
+          redirectUri: `${config.baseUrl}/oauth/${provider.id}/callback`,
+          scopeLevel,
+          loginHint: req.form?.['account'] || undefined,
+        });
+        return { status: 303, headers: { location }, body: '' };
+      }
+      // /app/calendar/<connectionId>/delete
+      if (parts[2] && parts[3] === 'delete') {
+        const gone = await hub.deleteConnection(sql, owner.owner_id, parts[2]);
+        if (!gone) return html(404, errorPage(404, 'No such calendar connection.'));
+        return { status: 303, headers: { location: '/app' }, body: '' };
+      }
+      // /app/calendar/<connectionId>/calendars — which are checked, which receives
+      if (parts[2] && parts[3] === 'calendars') {
+        const owned = await sql.query(
+          `SELECT connection_id FROM calendar_connections
+            WHERE connection_id = $1 AND owner_id = $2`,
+          [parts[2], owner.owner_id],
+        );
+        if (!owned.rows[0]) return html(404, errorPage(404, 'No such calendar connection.'));
+        const f = req.form ?? {};
+        const { rows: cals } = await sql.query(
+          `SELECT calendar_id FROM connection_calendars WHERE connection_id = $1`,
+          [parts[2]],
+        );
+        for (const c of cals) {
+          const id = String(c['calendar_id']);
+          await sql.query(
+            `UPDATE connection_calendars SET check_conflicts = $3, is_destination = $4
+              WHERE connection_id = $1 AND calendar_id = $2`,
+            [parts[2], id, f[`check:${id}`] === 'on' ? 1 : 0, f['destination'] === id ? 1 : 0],
+          );
+        }
+        return { status: 303, headers: { location: '/app' }, body: '' };
+      }
+      return html(404, errorPage(404, 'Nothing here.'));
+    }
+
     // I4 · every owner-scoped read is filtered by the session's account here,
     // not by hiding controls in the interface.
     const { rows } = await sql.query(
@@ -413,7 +528,10 @@ export async function handle(
         })),
       });
     }
-    return html(200, ownerHome(owner, summaries, config.baseUrl));
+    const connections = deps.calendars
+      ? await deps.calendars.listConnections(sql, owner.owner_id)
+      : undefined;
+    return html(200, ownerHome(owner, summaries, config.baseUrl, undefined, connections));
   }
 
   // ── the public booking page ──────────────────────────────────────────────
@@ -494,7 +612,16 @@ async function ownerForBooking(sql: SqlClient, bookingId: string): Promise<Conta
 async function slotsFor(deps: AppDeps, schedule: Schedule, now: string) {
   const from = Temporal.Instant.from(now).toString();
   const to = Temporal.Instant.from(now).add({ hours: 24 * 14 }).toString();
-  return availableSlots(deps.sql, schedule, { from, to, now });
+  // SPEC-0003 · the calendar is consulted on every slot computation — page
+  // views AND the commit-time revalidation — so a busy time that appeared
+  // after the page loaded still blocks the booking (fresh fetch, B3 pattern).
+  let externalBusy: Interval[] = [];
+  if (deps.calendars) {
+    const answer = await deps.calendars.busyFor(deps.sql, schedule.owner_id, from, to);
+    if (!answer.ok) throw new CalendarBlindError(answer.reason);
+    externalBusy = answer.intervals;
+  }
+  return availableSlots(deps.sql, schedule, { from, to, now }, externalBusy);
 }
 
 async function bookHandler(
@@ -593,6 +720,14 @@ async function bookHandler(
     schedule.schedule_id,
     bookingId,
   ]);
+
+  // SPEC-0003 · the booking lands in the owner's calendar (never fatal, M3).
+  await deps.calendars?.writeBack(sql, schedule.owner_id, bookingId, {
+    title: `${schedule.title} — ${name}`,
+    description: `Booked via ${config.baseUrl}/${schedule.slug}\nWith: ${name} <${email}>`,
+    start,
+    end,
+  });
 
   // M2 · after commit, never inside the transaction. M3 · a failure here must
   // not invalidate a confirmed booking.

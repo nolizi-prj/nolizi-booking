@@ -28,6 +28,11 @@ export interface Config {
   baseUrl: string;
   /** Development: write messages here instead of sending them. */
   mailDir: string | undefined;
+  /** SPEC-0003 · calendar OAuth. All three absent means no integration. */
+  googleClientId: string | undefined;
+  googleClientSecret: string | undefined;
+  /** 32 random bytes, base64 — seals calendar credentials at rest (seal.ts). */
+  tokenKey: string | undefined;
 }
 
 export const CEILING_DEFAULTS = { owners: 5, bookings: 200 } as const;
@@ -72,6 +77,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     mailFrom: env['MAIL_FROM'] ?? 'Pumasi <no-reply@localhost>',
     baseUrl: (env['BASE_URL'] ?? `http://localhost:${int(env['PORT'], 8080)}`).replace(/\/$/, ''),
     mailDir: env['MAIL_DIR'],
+    googleClientId: env['GOOGLE_OAUTH_CLIENT_ID'],
+    googleClientSecret: env['GOOGLE_OAUTH_CLIENT_SECRET'],
+    tokenKey: env['TOKEN_KEY'],
   };
 }
 
