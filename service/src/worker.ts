@@ -5,7 +5,7 @@
  * (home, login, signup, embed.js) and decides which world a request belongs
  * to, using:
  *
- *   - the org tag carried inside public tokens (/b/<tag>.<token>, /s/, /p/,
+ *   - the org tag carried inside public tokens (/b/<tag>.<token>, /s/, /p/, /v/,
  *     /auth/, API keys pk_<tag>_…, SCIM tokens scim_<tag>_…),
  *   - the pumasi_org cookie for /app,
  *   - the sealed OAuth state's tag for callbacks,
@@ -63,6 +63,7 @@ import schema010 from '../migrations-sqlite/010_limits.sql';
 // @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema011 from '../migrations-sqlite/011_recurrence.sql';
 import schema012 from '../migrations-sqlite/012_blocked_sources.sql';
+import schema013 from '../migrations-sqlite/013_email_verification.sql';
 
 /** Mirrors server.ts: a form here is a name, an address and two timestamps. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -196,6 +197,7 @@ export class PumasiService extends DurableObject {
           { name: '010_limits.sql', sql: schema010 as string },
           { name: '011_recurrence.sql', sql: schema011 as string },
           { name: '012_blocked_sources.sql', sql: schema012 as string },
+          { name: '013_email_verification.sql', sql: schema013 as string },
         ],
       }),
     );
@@ -580,7 +582,7 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
     }
 
     // ── tagged public tokens ───────────────────────────────────────────────
-    if (['b', 's', 'p', 'auth'].includes(seg[0] ?? '') && seg[1]) {
+    if (['b', 's', 'p', 'v', 'auth'].includes(seg[0] ?? '') && seg[1]) {
       const split = splitTagged(seg[1]!);
       if (!split) return htmlResponse(404, errorPage(404, 'This link is not valid.'));
       const rest = seg.slice(2).join('/');

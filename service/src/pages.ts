@@ -1384,6 +1384,13 @@ export function eventTypeEditor(
     placeholder="FREQ=WEEKLY;COUNT=4">
   <p class="notice">A booker may take the whole series in one go; it is booked
     all-or-nothing and cancels as one. Up to 12 occurrences.</p>
+  <label style="display:flex;gap:.5rem;align-items:center">
+    <input type="checkbox" name="require_email_verification" style="width:auto"
+      ${s.require_email_verification ? 'checked' : ''}>
+    Make bookers confirm their email address first</label>
+  <p class="notice">They get a link that confirms the booking. The time is not
+    held while they do, so it may go to someone else — holding it would let
+    anyone fill your calendar with addresses they do not own.</p>
   <label for="av">Availability schedule</label>
   <select id="av" name="availability_set_id">${setOptions}</select>
   <label for="gr">Start-time spacing (minutes)</label><input id="gr" name="granularity_minutes" type="number" min="1" value="${s.granularity_minutes}">

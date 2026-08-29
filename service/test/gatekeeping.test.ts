@@ -15,6 +15,7 @@ import { createPostgresDriver, type Database } from '../src/driver.ts';
 import { handle, type AppDeps } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import { RecordingMail, RetryingMail } from '../src/mail.ts';
+import { renderMessage } from '../src/mail-render.ts';
 
 const PORT = 55451;
 const NOW = '2026-06-01T08:00:00Z';
@@ -38,8 +39,8 @@ after(async () => { await db?.close(); await pg?.stop(); });
 beforeEach(async () => {
   await db.query(`TRUNCATE sign_in_tokens, sessions, invites, bookings, idempotency_keys,
     availability_rules, date_overrides, schedules, owners, availability_sets, set_rules,
-    set_overrides, contacts, contact_exclusions, booking_blocks, audit_events
-    RESTART IDENTITY CASCADE`);
+    set_overrides, contacts, contact_exclusions, booking_blocks, booking_intents,
+    audit_events RESTART IDENTITY CASCADE`);
   await db.query(`DELETE FROM rate_events`);
   recorder = new RecordingMail();
   deps = {
@@ -155,6 +156,150 @@ test('a block belongs to one owner, not to the service', async () => {
     form: { start: '2026-06-01T09:00:00Z', end: '2026-06-01T09:30:00Z',
             name: 'Ada', email: 'nuisance@spam.test' } });
   assert.equal(r.status, 200, 'one owner\'s block reached another owner\'s page');
+});
+
+// ── booking email verification ──────────────────────────────────────────────
+
+/** Turn verification on for the event type created by ownerWithEvent(). */
+async function requireVerification(cookie: string, id: string) {
+  await call('POST', `/app/event/${id}`, {
+    cookie, form: {
+      title: 'Chat', duration_minutes: '30', granularity_minutes: '30',
+      buffer_before_minutes: '0', buffer_after_minutes: '0',
+      minimum_notice_minutes: '0', maximum_horizon_days: '90',
+      max_bookings_per_day: '', location_kind: 'custom', location_value: '',
+      available_from: '', available_until: '', require_email_verification: 'on',
+    } });
+}
+
+/** The /v/<token> link out of the most recent verification mail. */
+function verifyLink(): string {
+  const m = [...recorder.sent].reverse().find((x) => x.kind === 'verify');
+  assert.ok(m, 'no verification mail was sent');
+  return `/v/${m.token}`;
+}
+
+test('an unverified booking makes no meeting, and holds no time', async () => {
+  const { cookie, id } = await ownerWithEvent();
+  await requireVerification(cookie, id);
+
+  const r = await book('ada@example.com');
+  assert.equal(r.status, 200);
+  assert.match(r.body, /Check your email/i);
+
+  const made = await db.query(`SELECT count(*)::int AS c FROM bookings`);
+  assert.equal(Number(made.rows[0]!['c']), 0, 'an unproven address got a booking');
+
+  // The point of not holding it: someone else can still take the time.
+  const other = await call('POST', '/chat/book', {
+    form: { start: '2026-06-01T09:00:00Z', end: '2026-06-01T09:30:00Z',
+            name: 'Bo', email: 'bo@example.com' } });
+  assert.equal(other.status, 200);
+});
+
+test('the verification mail does not claim a meeting exists', async () => {
+  const { cookie, id } = await ownerWithEvent();
+  await requireVerification(cookie, id);
+  await book('ada@example.com');
+  const m = [...recorder.sent].reverse().find((x) => x.kind === 'verify')!;
+  assert.equal(m.to, 'ada@example.com');
+  // Someone whose address a stranger typed must not read this as an appointment,
+  // so the assertion is on what actually reaches them, not on the message object.
+  const out = renderMessage(m, 'https://booking.test');
+  assert.match(out.subject, /confirm/i);
+  assert.match(out.text, /Nothing is booked yet/i);
+  assert.ok(!/is confirmed/i.test(out.text), 'the mail told them it was booked');
+});
+
+test('following the link books it, once', async () => {
+  const { cookie, id } = await ownerWithEvent();
+  await requireVerification(cookie, id);
+  await book('ada@example.com');
+
+  const link = verifyLink();
+  const ok = await call('GET', link);
+  assert.equal(ok.status, 200);
+  const rows = await db.query(
+    `SELECT booker_email FROM bookings WHERE status = 'confirmed'`);
+  assert.equal(rows.rows.length, 1);
+  assert.equal(rows.rows[0]!['booker_email'], 'ada@example.com');
+
+  // A second use of the same link is refused, and books nothing further.
+  const again = await call('GET', link);
+  assert.equal(again.status, 404);
+  const after = await db.query(`SELECT count(*)::int AS c FROM bookings WHERE status = 'confirmed'`);
+  assert.equal(Number(after.rows[0]!['c']), 1);
+});
+
+test('an expired link is refused, and looks like any other dead link', async () => {
+  const { cookie, id } = await ownerWithEvent();
+  await requireVerification(cookie, id);
+  await book('ada@example.com');
+  const link = verifyLink();
+
+  deps.now = () => '2026-06-01T08:31:00Z'; // 31 minutes later; the TTL is 30
+  const late = await call('GET', link);
+  assert.equal(late.status, 404);
+
+  // A token that never existed answers identically, so guessing learns nothing.
+  const bogus = await call('GET', '/v/00000000000000000000000000000000');
+  assert.equal(bogus.status, late.status);
+  assert.equal(bogus.body, late.body);
+});
+
+test('losing the time while confirming is refused, not double-booked', async () => {
+  const { cookie, id } = await ownerWithEvent();
+  await requireVerification(cookie, id);
+  await book('ada@example.com');
+  const link = verifyLink();
+
+  // Someone takes the time before Ada gets to her mail. Written straight to
+  // the table because every route to this event type now goes through
+  // verification too — the competitor has to be an already-confirmed booking.
+  const owner = await db.query(`SELECT owner_id FROM owners`);
+  await db.query(
+    `INSERT INTO bookings (booking_id, owner_id, starts_at, ends_at, status, booker_email)
+     VALUES ('taken', $1, '2026-06-01T09:00:00Z', '2026-06-01T09:30:00Z', 'confirmed', 'bo@example.com')`,
+    [String(owner.rows[0]!['owner_id'])]);
+
+  const late = await call('GET', link);
+  assert.equal(late.status, 409);
+  const rows = await db.query(
+    `SELECT booker_email FROM bookings WHERE status = 'confirmed'`);
+  assert.equal(rows.rows.length, 1, 'the time was booked twice');
+  assert.equal(rows.rows[0]!['booker_email'], 'bo@example.com');
+});
+
+test('verification is off unless the owner asks for it', async () => {
+  await ownerWithEvent();
+  const r = await book('ada@example.com');
+  assert.equal(r.status, 200);
+  const rows = await db.query(`SELECT count(*)::int AS c FROM bookings WHERE status = 'confirmed'`);
+  assert.equal(Number(rows.rows[0]!['c']), 1, 'an ordinary booking was made to verify');
+});
+
+test('a blocked address is refused before it can be mailed anything', async () => {
+  const { cookie, id } = await ownerWithEvent();
+  await requireVerification(cookie, id);
+  await call('POST', '/app/contacts/blocks', { cookie, form: { pattern: 'nuisance@spam.test' } });
+
+  const r = await book('nuisance@spam.test');
+  assert.equal(r.status, 403);
+  // Otherwise the block becomes a way to send mail to an arbitrary address.
+  assert.equal(recorder.sent.filter((m) => m.kind === 'verify').length, 0);
+});
+
+test('unredeemed intents go when the account goes', async () => {
+  const { cookie, id } = await ownerWithEvent();
+  await requireVerification(cookie, id);
+  await book('ada@example.com');
+  const held = await db.query(`SELECT count(*)::int AS c FROM booking_intents`);
+  assert.equal(Number(held.rows[0]!['c']), 1);
+
+  const gone = await call('POST', '/app/delete', { cookie, form: { confirm: 'yes' } });
+  assert.ok(gone.status < 400);
+  const left = await db.query(`SELECT count(*)::int AS c FROM booking_intents`);
+  assert.equal(Number(left.rows[0]!['c']), 0, 'a deleted account left a booker\'s address behind');
 });
 
 test('blocks are audited, and go when the account goes', async () => {

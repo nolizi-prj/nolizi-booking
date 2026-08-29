@@ -7,7 +7,7 @@
  */
 
 export interface MailMessage {
-  kind: 'confirmed' | 'cancelled' | 'rescheduled' | 'signin' | 'custom';
+  kind: 'confirmed' | 'cancelled' | 'rescheduled' | 'signin' | 'verify' | 'custom';
   /** An address, or the literal 'owner' meaning the schedule's owner. */
   to: string;
   bookingId: string;

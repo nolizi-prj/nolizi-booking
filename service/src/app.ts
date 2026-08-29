@@ -132,6 +132,14 @@ export interface DirectoryPort {
   mintInvite(kind: 'platform' | 'org'): Promise<string>;
 }
 
+/**
+ * How long a booking-confirmation link lives. Long enough to walk to another
+ * device for the mail, short enough that a link left in an inbox is not a
+ * standing right to book. The time is not held during it, so a longer window
+ * would only widen the gap between confirming and finding the slot gone.
+ */
+const VERIFY_TTL_MINUTES = 30;
+
 /** Sharding · public tokens carry the org tag so the router needs no lookup. */
 const tagged = (deps: AppDeps, token: string): string =>
   deps.orgTag ? `${deps.orgTag}.${token}` : token;
@@ -1020,6 +1028,8 @@ async function handleRoutes(
         await tx.query(`DELETE FROM contacts WHERE owner_id = $1`, [owner.owner_id]);
         await tx.query(`DELETE FROM contact_exclusions WHERE owner_id = $1`, [owner.owner_id]);
         await tx.query(`DELETE FROM booking_blocks WHERE owner_id = $1`, [owner.owner_id]);
+        // Unredeemed intents hold a booker's name and address; they go too.
+        await tx.query(`DELETE FROM booking_intents WHERE owner_id = $1`, [owner.owner_id]);
         await tx.query(
           `DELETE FROM single_use_links WHERE schedule_id IN
              (SELECT schedule_id FROM schedules WHERE owner_id = $1)`, [owner.owner_id]);
@@ -2022,7 +2032,7 @@ async function handleRoutes(
                   available_from = $14, available_until = $15, color = $16,
                   max_bookings_per_week = $18, max_bookings_per_month = $19,
                   max_minutes_per_day = $20, max_minutes_per_week = $21,
-                  recurrence_rule = $22
+                  recurrence_rule = $22, require_email_verification = $23
             WHERE schedule_id = $1 AND owner_id = $17`,
           [sched.schedule_id,
            (f['title'] ?? sched.title).trim() || sched.title,
@@ -2045,7 +2055,8 @@ async function handleRoutes(
            // A rule we cannot parse is refused rather than stored: an event
            // type that promises a series it cannot expand is worse than none.
            (f['recurrence_rule'] ?? '').trim() && isValidRecurrence(f['recurrence_rule']!.trim())
-             ? f['recurrence_rule']!.trim() : null],
+             ? f['recurrence_rule']!.trim() : null,
+           f['require_email_verification'] === 'on' ? 1 : 0],
         );
 
         // P5 · scheduling kind and hosts. A chosen host must share an org with
@@ -2203,6 +2214,44 @@ async function handleRoutes(
       return bookHandler(deps, schedule, req, now, parts[1], `/s/${tagged(deps, parts[1])}/book`);
     }
     return html(404, errorPage(404, 'Nothing here.'));
+  }
+
+  // ── booking email verification: the proof, then the ordinary booking ────
+  //
+  // GET, because it is reached from a mail client. That is safe here in a way
+  // it would not be for a destructive action: using the link twice books
+  // nothing twice (the intent is consumed, and the idempotency key would catch
+  // it anyway), and a link-prefetching mail client only completes a booking
+  // its own user asked for.
+  if (parts[0] === 'v' && parts[1] && req.method === 'GET') {
+    if (await overLimit(sql, `verify:${req.ip}`, RATE_LIMITS.page_views_per_ip_per_minute, 60, now)) {
+      return html(429, errorPage(429, 'Too many requests. Try again shortly.'));
+    }
+    const found = await sql.query(
+      `SELECT schedule_id, payload, created_at, used_at FROM booking_intents WHERE token = $1`,
+      [parts[1]]);
+    const intent = found.rows[0];
+    // One answer for expired, used and never-existed alike: distinguishing
+    // them tells a guesser which tokens are real.
+    const dead = () => html(404, errorPage(404,
+      'This confirmation link has been used or has expired. Book the time again to get a new one.'));
+    if (!intent || intent['used_at'] !== null) return dead();
+    const age = Temporal.Instant.from(now).epochMilliseconds
+      - Temporal.Instant.from(String(intent['created_at'])).epochMilliseconds;
+    if (age > VERIFY_TTL_MINUTES * 60_000) return dead();
+
+    const schedule = await findScheduleById(sql, String(intent['schedule_id']));
+    if (!schedule) return dead();
+
+    // Consumed BEFORE the booking runs. If the booking fails — the time went,
+    // a limit was reached — the token is still spent, and the booker starts
+    // over from the page. Spending it afterwards would leave a live token on
+    // every failure, which is a replay window for anyone who saw the link.
+    await sql.query(`UPDATE booking_intents SET used_at = $2 WHERE token = $1`, [parts[1], now]);
+
+    const payload = JSON.parse(String(intent['payload'])) as Record<string, string>;
+    return bookHandler(deps, schedule, { ip: req.ip, form: payload }, now,
+      undefined, `/${schedule.slug}/book`, true);
   }
 
   // ── routing forms, public side (P6): the answer routes, and is gone ──────
@@ -2566,6 +2615,8 @@ async function bookHandler(
   singleUse?: string,
   /** Sharding · where the page's form posts back to on an error re-render. */
   action?: string,
+  /** The booker has proved this address, so do not ask again. */
+  verified?: boolean,
 ): Promise<Reply> {
   const { sql, config, mail } = deps;
   const form = req.form ?? {};
@@ -2597,6 +2648,34 @@ async function bookHandler(
   // why — that is the owner's business, not the caller's.
   if (await blockedSource(sql, schedule.owner_id, email)) {
     return html(403, errorPage(403, 'This booking page is not accepting bookings from that address.'));
+  }
+
+  // Email verification · prove the address before a meeting exists.
+  //
+  // The intent is stored INSTEAD of the booking. Holding the slot for an
+  // unproven address would turn this feature into a denial-of-service tool —
+  // one submission per slot with fabricated addresses fills a calendar without
+  // a single real person — and a control meant to raise the cost of abuse must
+  // not lower it. So the time stays open, and when the link is used the
+  // ordinary booking path runs with the same form: same availability check,
+  // same race, same 409 if the time went.
+  if (schedule.require_email_verification && !verified) {
+    const intentToken = newToken();
+    await sql.query(
+      `INSERT INTO booking_intents (token, schedule_id, owner_id, email, payload, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [intentToken, schedule.schedule_id, schedule.owner_id, email.toLowerCase(),
+       JSON.stringify(form), now],
+    );
+    await mail.send({
+      kind: 'verify', to: email, bookingId: 'pending', start,
+      token: tagged(deps, intentToken), timezone: bookerTz,
+      location: locationText(schedule),
+    });
+    // The same page whether or not the mail could be delivered: a different
+    // answer for a deliverable address is an address oracle.
+    return html(200, errorPage(200,
+      'Check your email. Nothing is booked yet — the message has a link that confirms it. The time is not held until you do.'));
   }
 
   // D1 · the ceiling is enforced, not intended.

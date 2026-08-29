@@ -57,6 +57,7 @@ export interface Schedule {
   scheduling_kind: 'solo' | 'round_robin' | 'collective';
   /** An RFC 5545 RRULE, when this event type may be booked as a series. */
   recurrence_rule: string | null;
+  require_email_verification: boolean;
   org_id: string | null;
 }
 
@@ -66,7 +67,8 @@ const SCHEDULE_COLS = `sc.schedule_id, sc.owner_id, sc.slug, sc.title, o.timezon
             sc.max_bookings_per_day, sc.max_bookings_per_week, sc.max_bookings_per_month,
             sc.max_minutes_per_day, sc.max_minutes_per_week, sc.availability_set_id, sc.description, sc.color,
             sc.location_kind, sc.location_value, sc.available_from, sc.available_until,
-            sc.scheduling_kind, sc.org_id, sc.recurrence_rule`;
+            sc.scheduling_kind, sc.org_id, sc.recurrence_rule,
+            sc.require_email_verification`;
 
 function toSchedule(r: Record<string, unknown>): Schedule {
   const opt = (v: unknown) => (v === null || v === undefined ? null : s(v));
@@ -98,6 +100,8 @@ function toSchedule(r: Record<string, unknown>): Schedule {
     scheduling_kind: (opt(r['scheduling_kind']) ?? 'solo') as Schedule['scheduling_kind'],
     org_id: opt(r['org_id']),
     recurrence_rule: opt(r['recurrence_rule']),
+    // INTEGER in both dialects, so Number() is the one correct read.
+    require_email_verification: Number(r['require_email_verification'] ?? 0) === 1,
   };
 }
 

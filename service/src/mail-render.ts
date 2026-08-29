@@ -70,6 +70,23 @@ export function renderMessage(m: MailMessage, baseUrl: string): RenderedMail {
           `It works once and expires in 20 minutes.\n\n` +
           `If you did not ask for it, nothing has happened and you can ignore this.\n`,
       };
+    case 'verify':
+      // No meeting exists yet, so this message must not describe one as
+      // booked. It states the time it WOULD take, and that nothing has
+      // happened until the link is used — otherwise someone whose address was
+      // typed by a stranger believes they have an appointment.
+      return {
+        subject: `Confirm your booking: ${when}`,
+        text:
+          `Someone asked to book this time with your email address:\n\n` +
+          `When: ${when}\n${where}\n` +
+          `Nothing is booked yet. To confirm it, use this link:\n` +
+          `  ${baseUrl.replace(/\/$/, '')}/v/${m.token ?? ''}\n\n` +
+          `It works once and expires in 30 minutes. The time is not held in\n` +
+          `the meantime, so someone else may take it first.\n\n` +
+          `If this was not you, ignore this message — no booking was made and\n` +
+          `none will be.\n`,
+      };
     case 'rescheduled':
       return {
         subject: `Moved: ${when}`,
