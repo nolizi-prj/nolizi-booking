@@ -7,6 +7,7 @@
  * interface (SPEC.md §1).
  */
 
+import { Temporal } from '@js-temporal/polyfill';
 import { computeSlots } from '@pumasi/booking-core';
 import type {
   ComputeSlotsResponse,
@@ -141,19 +142,19 @@ async function loadBusy(sql: SqlClient, ownerId: string): Promise<Interval[]> {
   return rows.map((r) => ({ start: iso(r['starts_at']), end: iso(r['ends_at']) }));
 }
 
-/** S9 · Counts per OWNER-local date. The owner's date, not UTC's, not the booker's. */
-async function loadDailyCounts(
-  sql: SqlClient,
-  ownerId: string,
-  timezone: string,
-): Promise<Record<string, number>> {
-  const { rows } = await sql.query(
-    `SELECT to_char(starts_at AT TIME ZONE $2, 'YYYY-MM-DD') AS d, count(*)::int AS c
-       FROM bookings WHERE owner_id = $1 AND status = 'confirmed'
-      GROUP BY 1`,
-    [ownerId, timezone],
-  );
-  return Object.fromEntries(rows.map((r) => [s(r['d']), n(r['c'])]));
+/**
+ * S9 · Counts per OWNER-local date. The owner's date, not UTC's, not the
+ * booker's. The UTC→local conversion happens here in Temporal rather than in
+ * SQL: `AT TIME ZONE` is PostgreSQL-only and broke the SQLite deployment the
+ * first time a page was viewed. One dialect-neutral query, one converter.
+ */
+function dailyCounts(busy: Interval[], timezone: string): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const b of busy) {
+    const d = Temporal.Instant.from(b.start).toZonedDateTimeISO(timezone).toPlainDate().toString();
+    counts[d] = (counts[d] ?? 0) + 1;
+  }
+  return counts;
 }
 
 export interface SlotQuery {
@@ -174,12 +175,14 @@ export async function availableSlots(
   /** SPEC-0003: calendar busy intervals arrive as plain intervals, nothing more. */
   externalBusy: Interval[] = [],
 ): Promise<ComputeSlotsResponse> {
-  const [availability, dateOverrides, busy, counts] = await Promise.all([
+  const [availability, dateOverrides, busy] = await Promise.all([
     loadRules(sql, schedule.schedule_id),
     loadOverrides(sql, schedule.schedule_id),
     loadBusy(sql, schedule.owner_id),
-    loadDailyCounts(sql, schedule.owner_id, schedule.owner_timezone),
   ]);
+  // Counted from the service's own bookings only — calendar busy (externalBusy)
+  // blocks time but is not a booking this service took (S9).
+  const counts = dailyCounts(busy, schedule.owner_timezone);
 
   return computeSlots({
     owner_timezone: schedule.owner_timezone,

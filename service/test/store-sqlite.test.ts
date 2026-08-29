@@ -175,3 +175,30 @@ test('unique email is case-insensitive at the query seam', async () => {
   ]);
   assert.equal(rows[0]?.['owner_id'], 'own-1');
 });
+
+test('S9 on SQLite: slot computation, daily counts included, runs on this dialect', async () => {
+  // The pg-only `AT TIME ZONE` in daily counting broke the deployed Worker on
+  // first page view; this pins slot computation to the SQLite dialect forever.
+  const { availableSlots, findScheduleBySlug } = await import('../src/schedules.ts');
+  await db.query(`DELETE FROM bookings`);
+  await db.query(`DELETE FROM owners`);
+  await db.query(`INSERT INTO owners (owner_id, email, display_name, timezone) VALUES ($1,$2,$3,$4)`,
+    ['own-s9', 's9@example.com', 'S9', 'America/Chicago']);
+  await db.query(
+    `INSERT INTO schedules (schedule_id, owner_id, slug, title, duration_minutes,
+       granularity_minutes, minimum_notice_minutes, maximum_horizon_days, max_bookings_per_day)
+     VALUES ('sch-s9','own-s9','s9','S9',30,30,0,14,2)`);
+  await db.query(
+    `INSERT INTO availability_rules (schedule_id, weekday, starts_local, ends_local)
+     VALUES ('sch-s9','MO','09:00','17:00')`);
+  await db.query(
+    `INSERT INTO bookings (booking_id, owner_id, starts_at, ends_at, status)
+     VALUES ('bk-s9','own-s9','2026-06-01T14:00:00Z','2026-06-01T14:30:00Z','confirmed')`);
+
+  const schedule = (await findScheduleBySlug(db, 's9'))!;
+  const res = await availableSlots(db, schedule, {
+    from: '2026-06-01T00:00:00Z', to: '2026-06-02T00:00:00Z', now: '2026-06-01T00:00:00Z',
+  });
+  assert.ok(res.slots.length > 0, 'slots computed on sqlite');
+  assert.ok(!res.slots.some((s) => s.start === '2026-06-01T14:00:00Z'), 'booked slot excluded');
+});
