@@ -13,8 +13,8 @@ import { FileMail, SmtpMail } from './mail-smtp.ts';
 import { isPermittedMailHost, mailHostOf, PERMITTED_MAIL_HOSTS } from './subprocessors.ts';
 import { seedDemo } from './seed.ts';
 import { bootstrapInvite } from './bootstrap.ts';
-import { checkTransitions, checkTzdata } from '@pumasi/scheduling-core';
-import { classifyWallTime } from '@pumasi/scheduling-core';
+import { checkTransitions, checkTzdata } from '@pumasi/booking-core';
+import { classifyWallTime } from '@pumasi/booking-core';
 
 export async function start(): Promise<{ close: () => Promise<void>; port: number }> {
   const config = loadConfig();

@@ -46,7 +46,7 @@ recipe for the Microsoft equivalent later:
    for now — **URIs are editable any time**, and the spec will fix the real
    path and production URL.
 3. **Create**, then copy the **Client ID** and **Client secret** into a file
-   that never enters git — e.g. `apps/service/.env` (already gitignored):
+   that never enters git — e.g. `service/.env` (already gitignored):
 
        GOOGLE_OAUTH_CLIENT_ID=...
        GOOGLE_OAUTH_CLIENT_SECRET=...
@@ -63,7 +63,7 @@ or Gmail/Drive). This answers the intent statement's open question 3. Until
 the app is published, the 100-test-user cap is the ceiling — which D-105's
 5-owner ceiling makes moot anyway.
 
-**Credentials** live in `apps/service/.env` (gitignored, verified untracked):
+**Credentials** live in `service/.env` (gitignored, verified untracked):
 `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
 `GOOGLE_OAUTH_REDIRECT_URI`. The redirect URI is `http://localhost:3000/oauth/google/callback`
 until the spec fixes the real path; URIs are editable on the client any time.

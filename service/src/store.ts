@@ -11,7 +11,7 @@
  * enforced by reading rows and deciding.
  */
 
-import type { BookingRecord, BookingStore } from '@pumasi/scheduling-core';
+import type { BookingRecord, BookingStore } from '@pumasi/booking-core';
 
 /** The minimum surface a driver must offer. `pg` and PGlite both satisfy it. */
 export interface SqlClient {

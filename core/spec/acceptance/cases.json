@@ -1,0 +1,1475 @@
+{
+  "suite": "SPEC-0001 scheduling-core acceptance",
+  "version": "1.1.0",
+  "frozen_at_approval": true,
+  "note": "Language-neutral conformance suite. Each implementation ships a thin runner that feeds `request` to compute_slots/book and compares against `expect`. Runners are ordinary risk; this file is the truth.",
+  "environment": {
+    "tzdata": "2026a",
+    "on_mismatch": "FAIL_LOUDLY",
+    "rationale": "SPEC.md section 6 / DEBT.md D-006. A skipped timezone test is worse than a failing one."
+  },
+  "defaults": {
+    "buffer_before_minutes": 0,
+    "buffer_after_minutes": 0,
+    "minimum_notice_minutes": 0,
+    "maximum_horizon_days": 3650,
+    "max_bookings_per_day": null,
+    "bookings_per_local_date": {},
+    "date_overrides": [],
+    "busy": []
+  },
+  "slot_cases": [
+    {
+      "id": "C-001",
+      "clause": "S5",
+      "description": "Baseline. Monday 09:00-11:00 EDT, hourly slots.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "MO",
+            "start": "09:00",
+            "end": "11:00"
+          }
+        ],
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2026-06-01T00:00:00Z",
+          "to": "2026-06-02T00:00:00Z"
+        },
+        "now": "2026-06-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [
+          {
+            "start": "2026-06-01T13:00:00Z",
+            "end": "2026-06-01T14:00:00Z"
+          },
+          {
+            "start": "2026-06-01T14:00:00Z",
+            "end": "2026-06-01T15:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-002",
+      "clause": "S5",
+      "description": "Granularity 30 < duration 60 produces OVERLAPPING candidates. The 14:30 candidate is dropped because it would spill past the window.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "MO",
+            "start": "09:00",
+            "end": "11:00"
+          }
+        ],
+        "duration_minutes": 60,
+        "granularity_minutes": 30,
+        "query": {
+          "from": "2026-06-01T00:00:00Z",
+          "to": "2026-06-02T00:00:00Z"
+        },
+        "now": "2026-06-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [
+          {
+            "start": "2026-06-01T13:00:00Z",
+            "end": "2026-06-01T14:00:00Z"
+          },
+          {
+            "start": "2026-06-01T13:30:00Z",
+            "end": "2026-06-01T14:30:00Z"
+          },
+          {
+            "start": "2026-06-01T14:00:00Z",
+            "end": "2026-06-01T15:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-003",
+      "clause": "S5",
+      "description": "Busy interval removes any candidate it intersects, even partially.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "MO",
+            "start": "09:00",
+            "end": "11:00"
+          }
+        ],
+        "busy": [
+          {
+            "start": "2026-06-01T13:30:00Z",
+            "end": "2026-06-01T14:00:00Z"
+          }
+        ],
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2026-06-01T00:00:00Z",
+          "to": "2026-06-02T00:00:00Z"
+        },
+        "now": "2026-06-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [
+          {
+            "start": "2026-06-01T14:00:00Z",
+            "end": "2026-06-01T15:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-004",
+      "clause": "S6",
+      "description": "Buffers expand the exclusion window against BUSY only. The 16:00 slot survives even though its trailing buffer runs past the end of the availability window.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "MO",
+            "start": "09:00",
+            "end": "13:00"
+          }
+        ],
+        "busy": [
+          {
+            "start": "2026-06-01T14:00:00Z",
+            "end": "2026-06-01T14:30:00Z"
+          }
+        ],
+        "buffer_before_minutes": 15,
+        "buffer_after_minutes": 15,
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2026-06-01T00:00:00Z",
+          "to": "2026-06-02T00:00:00Z"
+        },
+        "now": "2026-06-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [
+          {
+            "start": "2026-06-01T15:00:00Z",
+            "end": "2026-06-01T16:00:00Z"
+          },
+          {
+            "start": "2026-06-01T16:00:00Z",
+            "end": "2026-06-01T17:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-005",
+      "clause": "S7",
+      "description": "Minimum notice measured from the INJECTED clock, not the system clock.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "MO",
+            "start": "09:00",
+            "end": "12:00"
+          }
+        ],
+        "minimum_notice_minutes": 60,
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2026-06-01T00:00:00Z",
+          "to": "2026-06-02T00:00:00Z"
+        },
+        "now": "2026-06-01T13:30:00Z"
+      },
+      "expect": {
+        "slots": [
+          {
+            "start": "2026-06-01T15:00:00Z",
+            "end": "2026-06-01T16:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-006",
+      "clause": "S8",
+      "description": "Horizon is absolute (now + N*24h), not calendar-local. Tuesday's slot falls outside a 1-day horizon.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "MO",
+            "start": "09:00",
+            "end": "10:00"
+          },
+          {
+            "weekday": "TU",
+            "start": "09:00",
+            "end": "10:00"
+          }
+        ],
+        "maximum_horizon_days": 1,
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2026-06-01T00:00:00Z",
+          "to": "2026-06-08T00:00:00Z"
+        },
+        "now": "2026-06-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [
+          {
+            "start": "2026-06-01T13:00:00Z",
+            "end": "2026-06-01T14:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-007",
+      "clause": "S2",
+      "description": "SPRING FORWARD. 2026-03-08 America/New_York: local 02:00-03:00 does not exist. A 01:00-04:00 local window is TWO absolute hours, not three. Local slots are 01:00 EST and 03:00 EDT.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "SU",
+            "start": "01:00",
+            "end": "04:00"
+          }
+        ],
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2026-03-08T00:00:00Z",
+          "to": "2026-03-09T00:00:00Z"
+        },
+        "now": "2026-03-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [
+          {
+            "start": "2026-03-08T06:00:00Z",
+            "end": "2026-03-08T07:00:00Z"
+          },
+          {
+            "start": "2026-03-08T07:00:00Z",
+            "end": "2026-03-08T08:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-008",
+      "clause": "S3",
+      "description": "SPRING FORWARD, nonexistent start. Window 02:00-03:00 on 2026-03-08 begins at a local time that never occurs. Window is SKIPPED and a diagnostic is emitted. It is NOT silently shifted to 03:00.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "SU",
+            "start": "02:00",
+            "end": "03:00"
+          }
+        ],
+        "duration_minutes": 30,
+        "granularity_minutes": 30,
+        "query": {
+          "from": "2026-03-08T00:00:00Z",
+          "to": "2026-03-09T00:00:00Z"
+        },
+        "now": "2026-03-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [],
+        "diagnostics": [
+          {
+            "code": "NONEXISTENT_LOCAL_TIME",
+            "date": "2026-03-08"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-009",
+      "clause": "S4",
+      "description": "FALL BACK. 2026-11-01 America/New_York: local 01:00-02:00 occurs twice. A 01:00-03:00 local window is THREE absolute hours, not two. Both occurrences of the 01:00 hour are bookable.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "SU",
+            "start": "01:00",
+            "end": "03:00"
+          }
+        ],
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2026-11-01T00:00:00Z",
+          "to": "2026-11-02T00:00:00Z"
+        },
+        "now": "2026-10-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [
+          {
+            "start": "2026-11-01T05:00:00Z",
+            "end": "2026-11-01T06:00:00Z"
+          },
+          {
+            "start": "2026-11-01T06:00:00Z",
+            "end": "2026-11-01T07:00:00Z"
+          },
+          {
+            "start": "2026-11-01T07:00:00Z",
+            "end": "2026-11-01T08:00:00Z"
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "AMBIGUOUS_LOCAL_TIME",
+            "date": "2026-11-01"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-010",
+      "clause": "S11",
+      "description": "Date override with empty windows makes the date unavailable, overriding the weekly rule.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "MO",
+            "start": "09:00",
+            "end": "11:00"
+          }
+        ],
+        "date_overrides": [
+          {
+            "date": "2026-06-01",
+            "windows": []
+          }
+        ],
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2026-06-01T00:00:00Z",
+          "to": "2026-06-02T00:00:00Z"
+        },
+        "now": "2026-06-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": []
+      }
+    },
+    {
+      "id": "C-011",
+      "clause": "S11",
+      "description": "Date override REPLACES the weekly rule; it does not merge with it.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "MO",
+            "start": "09:00",
+            "end": "11:00"
+          }
+        ],
+        "date_overrides": [
+          {
+            "date": "2026-06-01",
+            "windows": [
+              {
+                "start": "14:00",
+                "end": "16:00"
+              }
+            ]
+          }
+        ],
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2026-06-01T00:00:00Z",
+          "to": "2026-06-02T00:00:00Z"
+        },
+        "now": "2026-06-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [
+          {
+            "start": "2026-06-01T18:00:00Z",
+            "end": "2026-06-01T19:00:00Z"
+          },
+          {
+            "start": "2026-06-01T19:00:00Z",
+            "end": "2026-06-01T20:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-012",
+      "clause": "S9",
+      "description": "Daily cap counted on the OWNER's local date.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "MO",
+            "start": "09:00",
+            "end": "11:00"
+          }
+        ],
+        "max_bookings_per_day": 2,
+        "bookings_per_local_date": {
+          "2026-06-01": 2
+        },
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2026-06-01T00:00:00Z",
+          "to": "2026-06-02T00:00:00Z"
+        },
+        "now": "2026-06-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": []
+      }
+    },
+    {
+      "id": "C-013",
+      "clause": "S10",
+      "description": "Query window clamps on BOTH ends. A slot starting before `from` or ending after `to` is excluded.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "MO",
+            "start": "09:00",
+            "end": "12:00"
+          }
+        ],
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2026-06-01T13:30:00Z",
+          "to": "2026-06-01T15:30:00Z"
+        },
+        "now": "2026-06-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [
+          {
+            "start": "2026-06-01T14:00:00Z",
+            "end": "2026-06-01T15:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-014",
+      "clause": "S5",
+      "description": "Zero-length busy interval is ignored entirely.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "MO",
+            "start": "09:00",
+            "end": "10:00"
+          }
+        ],
+        "busy": [
+          {
+            "start": "2026-06-01T13:30:00Z",
+            "end": "2026-06-01T13:30:00Z"
+          }
+        ],
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2026-06-01T00:00:00Z",
+          "to": "2026-06-02T00:00:00Z"
+        },
+        "now": "2026-06-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [
+          {
+            "start": "2026-06-01T13:00:00Z",
+            "end": "2026-06-01T14:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-015",
+      "clause": "S5",
+      "description": "Overlapping busy intervals behave as their union.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "MO",
+            "start": "09:00",
+            "end": "13:00"
+          }
+        ],
+        "busy": [
+          {
+            "start": "2026-06-01T13:30:00Z",
+            "end": "2026-06-01T14:30:00Z"
+          },
+          {
+            "start": "2026-06-01T14:00:00Z",
+            "end": "2026-06-01T15:00:00Z"
+          }
+        ],
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2026-06-01T00:00:00Z",
+          "to": "2026-06-02T00:00:00Z"
+        },
+        "now": "2026-06-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [
+          {
+            "start": "2026-06-01T15:00:00Z",
+            "end": "2026-06-01T16:00:00Z"
+          },
+          {
+            "start": "2026-06-01T16:00:00Z",
+            "end": "2026-06-01T17:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-016",
+      "clause": "S5",
+      "description": "A slot may end exactly at the window end, but never after it.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "MO",
+            "start": "09:00",
+            "end": "10:30"
+          }
+        ],
+        "duration_minutes": 60,
+        "granularity_minutes": 30,
+        "query": {
+          "from": "2026-06-01T00:00:00Z",
+          "to": "2026-06-02T00:00:00Z"
+        },
+        "now": "2026-06-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [
+          {
+            "start": "2026-06-01T13:00:00Z",
+            "end": "2026-06-01T14:00:00Z"
+          },
+          {
+            "start": "2026-06-01T13:30:00Z",
+            "end": "2026-06-01T14:30:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-017",
+      "clause": "S1",
+      "description": "SOUTHERN HEMISPHERE + DATE BOUNDARY. Sydney AEST (UTC+10) in June. Monday 09:00 local is the PREVIOUS day in UTC. An implementation that groups by UTC date loses these slots.",
+      "request": {
+        "owner_timezone": "Australia/Sydney",
+        "availability": [
+          {
+            "weekday": "MO",
+            "start": "09:00",
+            "end": "11:00"
+          }
+        ],
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2026-06-14T00:00:00Z",
+          "to": "2026-06-16T00:00:00Z"
+        },
+        "now": "2026-06-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [
+          {
+            "start": "2026-06-14T23:00:00Z",
+            "end": "2026-06-15T00:00:00Z"
+          },
+          {
+            "start": "2026-06-15T00:00:00Z",
+            "end": "2026-06-15T01:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-018",
+      "clause": "S1",
+      "description": "EXTREME OFFSET. Kiritimati is UTC+14. Monday 09:00 local is 19:00Z on the previous day.",
+      "request": {
+        "owner_timezone": "Pacific/Kiritimati",
+        "availability": [
+          {
+            "weekday": "MO",
+            "start": "09:00",
+            "end": "10:00"
+          }
+        ],
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2026-06-14T00:00:00Z",
+          "to": "2026-06-16T00:00:00Z"
+        },
+        "now": "2026-06-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [
+          {
+            "start": "2026-06-14T19:00:00Z",
+            "end": "2026-06-14T20:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-019",
+      "clause": "S1",
+      "description": "LEAP DAY. 2028-02-29 is a Tuesday, EST (UTC-5).",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "TU",
+            "start": "09:00",
+            "end": "10:00"
+          }
+        ],
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2028-02-29T00:00:00Z",
+          "to": "2028-03-01T00:00:00Z"
+        },
+        "now": "2028-02-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [
+          {
+            "start": "2028-02-29T14:00:00Z",
+            "end": "2028-02-29T15:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-020",
+      "clause": "S14",
+      "description": "Query span exceeds max_query_span_days. No slots are returned and QUERY_RANGE_TOO_LARGE is emitted. The range is NOT silently clamped to the permitted span.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "MO",
+            "start": "09:00",
+            "end": "11:00"
+          }
+        ],
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "max_query_span_days": 31,
+        "query": {
+          "from": "2026-06-01T00:00:00Z",
+          "to": "2026-07-15T00:00:00Z"
+        },
+        "now": "2026-05-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [],
+        "diagnostics": [
+          {
+            "code": "QUERY_RANGE_TOO_LARGE"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-021",
+      "clause": "S12",
+      "description": "Determinism. The same request is evaluated twice in the same process and again in a fresh one; all three responses must be BYTE-identical, including diagnostic order. Catches ambient clock reads, map-iteration order, and locale-dependent formatting.",
+      "repeat": {
+        "in_process": 2,
+        "fresh_process": 1,
+        "compare": "bytes"
+      },
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "SU",
+            "start": "01:00",
+            "end": "03:00"
+          }
+        ],
+        "date_overrides": [
+          {
+            "date": "2026-03-08",
+            "windows": [
+              {
+                "start": "02:00",
+                "end": "03:00"
+              }
+            ]
+          }
+        ],
+        "duration_minutes": 30,
+        "granularity_minutes": 30,
+        "query": {
+          "from": "2026-03-01T00:00:00Z",
+          "to": "2026-03-15T00:00:00Z"
+        },
+        "now": "2026-02-01T00:00:00Z"
+      },
+      "expect": {
+        "byte_identical_across_runs": true
+      }
+    },
+    {
+      "id": "C-022",
+      "clause": "S3",
+      "description": "A zone that skips an ENTIRE CALENDAR DAY. Pacific/Apia had no 2011-12-30 when it crossed the date line. Comparing only the clock face reads this as an ambiguous hour, because the same wall time exists on the adjacent date, and offers slots that never occurred. Added 2026-08-02. Found by adversarial code review of the first implementation, not by this suite — the suite is a floor and this is what it had missed.",
+      "request": {
+        "owner_timezone": "Pacific/Apia",
+        "availability": [
+          {
+            "weekday": "FR",
+            "start": "09:00",
+            "end": "17:00"
+          }
+        ],
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2011-12-28T00:00:00Z",
+          "to": "2012-01-01T00:00:00Z"
+        },
+        "now": "2011-12-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [],
+        "diagnostics": [
+          {
+            "code": "NONEXISTENT_LOCAL_TIME"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C-023",
+      "clause": "S1",
+      "description": "An overnight window whose END is skipped by the spring-forward transition. 23:00-02:30 on 2026-03-07 in America/New_York: 02:30 never occurs on the 8th. The window is malformed and skipped with a diagnostic, NOT silently extended to the 9th and NOT returned as an empty window indistinguishable from a fully booked day. Added 2026-08-02. Found by adversarial code review of the first implementation, not by this suite — the suite is a floor and this is what it had missed.",
+      "request": {
+        "owner_timezone": "America/New_York",
+        "availability": [
+          {
+            "weekday": "SA",
+            "start": "23:00",
+            "end": "02:30"
+          }
+        ],
+        "duration_minutes": 60,
+        "granularity_minutes": 60,
+        "query": {
+          "from": "2026-03-07T00:00:00Z",
+          "to": "2026-03-10T00:00:00Z"
+        },
+        "now": "2026-03-01T00:00:00Z"
+      },
+      "expect": {
+        "slots": [],
+        "diagnostics": [
+          {
+            "code": "NONEXISTENT_LOCAL_TIME"
+          }
+        ]
+      }
+    }
+  ],
+  "booking_cases": [
+    {
+      "id": "B-001",
+      "clause": "B1",
+      "description": "Idempotency. Replaying the same key returns the original booking_id and creates no second booking. Corrected 2026-08-02: `now` was absent, which SPEC.md §5.1 requires on every verb.",
+      "steps": [
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-01T13:00:00Z",
+            "end": "2026-06-01T14:00:00Z",
+            "idempotency_key": "k1",
+            "now": "2026-06-01T12:00:00Z"
+          },
+          "expect": {
+            "status": "confirmed"
+          },
+          "capture": "id1"
+        },
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-01T13:00:00Z",
+            "end": "2026-06-01T14:00:00Z",
+            "idempotency_key": "k1",
+            "now": "2026-06-01T12:00:00Z"
+          },
+          "expect": {
+            "status": "confirmed",
+            "booking_id": "$id1"
+          }
+        },
+        {
+          "assert": "confirmed_booking_count == 1"
+        }
+      ]
+    },
+    {
+      "id": "B-002",
+      "clause": "B2",
+      "description": "Exclusivity under concurrency. N concurrent requests with distinct keys for intersecting slots: exactly one confirmed. Run >= 1000 iterations (SPEC.md section 8 item 5).",
+      "concurrency": {
+        "workers": 16,
+        "iterations": 1000
+      },
+      "steps": [
+        {
+          "call": "book_concurrent",
+          "args": {
+            "slots": [
+              {
+                "start": "2026-06-01T13:00:00Z",
+                "end": "2026-06-01T14:00:00Z"
+              },
+              {
+                "start": "2026-06-01T13:30:00Z",
+                "end": "2026-06-01T14:30:00Z"
+              }
+            ],
+            "distinct_keys": true
+          },
+          "expect": {
+            "confirmed_count": 1,
+            "conflict_count": 1
+          }
+        },
+        {
+          "assert": "no two confirmed bookings intersect"
+        }
+      ],
+      "delegated_to": "SPEC-0002 acceptance: P-001 (exclusivity), P-005 (reschedule atomicity), P-009 (concurrent reschedule)",
+      "delegation_reason": "SPEC-0001 is storage-agnostic by contract (§1). Exclusivity under real concurrency is a property of the store, not of these semantics — an in-process check is a time-of-check-to-time-of-use race. The clause stands; its proof lives where a store exists."
+    },
+    {
+      "id": "B-003",
+      "clause": "B3",
+      "description": "Revalidation at commit. A slot valid at compute time but now inside the minimum-notice window returns `expired`, not `confirmed`, and leaves no state. Corrected 2026-08-02: the request lacked availability, duration, granularity and query, so it was not runnable. Corrected 2026-08-02: the book step omitted minimum_notice_minutes, so there was no constraint to revalidate and the case could not distinguish a correct implementation from one that never revalidates at all.",
+      "steps": [
+        {
+          "call": "compute_slots",
+          "args": {
+            "owner_timezone": "America/New_York",
+            "availability": [
+              {
+                "weekday": "MO",
+                "start": "09:00",
+                "end": "11:00"
+              }
+            ],
+            "duration_minutes": 60,
+            "granularity_minutes": 60,
+            "minimum_notice_minutes": 60,
+            "query": {
+              "from": "2026-06-01T00:00:00Z",
+              "to": "2026-06-02T00:00:00Z"
+            },
+            "now": "2026-06-01T11:00:00Z"
+          },
+          "capture": "slot"
+        },
+        {
+          "call": "book",
+          "args": {
+            "slot": "$slot",
+            "idempotency_key": "k2",
+            "now": "2026-06-01T12:45:00Z",
+            "minimum_notice_minutes": 60
+          },
+          "expect": {
+            "status": "expired"
+          }
+        },
+        {
+          "assert": "confirmed_booking_count == 0"
+        }
+      ]
+    },
+    {
+      "id": "B-004",
+      "clause": "B4",
+      "description": "No partial state. A non-confirmed result leaves no trace that affects any later call. An `expired` book is followed by a successful book of the same slot under a different key. Slot and keys are distinct from B-001..B-003 to avoid cross-case interference; the `confirmed_booking_count` assertion assumes per-case isolation, as B-003's does.",
+      "steps": [
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-02T15:00:00Z",
+            "end": "2026-06-02T16:00:00Z",
+            "idempotency_key": "k5",
+            "now": "2026-06-02T14:45:00Z",
+            "minimum_notice_minutes": 60
+          },
+          "expect": {
+            "status": "expired"
+          }
+        },
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-02T15:00:00Z",
+            "end": "2026-06-02T16:00:00Z",
+            "idempotency_key": "k6",
+            "now": "2026-06-02T13:00:00Z",
+            "minimum_notice_minutes": 60
+          },
+          "expect": {
+            "status": "confirmed"
+          }
+        },
+        {
+          "assert": "confirmed_booking_count == 1"
+        }
+      ]
+    },
+    {
+      "id": "B-005",
+      "clause": "B5",
+      "description": "Cancellation releases the interval. A cancelled booking no longer constrains B2; the same interval is immediately bookable by a different key.",
+      "steps": [
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-03T10:00:00Z",
+            "end": "2026-06-03T11:00:00Z",
+            "idempotency_key": "k7",
+            "now": "2026-06-03T08:00:00Z"
+          },
+          "expect": {
+            "status": "confirmed"
+          },
+          "capture": "id5"
+        },
+        {
+          "call": "cancel",
+          "args": {
+            "booking_id": "$id5",
+            "idempotency_key": "k8",
+            "now": "2026-06-03T08:30:00Z"
+          },
+          "expect": {
+            "status": "cancelled"
+          }
+        },
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-03T10:00:00Z",
+            "end": "2026-06-03T11:00:00Z",
+            "idempotency_key": "k9",
+            "now": "2026-06-03T08:31:00Z"
+          },
+          "expect": {
+            "status": "confirmed"
+          }
+        },
+        {
+          "assert": "confirmed_booking_count == 1"
+        }
+      ]
+    },
+    {
+      "id": "B-006",
+      "clause": "B5",
+      "description": "Cancel is idempotent and total. Re-cancelling returns `cancelled`, not an error. Cancelling an unknown booking_id returns `not_found` and creates nothing.",
+      "steps": [
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-03T13:00:00Z",
+            "end": "2026-06-03T14:00:00Z",
+            "idempotency_key": "k10",
+            "now": "2026-06-03T08:00:00Z"
+          },
+          "expect": {
+            "status": "confirmed"
+          },
+          "capture": "id6"
+        },
+        {
+          "call": "cancel",
+          "args": {
+            "booking_id": "$id6",
+            "idempotency_key": "k11",
+            "now": "2026-06-03T09:00:00Z"
+          },
+          "expect": {
+            "status": "cancelled"
+          }
+        },
+        {
+          "call": "cancel",
+          "args": {
+            "booking_id": "$id6",
+            "idempotency_key": "k11",
+            "now": "2026-06-03T09:05:00Z"
+          },
+          "expect": {
+            "status": "cancelled"
+          }
+        },
+        {
+          "call": "cancel",
+          "args": {
+            "booking_id": "does-not-exist",
+            "idempotency_key": "k11b",
+            "now": "2026-06-03T09:06:00Z"
+          },
+          "expect": {
+            "status": "not_found"
+          }
+        },
+        {
+          "assert": "confirmed_booking_count == 0"
+        }
+      ]
+    },
+    {
+      "id": "B-007",
+      "clause": "B6",
+      "description": "Reschedule is atomic and preserves booking_id. The old interval is released, the new one held, and the booking is never in both or neither.",
+      "steps": [
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-04T09:00:00Z",
+            "end": "2026-06-04T10:00:00Z",
+            "idempotency_key": "k12",
+            "now": "2026-06-04T07:00:00Z"
+          },
+          "expect": {
+            "status": "confirmed"
+          },
+          "capture": "id7"
+        },
+        {
+          "call": "reschedule",
+          "args": {
+            "booking_id": "$id7",
+            "new_start": "2026-06-04T14:00:00Z",
+            "new_end": "2026-06-04T15:00:00Z",
+            "idempotency_key": "k13",
+            "now": "2026-06-04T07:30:00Z",
+            "minimum_reschedule_notice_minutes": 60
+          },
+          "expect": {
+            "status": "confirmed",
+            "booking_id": "$id7"
+          }
+        },
+        {
+          "assert": "confirmed_booking_count == 1"
+        },
+        {
+          "assert": "no confirmed booking intersects 2026-06-04T09:00:00Z/2026-06-04T10:00:00Z"
+        },
+        {
+          "assert": "a confirmed booking covers 2026-06-04T14:00:00Z/2026-06-04T15:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "B-008",
+      "clause": "B6",
+      "description": "A losing reschedule returns `conflict` and leaves the original booking confirmed, unmoved and uncancelled. The target is pre-occupied so the loss is DETERMINISTIC — the loser path is exercised on every run, not only when a race happens to go one way.",
+      "steps": [
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-05T09:00:00Z",
+            "end": "2026-06-05T10:00:00Z",
+            "idempotency_key": "k14",
+            "now": "2026-06-05T07:00:00Z"
+          },
+          "expect": {
+            "status": "confirmed"
+          },
+          "capture": "id8"
+        },
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-05T14:00:00Z",
+            "end": "2026-06-05T15:00:00Z",
+            "idempotency_key": "k15",
+            "now": "2026-06-05T07:01:00Z"
+          },
+          "expect": {
+            "status": "confirmed"
+          }
+        },
+        {
+          "call": "reschedule",
+          "args": {
+            "booking_id": "$id8",
+            "new_start": "2026-06-05T14:00:00Z",
+            "new_end": "2026-06-05T15:00:00Z",
+            "idempotency_key": "k18",
+            "now": "2026-06-05T07:02:00Z",
+            "minimum_reschedule_notice_minutes": 60
+          },
+          "expect": {
+            "status": "conflict"
+          }
+        },
+        {
+          "assert": "confirmed_booking_count == 2"
+        },
+        {
+          "assert": "$id8 is confirmed and covers 2026-06-05T09:00:00Z/2026-06-05T10:00:00Z"
+        },
+        {
+          "assert": "$id8 is not cancelled"
+        }
+      ]
+    },
+    {
+      "id": "B-009",
+      "clause": "B7",
+      "description": "Reschedule notice is measured from the booking's CURRENT start, not the proposed one. A move requested inside the notice window fails even though the target is far in the future.",
+      "steps": [
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-06T12:00:00Z",
+            "end": "2026-06-06T13:00:00Z",
+            "idempotency_key": "k16",
+            "now": "2026-06-06T06:00:00Z"
+          },
+          "expect": {
+            "status": "confirmed"
+          },
+          "capture": "id9"
+        },
+        {
+          "call": "reschedule",
+          "args": {
+            "booking_id": "$id9",
+            "new_start": "2026-06-08T12:00:00Z",
+            "new_end": "2026-06-08T13:00:00Z",
+            "idempotency_key": "k17",
+            "now": "2026-06-06T11:30:00Z",
+            "minimum_reschedule_notice_minutes": 60
+          },
+          "expect": {
+            "status": "expired"
+          }
+        },
+        {
+          "assert": "confirmed_booking_count == 1"
+        },
+        {
+          "assert": "a confirmed booking covers 2026-06-06T12:00:00Z/2026-06-06T13:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "B-010",
+      "clause": "B6",
+      "description": "Reschedule atomicity under genuine contention. A reschedule into an interval and a book of that same interval run concurrently. Assertions are unconditional and hold whichever side wins. Run >= 1000 iterations (SPEC.md section 8 item 5).",
+      "concurrency": {
+        "workers": 16,
+        "iterations": 1000
+      },
+      "steps": [
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-07T09:00:00Z",
+            "end": "2026-06-07T10:00:00Z",
+            "idempotency_key": "k19",
+            "now": "2026-06-07T07:00:00Z"
+          },
+          "expect": {
+            "status": "confirmed"
+          },
+          "capture": "id10"
+        },
+        {
+          "call": "concurrent_ops",
+          "args": {
+            "distinct_keys": true,
+            "operations": [
+              {
+                "call": "reschedule",
+                "args": {
+                  "booking_id": "$id10",
+                  "new_start": "2026-06-07T14:00:00Z",
+                  "new_end": "2026-06-07T15:00:00Z",
+                  "minimum_reschedule_notice_minutes": 60
+                }
+              },
+              {
+                "call": "book",
+                "args": {
+                  "start": "2026-06-07T14:00:00Z",
+                  "end": "2026-06-07T15:00:00Z"
+                }
+              }
+            ]
+          },
+          "expect": {
+            "confirmed_count": 1,
+            "conflict_count": 1
+          }
+        },
+        {
+          "assert": "exactly one confirmed booking covers 2026-06-07T14:00:00Z/2026-06-07T15:00:00Z"
+        },
+        {
+          "assert": "$id10 is CONFIRMED, and covers exactly one of 2026-06-07T09:00:00Z/2026-06-07T10:00:00Z or 2026-06-07T14:00:00Z/2026-06-07T15:00:00Z — never both, never neither, and never a non-confirmed status"
+        },
+        {
+          "assert": "$id10 is never cancelled"
+        }
+      ],
+      "delegated_to": "SPEC-0002 acceptance: P-001 (exclusivity), P-005 (reschedule atomicity), P-009 (concurrent reschedule)",
+      "delegation_reason": "SPEC-0001 is storage-agnostic by contract (§1). Exclusivity under real concurrency is a property of the store, not of these semantics — an in-process check is a time-of-check-to-time-of-use race. The clause stands; its proof lives where a store exists."
+    },
+    {
+      "id": "B-011",
+      "clause": "B5.1",
+      "description": "Replay after cancellation returns the booking's CURRENT state. The key is replayed after the interval has been taken by a third party; the replay must return `cancelled`, must not resurrect the booking, and must not conflict with the new holder.",
+      "steps": [
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-09T10:00:00Z",
+            "end": "2026-06-09T11:00:00Z",
+            "idempotency_key": "k20",
+            "now": "2026-06-09T08:00:00Z"
+          },
+          "expect": {
+            "status": "confirmed"
+          },
+          "capture": "id11"
+        },
+        {
+          "call": "cancel",
+          "args": {
+            "booking_id": "$id11",
+            "idempotency_key": "k21",
+            "now": "2026-06-09T08:10:00Z"
+          },
+          "expect": {
+            "status": "cancelled"
+          }
+        },
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-09T10:00:00Z",
+            "end": "2026-06-09T11:00:00Z",
+            "idempotency_key": "k22",
+            "now": "2026-06-09T08:20:00Z"
+          },
+          "expect": {
+            "status": "confirmed"
+          },
+          "capture": "id11b"
+        },
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-09T10:00:00Z",
+            "end": "2026-06-09T11:00:00Z",
+            "idempotency_key": "k20",
+            "now": "2026-06-09T08:30:00Z"
+          },
+          "expect": {
+            "status": "cancelled",
+            "booking_id": "$id11"
+          }
+        },
+        {
+          "assert": "confirmed_booking_count == 1"
+        },
+        {
+          "assert": "$id11b is confirmed and covers 2026-06-09T10:00:00Z/2026-06-09T11:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "B-012",
+      "clause": "B5.1",
+      "description": "Replay after reschedule returns the booking at its CURRENT interval and does not re-claim the vacated one. The vacated interval is booked by a third party first, so a replay that re-claimed it would surface as a conflict or a double-hold.",
+      "steps": [
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-10T09:00:00Z",
+            "end": "2026-06-10T10:00:00Z",
+            "idempotency_key": "k23",
+            "now": "2026-06-10T07:00:00Z"
+          },
+          "expect": {
+            "status": "confirmed"
+          },
+          "capture": "id12"
+        },
+        {
+          "call": "reschedule",
+          "args": {
+            "booking_id": "$id12",
+            "new_start": "2026-06-10T15:00:00Z",
+            "new_end": "2026-06-10T16:00:00Z",
+            "idempotency_key": "k24",
+            "now": "2026-06-10T07:10:00Z",
+            "minimum_reschedule_notice_minutes": 60
+          },
+          "expect": {
+            "status": "confirmed",
+            "booking_id": "$id12"
+          }
+        },
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-10T09:00:00Z",
+            "end": "2026-06-10T10:00:00Z",
+            "idempotency_key": "k25",
+            "now": "2026-06-10T07:20:00Z"
+          },
+          "expect": {
+            "status": "confirmed"
+          },
+          "capture": "id12b"
+        },
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-10T09:00:00Z",
+            "end": "2026-06-10T10:00:00Z",
+            "idempotency_key": "k23",
+            "now": "2026-06-10T07:30:00Z"
+          },
+          "expect": {
+            "status": "confirmed",
+            "booking_id": "$id12"
+          }
+        },
+        {
+          "assert": "$id12 covers 2026-06-10T15:00:00Z/2026-06-10T16:00:00Z and NOT 2026-06-10T09:00:00Z/2026-06-10T10:00:00Z"
+        },
+        {
+          "assert": "$id12b is confirmed and covers 2026-06-10T09:00:00Z/2026-06-10T10:00:00Z"
+        },
+        {
+          "assert": "confirmed_booking_count == 2"
+        }
+      ]
+    },
+    {
+      "id": "B-013",
+      "clause": "B1, B5.1",
+      "description": "An idempotency key belongs to the booking that first used it, and no later operation may steal it. Cancelling booking B while passing booking A's key must not rebind that key: a replay of A's key must still report A. Added 2026-08-02. Found by adversarial code review of the first implementation, not by this suite — the suite is a floor and this is what it had missed.",
+      "steps": [
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-15T09:00:00Z",
+            "end": "2026-06-15T10:00:00Z",
+            "idempotency_key": "kA",
+            "now": "2026-06-15T07:00:00Z"
+          },
+          "expect": {
+            "status": "confirmed"
+          },
+          "capture": "idA"
+        },
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-15T11:00:00Z",
+            "end": "2026-06-15T12:00:00Z",
+            "idempotency_key": "kB",
+            "now": "2026-06-15T07:00:00Z"
+          },
+          "expect": {
+            "status": "confirmed"
+          },
+          "capture": "idB"
+        },
+        {
+          "call": "cancel",
+          "args": {
+            "booking_id": "$idB",
+            "idempotency_key": "kA",
+            "now": "2026-06-15T07:30:00Z"
+          },
+          "expect": {
+            "status": "cancelled"
+          }
+        },
+        {
+          "call": "book",
+          "args": {
+            "start": "2026-06-15T09:00:00Z",
+            "end": "2026-06-15T10:00:00Z",
+            "idempotency_key": "kA",
+            "now": "2026-06-15T07:40:00Z"
+          },
+          "expect": {
+            "status": "confirmed",
+            "booking_id": "$idA"
+          }
+        },
+        {
+          "assert": "confirmed_booking_count == 1"
+        }
+      ]
+    }
+  ]
+}

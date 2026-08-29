@@ -1,0 +1,49 @@
+{
+  "name": "@pumasi/booking-core",
+  "version": "0.1.0",
+  "description": "Availability computation and booking. Apache-2.0, embeddable. Implements SPEC-0001.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:test": "tsc -p tsconfig.test.json",
+    "test": "npm run build:test && node --test .build/test/zone.test.js && node .build/test/run-acceptance.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:unit": "npm run build:test && node --test .build/test/zone.test.js",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "@js-temporal/polyfill": "^0.5.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pumasi-ai/pumasi-booking.git"
+  },
+  "homepage": "https://github.com/pumasi-ai/pumasi-booking",
+  "keywords": [
+    "scheduling",
+    "availability",
+    "booking",
+    "calendar",
+    "timezone",
+    "dst",
+    "temporal"
+  ]
+}

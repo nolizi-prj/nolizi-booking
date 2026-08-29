@@ -8,7 +8,7 @@ intention.
 This list is **enforced, not descriptive**: the service refuses to start if
 configured to send mail through a host that does not appear here
 (`SPEC-0002` D6). Adding a provider means editing this file and
-`apps/service/src/subprocessors.ts` together, in a change anyone can read.
+`service/src/subprocessors.ts` together, in a change anyone can read.
 
 ---
 
@@ -43,7 +43,7 @@ hosted service and is not specific to this one; it is stated because a
 subprocessor list that omits the host is not a list of who sees the data.
 
 Self-hosting removes this entirely, which is why
-[the commercialization foundations](./pumasi-commercialization-foundations.md)
+[the commercialization foundations](https://github.com/pumasi-ai/pumasi/blob/main/pumasi-commercialization-foundations.md)
 make self-hosting first-class forever.
 
 ## Retention — how far deletion actually reaches

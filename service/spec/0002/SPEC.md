@@ -2,8 +2,8 @@
 
 **Drafted:** 2026-08-01 · **Status:** awaiting cross-family spec review
 **Intent:** [`INTENT.md`](./INTENT.md) — confirmed by the steward 2026-08-01
-**Depends on:** [`spec/0001-scheduling-core`](../0001-scheduling-core/SPEC.md) — the engine
-**Roadmap:** [`GAP-0004`](../../gap/0004-feature-parity.md) item 1b
+**Depends on:** [`core/spec`](../../../core/spec/SPEC.md) — the engine
+**Roadmap:** [`GAP-0004`](https://github.com/pumasi-ai/pumasi/blob/main/gap/0004-feature-parity.md) item 1b
 **Acceptance suite:** [`acceptance/cases.json`](./acceptance/cases.json) — **frozen when spec review completes; the builder may not modify it**
 
 ---
@@ -35,7 +35,7 @@ here.
 
 ## 2 · Non-goals
 
-Calendar-provider sync ([`GAP-0002`](../../gap/0002-calendar-integration.md), **promoted to next**) · teams, round-robin, pooled or multi-attendee
+Calendar-provider sync ([`GAP-0002`](https://github.com/pumasi-ai/pumasi/blob/main/gap/0002-calendar-integration.md), **promoted to next**) · teams, round-robin, pooled or multi-attendee
 bookings · payments · AI suggestions · weekly/monthly/duration limits · recurring
 bookings · SMS · a native mobile app.
 
@@ -421,7 +421,7 @@ The suite is a floor, not a ceiling.
 
 **41 cases.** Every clause has at least one; the mapping is checked mechanically
 rather than asserted here, because a hand-maintained coverage table drifts from
-the suite it describes — that is [`L-007`](../../lessons/L-007-restating-a-rule-forks-it.md).
+the suite it describes — that is [`L-007`](https://github.com/pumasi-ai/governance/blob/main/lessons/L-007-restating-a-rule-forks-it.md).
 
 | Cases | Cover |
 |---|---|
