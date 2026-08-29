@@ -76,8 +76,14 @@ nobody has yet asked for. The day someone wants the engine alone,
 `git subtree split` gives it to them with its history intact. Until then, one
 product is one repository.
 
-    npm test                    # 36 acceptance cases + 12 unit + 80 service
+    npm test                    # the engine's acceptance cases, then the service suite
     npm test -w @pumasi/booking-core
+
+The counts are deliberately not written here. This line used to say "36
+acceptance cases + 12 unit + 80 service"; two of those three numbers were stale
+and the service one was out by a factor of three, because a total in prose has
+nothing keeping it true. The command prints them, and the command is never
+wrong.
 
 ## Databases
 
