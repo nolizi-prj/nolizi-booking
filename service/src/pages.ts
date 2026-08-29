@@ -74,6 +74,7 @@ const NAV: { key: string; href: string; label: string; icon: string }[] = [
   { key: 'workflows', href: '/app/workflows', label: 'Workflows', icon: 'M5 7a2 2 0 100-4 2 2 0 000 4zM5 21a2 2 0 100-4 2 2 0 000 4zM19 14a2 2 0 100-4 2 2 0 000 4zM7 5h6a4 4 0 014 4v1M7 19h6a4 4 0 004-4' },
   { key: 'webhooks', href: '/app/webhooks', label: 'Webhooks', icon: 'M10 8a4 4 0 116 3.5M8 13a4 4 0 105 5M12 12l3 6M12 12l-5 2' },
   { key: 'api', href: '/app/api-keys', label: 'API keys', icon: 'M14 7a4 4 0 11-3.5 6H8v3H5v-3H3l3.5-3.5A4 4 0 0114 7z' },
+  { key: 'analytics', href: '/app/analytics', label: 'Analytics', icon: 'M4 20V10M10 20V4M16 20v-8M22 20H2' },
   { key: 'audit', href: '/app/audit', label: 'Audit log', icon: 'M9 5h9a1 1 0 011 1v13a1 1 0 01-1 1H6a1 1 0 01-1-1V8M9 5V3h6v2M8 12h8M8 16h5' },
   { key: 'settings', href: '/app/settings', label: 'Settings', icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19 12a7 7 0 00-.1-1l2-1.5-2-3.4-2.3 1a7 7 0 00-1.7-1L14.5 3h-4l-.4 2.6a7 7 0 00-1.7 1l-2.3-1-2 3.4L6 11a7 7 0 000 2l-2 1.5 2 3.4 2.3-1a7 7 0 001.7 1l.4 2.6h4l.4-2.6a7 7 0 001.7-1l2.3 1 2-3.4-2-1.5a7 7 0 00.2-1z' },
 ];
@@ -217,6 +218,8 @@ export function bookingPage(
     questions?: EventQuestion[];
     /** What the booker already typed, so a failed submit does not lose it. */
     answers?: Record<string, string>;
+    /** The owner's logo, as a data URL. */
+    logo?: string;
   } = {},
 ): string {
   const err = opts.error ? `<p class="err">${esc(opts.error)}</p>` : '';
@@ -269,6 +272,7 @@ export function bookingPage(
     schedule.title,
     `<div class="book-grid">
 <div class="book-meta">
+  ${opts.logo ? `<p style="margin:0 0 .6rem"><img src="${esc(opts.logo)}" alt="" class="brandlogo"></p>` : ''}
   ${schedule.owner_name ? `<p class="muted" style="margin:0 0 .2rem">${esc(schedule.owner_name)}</p>` : ''}
   <h1>${esc(schedule.title)}</h1>
   <p class="muted">${schedule.duration_minutes} minutes${where ? ` &middot; ${esc(where)}` : ''}</p>
@@ -319,6 +323,7 @@ ${FOOTER}
  .book-grid{display:grid;grid-template-columns:1fr;gap:0;background:var(--surface);
    border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
  @media(min-width:46rem){.book-grid{grid-template-columns:17.5rem minmax(0,1fr)}}
+ .brandlogo{max-height:2.75rem;max-width:100%}
  .book-meta{padding:1.5rem;border-bottom:1px solid var(--line)}
  @media(min-width:46rem){.book-meta{border-bottom:0;border-right:1px solid var(--line);
    background:var(--rail);height:100%}}
@@ -599,6 +604,7 @@ export function settingsPage(
   },
   baseUrl: string,
   error?: string,
+  logo?: string,
 ): string {
   return SHELL(
     'Settings',
@@ -617,6 +623,15 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
 <div class="card"><h2>Brand</h2>
   <label for="bc">Accent color</label>
   <input id="bc" name="brand_color" value="${esc(s.brand_color)}" placeholder="#1a56db" size="8">
+  <label for="lf">Logo</label>
+  ${logo ? `<p><img src="${esc(logo)}" alt="Your logo" class="logopv"></p>
+    <label style="display:flex;gap:.5rem;align-items:center">
+      <input type="checkbox" name="remove_logo" style="width:auto"> Remove it</label>` : ''}
+  <input id="lf" type="file" accept="image/png,image/jpeg,image/webp">
+  <input type="hidden" name="logo" id="logodata">
+  <p class="notice" id="logonote">Shown above your booking pages. It is resized
+    to 240 pixels before it leaves your computer. Choosing a file needs
+    JavaScript; everything else on this page works without it.</p>
 </div>
 <div class="card"><h2>Your link</h2>
   <p class="muted">${esc(baseUrl)}/<b>${esc(s.link_slug)}</b></p>
@@ -630,7 +645,42 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
 <style>
  .card{border:1px solid var(--line);border-radius:.5rem;padding:1rem;margin:1rem 0}
  .card h2{font-size:1.1rem;margin:0 0 .25rem}
-</style>`,
+ .logopv{max-height:4rem;border:1px solid var(--line);border-radius:.4rem;padding:.3rem;
+   background:var(--surface)}
+</style>
+<script>
+// The resize is a courtesy to the owner, not a control: the server checks the
+// media type, the signature and the size of whatever actually arrives.
+(function () {
+  var file = document.getElementById('lf');
+  var out = document.getElementById('logodata');
+  var note = document.getElementById('logonote');
+  if (!file || !out) return;
+  file.addEventListener('change', function () {
+    var f = file.files && file.files[0];
+    if (!f) { out.value = ''; return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      var img = new Image();
+      img.onload = function () {
+        var max = 240;
+        var scale = Math.min(1, max / Math.max(img.width, img.height));
+        var c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * scale));
+        c.height = Math.max(1, Math.round(img.height * scale));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        out.value = c.toDataURL('image/png');
+        if (note) note.textContent = 'Ready to save: ' + c.width + '\u00d7' + c.height + '.';
+      };
+      img.onerror = function () {
+        if (note) note.textContent = 'That file could not be read as an image.';
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(f);
+  });
+})();
+</script>`,
   );
 }
 
@@ -1517,6 +1567,7 @@ export function ownerLanding(
   events: { slug: string; title: string; duration_minutes: number; description?: string; color?: string }[],
   welcome?: string,
   brandColor?: string,
+  logo?: string,
 ): string {
   const cards = events
     .map(
@@ -1531,6 +1582,7 @@ export function ownerLanding(
   return SHELL(
     displayName,
     `${brandColor ? `<style>:root{--accent:${esc(brandColor)}}</style>` : ''}
+${logo ? `<p style="margin:0 0 .75rem"><img src="${esc(logo)}" alt="" style="max-height:3.5rem;max-width:100%"></p>` : ''}
 <h1>${esc(displayName)}</h1>
 <p class="muted">${welcome ? esc(welcome) : 'Pick a meeting to see available times.'}</p>
 <div class="evlist">${cards || '<p class="muted">No booking pages yet.</p>'}</div>
@@ -1701,5 +1753,102 @@ ${connections ? calendarSection(connections) : ''}
  .conn{border-top:1px solid var(--line);padding-top:.75rem;margin-top:.75rem}
  .err-inline{color:#c33;font-size:.9rem}
 </style>`,
+  );
+}
+
+/**
+ * The owner's own numbers.
+ *
+ * Aggregates only. No booker is named here and none needs to be: the question
+ * this page answers is "how is my scheduling going", not "who booked me", and
+ * the meetings page already answers the latter for anyone who needs it. That
+ * also means the page keeps working unchanged after a booker exercises their
+ * deletion right — the row survives with its identity fields emptied, and the
+ * counts were never about the identity.
+ */
+export function analyticsPage(a: {
+  days: number;
+  timezone: string;
+  booked: number;
+  cancelled: number;
+  noShows: number;
+  minutes: number;
+  leadDays: number | null;
+  byEvent: { title: string; count: number }[];
+  byWeekday: number[];
+  byHour: number[];
+}): string {
+  const pct = (n: number, of: number) => (of === 0 ? '—' : `${Math.round((n / of) * 100)}%`);
+  const hours = (m: number) => (m < 60 ? `${m} min` : `${(m / 60).toFixed(m % 60 === 0 ? 0 : 1)} h`);
+
+  const stat = (label: string, value: string, sub = '') =>
+    `<div class="stat"><div class="statv">${esc(value)}</div>
+      <div class="statl">${esc(label)}</div>
+      ${sub ? `<div class="statsub">${esc(sub)}</div>` : ''}</div>`;
+
+  // A bar chart in CSS: no library, no canvas, and it degrades to a readable
+  // list of numbers when styles do not load.
+  const bars = (values: number[], labels: string[]) => {
+    const peak = Math.max(1, ...values);
+    return `<div class="bars">${values
+      .map(
+        (v, i) => `<div class="bar" title="${esc(labels[i] ?? '')}: ${v}">
+        <div class="barfill" style="height:${Math.round((v / peak) * 100)}%"></div>
+        <div class="barl">${esc(labels[i] ?? '')}</div>
+        <div class="barn">${v}</div></div>`,
+      )
+      .join('')}</div>`;
+  };
+
+  const eventRows = a.byEvent
+    .map((e) => `<tr><td>${esc(e.title)}</td><td>${e.count}</td></tr>`)
+    .join('');
+
+  const ranges = [30, 90, 365]
+    .map(
+      (d) => `<a class="pill${d === a.days ? ' on' : ''}" href="/app/analytics?days=${d}">${d} days</a>`,
+    )
+    .join(' ');
+
+  return SHELL(
+    'Analytics',
+    `<!--nav:analytics-->
+<h1>Analytics</h1>
+<p class="muted">Meetings starting in the last ${a.days} days, counted in
+  ${esc(a.timezone)}. Nobody is named here.</p>
+<p>${ranges}</p>
+<div class="stats">
+  ${stat('Meetings booked', String(a.booked))}
+  ${stat('Time booked', hours(a.minutes))}
+  ${stat('Cancelled', String(a.cancelled), pct(a.cancelled, a.booked + a.cancelled))}
+  ${stat('No-shows', String(a.noShows), pct(a.noShows, a.booked))}
+  ${stat('Booked ahead by', a.leadDays === null ? '—' : `${a.leadDays} days`, 'median')}
+</div>
+<div class="card"><h2>By event type</h2>
+  ${eventRows ? `<table class="rows"><tr><th>Event type</th><th>Meetings</th></tr>${eventRows}</table>`
+    : '<p class="muted">Nothing booked in this window.</p>'}
+</div>
+<div class="card"><h2>Which day</h2>
+  ${bars(a.byWeekday, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])}
+</div>
+<div class="card"><h2>Which hour</h2>
+  ${bars(a.byHour, a.byHour.map((_, h) => String(h).padStart(2, '0')))}
+</div>
+<style>
+ .stats{display:grid;gap:.75rem;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));margin:1rem 0}
+ .stat{border:1px solid var(--line);border-radius:.6rem;padding:.85rem 1rem;background:var(--surface)}
+ .statv{font-size:1.6rem;font-weight:650;font-variant-numeric:tabular-nums;line-height:1.1}
+ .statl{color:var(--muted);font-size:.8rem;margin-top:.15rem}
+ .statsub{color:var(--muted);font-size:.75rem}
+ .pill.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+ .bars{display:flex;align-items:flex-end;gap:.25rem;height:8rem;overflow-x:auto;padding-top:.5rem}
+ .bar{flex:1 1 0;min-width:1.4rem;display:flex;flex-direction:column;justify-content:flex-end;
+   height:100%;text-align:center}
+ .barfill{background:var(--accent-soft);border:1px solid var(--accent);border-bottom:0;
+   border-radius:.25rem .25rem 0 0;min-height:2px}
+ .barl,.barn{font-size:.65rem;color:var(--muted);font-variant-numeric:tabular-nums}
+ .barn{font-weight:600;color:var(--fg)}
+</style>
+${CARD_CSS}`,
   );
 }

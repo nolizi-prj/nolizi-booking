@@ -13,7 +13,8 @@ import {
   intersectSlots, loadHosts, loadQuestions, locationText, unionSlots, type EventHost, type Schedule,
 } from './schedules.ts';
 import {
-  availabilityEditor, bookingPage, confirmedPage, contactsPage, errorPage, eventTypeEditor,
+  analyticsPage, availabilityEditor, bookingPage, confirmedPage, contactsPage, errorPage,
+  eventTypeEditor,
   legalPage,
   apiKeysPage, auditPage, homePage, loginPage, managePage, meetingsPage, messagePage, ownerHome,
   ownerLanding, pollDetailPage, pollsPage, pollVotePage, routeFormPage, routingPage, settingsPage,
@@ -32,6 +33,7 @@ import { RATE_LIMITS, type Config } from './config.ts';
 import type { CalendarHub } from './calendars.ts';
 import { icsFor } from './ics.ts';
 import { LEGAL_DOCS } from './legal.ts';
+import { validateLogo } from './branding.ts';
 import { describeRecurrence, expandRecurrence, isValidRecurrence } from './recurrence.ts';
 import { cancelPendingJobs, fireTrigger, type BookingCtx } from './automation.ts';
 import type { MailPort } from './mail.ts';
@@ -1065,6 +1067,7 @@ async function handleRoutes(
           `DELETE FROM booking_answers WHERE question_id IN
              (SELECT question_id FROM event_questions WHERE owner_id = $1)`, [owner.owner_id]);
         await tx.query(`DELETE FROM event_questions WHERE owner_id = $1`, [owner.owner_id]);
+        await tx.query(`DELETE FROM org_branding WHERE owner_id = $1`, [owner.owner_id]);
         await tx.query(
           `DELETE FROM single_use_links WHERE schedule_id IN
              (SELECT schedule_id FROM schedules WHERE owner_id = $1)`, [owner.owner_id]);
@@ -1657,8 +1660,11 @@ async function handleRoutes(
         welcome_message: row['welcome_message'] === null ? '' : String(row['welcome_message']),
         brand_color: row['brand_color'] === null ? '' : String(row['brand_color']),
       };
+      const brandRow = await sql.query(
+        `SELECT logo FROM org_branding WHERE owner_id = $1`, [owner.owner_id]);
+      const currentLogo = brandRow.rows[0] ? String(brandRow.rows[0]['logo']) : undefined;
       if (req.method === 'GET') {
-        return html(200, settingsPage(current, config.baseUrl));
+        return html(200, settingsPage(current, config.baseUrl, undefined, currentLogo));
       }
       if (req.method === 'POST') {
         const f = req.form ?? {};
@@ -1667,28 +1673,41 @@ async function handleRoutes(
         try {
           Temporal.Now.zonedDateTimeISO(tz); // refuse an unknown zone loudly
         } catch {
-          return html(400, settingsPage(current, config.baseUrl, 'That timezone is not recognised.'));
+          return html(400, settingsPage(current, config.baseUrl, 'That timezone is not recognised.', currentLogo));
         }
         const welcome = (f['welcome_message'] ?? '').trim().slice(0, 500);
         const color = (f['brand_color'] ?? '').trim();
         if (color && !/^#[0-9a-fA-F]{6}$/.test(color)) {
-          return html(400, settingsPage(current, config.baseUrl, 'A color looks like #1a56db.'));
+          return html(400, settingsPage(current, config.baseUrl, 'A color looks like #1a56db.', currentLogo));
         }
+        // The logo, before anything is written: a rejected image must not
+        // leave the rest of the form half-saved.
+        let nextLogo: string | null | undefined;
+        if (f['remove_logo'] === 'on') {
+          nextLogo = null;
+        } else if ((f['logo'] ?? '').trim()) {
+          const checked = validateLogo(f['logo']!);
+          if (!checked.ok) {
+            return html(400, settingsPage(current, config.baseUrl, checked.reason, currentLogo));
+          }
+          nextLogo = checked.dataUrl;
+        }
+
         const newSlug = (f['link_slug'] ?? '').trim().toLowerCase();
         if (newSlug !== current.link_slug) {
           if (!/^[a-z0-9-]{2,40}$/.test(newSlug) || RESERVED_SLUGS.has(newSlug)) {
             return html(400, settingsPage(current, config.baseUrl,
-              'A link uses lowercase letters, digits and dashes, and some names are reserved.'));
+              'A link uses lowercase letters, digits and dashes, and some names are reserved.', currentLogo));
           }
           const clash = await sql.query(
             `SELECT 1 FROM owners WHERE link_slug = $1 AND owner_id <> $2`,
             [newSlug, owner.owner_id]);
           if (clash.rows[0]) {
-            return html(400, settingsPage(current, config.baseUrl, 'That link is already taken.'));
+            return html(400, settingsPage(current, config.baseUrl, 'That link is already taken.', currentLogo));
           }
           // Sharding · the rename must also win the GLOBAL name.
           if (deps.directory && !(await deps.directory.registerLink(newSlug, current.link_slug))) {
-            return html(400, settingsPage(current, config.baseUrl, 'That link is already taken.'));
+            return html(400, settingsPage(current, config.baseUrl, 'That link is already taken.', currentLogo));
           }
         }
         await sql.query(
@@ -1696,6 +1715,15 @@ async function handleRoutes(
                   brand_color = $5, link_slug = $6
             WHERE owner_id = $1`,
           [owner.owner_id, name, tz, welcome || null, color || null, newSlug || current.link_slug]);
+        if (nextLogo === null) {
+          await sql.query(`DELETE FROM org_branding WHERE owner_id = $1`, [owner.owner_id]);
+        } else if (nextLogo !== undefined) {
+          await sql.query(
+            `INSERT INTO org_branding (owner_id, logo, updated_at) VALUES ($1, $2, $3)
+             ON CONFLICT (owner_id) DO UPDATE SET logo = excluded.logo,
+                                                 updated_at = excluded.updated_at`,
+            [owner.owner_id, nextLogo, now]);
+        }
         return { status: 303, headers: { location: '/app/settings' }, body: '' };
       }
     }
@@ -1803,6 +1831,71 @@ async function handleRoutes(
         return { status: 303, headers: { location: `/app/meetings${back}` }, body: '' };
       }
       return html(404, errorPage(404, 'Nothing here.'));
+    }
+
+    // ── analytics ────────────────────────────────────────────────────────
+    //
+    // Every bucket is computed in Temporal, in the owner's timezone, and never
+    // in SQL. `AT TIME ZONE` is PostgreSQL-only and took production down once
+    // when the same query reached SQLite in a Durable Object; the engine's own
+    // rule — one representation, converted in one place — applies to reporting
+    // as much as to booking.
+    if (parts[1] === 'analytics' && req.method === 'GET') {
+      const allowed = [30, 90, 365];
+      const asked = Number(req.query?.['days'] ?? 30);
+      const days = allowed.includes(asked) ? asked : 30;
+      const since = Temporal.Instant.from(now)
+        .subtract({ hours: 24 * days }).toString();
+
+      const { rows } = await sql.query(
+        `SELECT b.starts_at, b.ends_at, b.status, b.no_show, b.created_at, s.title
+           FROM bookings b LEFT JOIN schedules s ON s.schedule_id = b.schedule_id
+          WHERE b.owner_id = $1 AND b.starts_at >= $2 AND b.starts_at <= $3
+          ORDER BY b.starts_at DESC LIMIT 5000`,
+        [owner.owner_id, since, now],
+      );
+
+      const tz = owner.timezone;
+      const byWeekday = [0, 0, 0, 0, 0, 0, 0];
+      const byHour = Array.from({ length: 24 }, () => 0);
+      const byEvent = new Map<string, number>();
+      const leads: number[] = [];
+      let booked = 0, cancelled = 0, noShows = 0, minutes = 0;
+
+      for (const r of rows) {
+        const startIso = new Date(String(r['starts_at'])).toISOString();
+        if (String(r['status']) === 'cancelled') { cancelled++; continue; }
+        booked++;
+        if (Number(r['no_show']) === 1) noShows++;
+        const start = Temporal.Instant.from(startIso);
+        const end = Temporal.Instant.from(new Date(String(r['ends_at'])).toISOString());
+        minutes += Math.round((end.epochMilliseconds - start.epochMilliseconds) / 60000);
+        const local = start.toZonedDateTimeISO(tz);
+        // dayOfWeek is 1..7 from Monday, which is the order the labels use.
+        byWeekday[local.dayOfWeek - 1]! += 1;
+        byHour[local.hour]! += 1;
+        const title = String(r['title'] ?? 'Booking');
+        byEvent.set(title, (byEvent.get(title) ?? 0) + 1);
+        if (r['created_at']) {
+          const made = Temporal.Instant.from(new Date(String(r['created_at'])).toISOString());
+          const lead = (start.epochMilliseconds - made.epochMilliseconds) / 86_400_000;
+          if (lead >= 0) leads.push(lead);
+        }
+      }
+
+      // The median, not the mean: one meeting booked a year out would drag an
+      // average somewhere no owner recognises.
+      leads.sort((x, y) => x - y);
+      const leadDays = leads.length === 0 ? null
+        : Math.round(leads[Math.floor(leads.length / 2)]!);
+
+      return html(200, analyticsPage({
+        days, timezone: tz, booked, cancelled, noShows, minutes, leadDays,
+        byEvent: [...byEvent.entries()]
+          .map(([title, count]) => ({ title, count }))
+          .sort((x, y) => y.count - x.count),
+        byWeekday, byHour,
+      }));
     }
 
     // ── contacts (P3) ────────────────────────────────────────────────────
@@ -2307,7 +2400,8 @@ async function handleRoutes(
       }
       const slots = await slotsFor(deps, schedule, now);
       return html(200, bookingPage(schedule, slots.slots, { action: `/s/${tagged(deps, parts[1])}/book`,
-        questions: await loadQuestions(sql, schedule.schedule_id) }));
+        questions: await loadQuestions(sql, schedule.schedule_id),
+        logo: await logoFor(sql, schedule.owner_id) }));
     }
     if (req.method === 'POST' && parts[2] === 'book') {
       return bookHandler(deps, schedule, req, now, parts[1], `/s/${tagged(deps, parts[1])}/book`);
@@ -2479,6 +2573,7 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
       const slots = await slotsFor(deps, schedule, now);
       return html(200, bookingPage(schedule, slots.slots, { action: bookAction,
         questions: await loadQuestions(sql, schedule.schedule_id),
+        logo: await logoFor(sql, schedule.owner_id),
         recurrence: schedule.recurrence_rule ? describeRecurrence(schedule.recurrence_rule) : undefined }));
     }
     if (req.method === 'POST' && parts[2] === 'book') {
@@ -2513,6 +2608,7 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
         })),
         opt(ownerRow.rows[0]['welcome_message']),
         opt(ownerRow.rows[0]['brand_color']),
+        await logoFor(sql, String(ownerRow.rows[0]['owner_id'])),
       ));
     }
     const schedule = await findScheduleBySlug(sql, slug);
@@ -2520,6 +2616,7 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
     const slots = await slotsFor(deps, schedule, now);
     return html(200, bookingPage(schedule, slots.slots, {
       questions: await loadQuestions(sql, schedule.schedule_id),
+      logo: await logoFor(sql, schedule.owner_id),
       recurrence: schedule.recurrence_rule ? describeRecurrence(schedule.recurrence_rule) : undefined }));
   }
 
@@ -2555,6 +2652,13 @@ async function blockedSource(sql: SqlClient, ownerId: string, email: string): Pr
     [ownerId, address, domain],
   );
   return rows.length > 0;
+}
+
+/** An owner's logo, as a data URL, or undefined when they have not set one. */
+async function logoFor(sql: SqlClient, ownerId: string): Promise<string | undefined> {
+  const { rows } = await sql.query(
+    `SELECT logo FROM org_branding WHERE owner_id = $1`, [ownerId]);
+  return rows[0] ? String(rows[0]['logo']) : undefined;
 }
 
 async function ownerContact(sql: SqlClient, ownerId: string): Promise<Contact | undefined> {
