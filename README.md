@@ -20,10 +20,21 @@ you. Cancellations and reschedules follow to the connected calendar. See
 then knows only about bookings made inside it, and will offer a time you are
 already busy.
 
-**There is no settled lawful basis for the personal data it holds.** The service
-caps itself at five accounts and two hundred bookings and refuses to raise those
-ceilings until that is resolved. See
-[`DEBT.md` D-105](https://github.com/pumasi-ai/governance/blob/main/governance/DEBT.md).
+**The lawful basis for the personal data it holds is written and in force, and
+no lawyer has reviewed it.** The privacy notice, terms and DPA are served by the
+running service and say who the operator is, what is collected, on what basis,
+how to delete it, and who else sees it. What is genuinely unresolved is narrower:
+the international transfer position — the service is operated from the United
+States and data is processed there, with no standard contractual clauses in place
+— and the review by counsel itself. See
+[`DEBT.md` D-105](https://github.com/pumasi-ai/governance/blob/main/governance/DEBT.md),
+open at DEGRADING.
+
+**It defaults to five accounts and two hundred bookings, and public sign-up is
+off.** Those are deployment defaults an operator may change deliberately, not
+caps the service refuses to raise. They start low so a fresh deployment does not
+quietly become a service holding thousands of strangers' details before anyone
+chose that.
 
 **Not tied to any host.** It needs a port and, optionally, a PostgreSQL URL.
 Nothing in the code knows about a particular provider — that is `P12` (no
@@ -120,14 +131,28 @@ otherwise breaks the URL.
 
 Ethereal **captures rather than delivers**, which is what you want for testing.
 Real delivery to real inboxes needs a real provider, chosen on data-processing
-terms and residency — the same question as `D-105`.
+terms and residency — the same question as the transfer position in `D-105`.
 
 ## What the gates refuse
 
-`PUBLIC_SIGNUP=true` is **refused**, and the account and booking ceilings can be
-lowered but not raised, while [`DEBT.md`](https://github.com/pumasi-ai/governance/blob/main/governance/DEBT.md) D-105 is open
-— no lawful basis has been established for holding third-party personal data.
-Refusals are logged rather than silently ignored.
+**Configuration fails closed, and refusals are logged rather than silently
+ignored.** `PUBLIC_SIGNUP` is off unless explicitly and correctly enabled, and a
+value that does not parse is treated as absent rather than guessed in the
+dangerous direction. The account and booking ceilings default low and may be
+raised or lowered by the operator.
+
+What the service refuses outright is narrower and does not vary with
+configuration: it **will not send mail** through a host absent from
+[`SUBPROCESSORS.md`](SUBPROCESSORS.md), and it **will not start** on a
+timezone-transition or PostgreSQL version mismatch. The mail refusal stops the
+mail, not the service — bookings still work and confirmations queue, because the
+duty is that nobody's details reach an undisclosed party, not that the product be
+offline.
+
+**Public sign-up never hands out a session on an unproven address.** With it on,
+signing up creates the account and mails a single-use link; the session begins
+when that link is used. An invite, or Google's verified email, is proof; a typed
+string is not.
 
 ## How correctness is held
 
