@@ -1031,6 +1031,7 @@ export function teamPage(
   baseUrl = '',
   ssoByOrg: Map<string, { issuer: string; email_domain?: string }> = new Map(),
   freshScimToken?: string,
+  mintedInvite?: string,
 ): string {
   const ssoSection = (o: { org_id: string; my_role: string }): string => {
     if (o.my_role !== 'admin') return '';
@@ -1097,9 +1098,17 @@ ${list || '<p class="muted">No teams yet.</p>'}
 <div class="card">
   <h2>Invites</h2>
   <p class="muted">An account is created from an invite link; each works once.</p>
+  ${mintedInvite
+    ? `<p class="ok">New invite — copy it now:<br><code>${esc(baseUrl)}/signup?invite=${esc(mintedInvite)}</code></p>`
+    : ''}
   ${openInvites.map((c) => `<p><code>${esc(baseUrl)}/signup?invite=${esc(c)}</code></p>`).join('')}
-  <form method="post" action="/app/invites">
-    <button class="submit" type="submit">Mint an invite</button>
+  <form method="post" action="/app/invites" style="display:inline">
+    <input type="hidden" name="kind" value="org">
+    <button class="submit" type="submit">Invite a teammate</button>
+  </form>
+  <form method="post" action="/app/invites" style="display:inline">
+    <input type="hidden" name="kind" value="platform">
+    <button class="submit" type="submit">Invite a new company</button>
   </form>
 </div>
 ${CARD_CSS}

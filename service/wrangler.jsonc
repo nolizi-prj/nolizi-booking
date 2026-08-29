@@ -9,9 +9,15 @@
   "routes": [{ "pattern": "booking.pumasi.ai", "custom_domain": true }],
   // Migrations ship inside the bundle as text (.sql is Text by default rule).
   "durable_objects": {
-    "bindings": [{ "name": "PUMASI", "class_name": "PumasiService" }]
+    "bindings": [
+      { "name": "PUMASI", "class_name": "PumasiService" },
+      { "name": "DIRECTORY", "class_name": "PumasiDirectory" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PumasiService"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["PumasiService"] },
+    { "tag": "v2", "new_sqlite_classes": ["PumasiDirectory"] }
+  ],
   "observability": { "enabled": true },
   "vars": {
     "BASE_URL": "https://booking.pumasi.ai",

@@ -54,6 +54,26 @@ const json = (status: number, body: unknown): Reply => ({
 /** L1 · At least 128 bits from a CSPRNG. Not a booking id, not a sequence. */
 export const newToken = (): string => randomBytes(32).toString('base64url');
 
+/**
+ * Sharding · claim the owner's link slug in the global directory, renaming
+ * locally with a numeric suffix until the directory accepts one.
+ */
+async function registerOwnerLink(deps: AppDeps, sql: SqlClient, ownerId: string): Promise<void> {
+  if (!deps.directory) return;
+  const row = await sql.query(`SELECT link_slug FROM owners WHERE owner_id = $1`, [ownerId]);
+  const base = row.rows[0]?.['link_slug'] ? String(row.rows[0]['link_slug']) : 'user';
+  let slug = base;
+  for (let i = 2; i < 30; i++) {
+    if (await deps.directory.registerLink(slug)) {
+      if (slug !== base) {
+        await sql.query(`UPDATE owners SET link_slug = $2 WHERE owner_id = $1`, [ownerId, slug]);
+      }
+      return;
+    }
+    slug = `${base}-${i}`;
+  }
+}
+
 /** P8 · one line in the ledger. Never throws; an audit line is not worth a 500. */
 async function audit(
   sql: SqlClient,
@@ -91,7 +111,27 @@ export interface AppDeps {
   calendars?: CalendarHub;
   /** P7 · nudges the host's job runner after new jobs are enqueued. */
   pump?: () => Promise<void>;
+  /** Sharding · this deployment's org tag; absent = single-tenant host. */
+  orgTag?: string;
+  /** Sharding · the global directory; absent = single-tenant host. */
+  directory?: DirectoryPort;
 }
+
+/** Sharding · what an org's world needs from the global directory. */
+export interface DirectoryPort {
+  /** SSO JIT: claim an email for this org. */
+  claimEmail(email: string): Promise<'ok' | 'taken' | 'ceiling'>;
+  registerLink(slug: string, oldSlug?: string): Promise<boolean>;
+  registerForm(slug: string): Promise<boolean>;
+  releaseForm(slug: string): Promise<void>;
+  registerDomain(domain: string | null): Promise<void>;
+  releaseOwner(email: string, linkSlug?: string): Promise<void>;
+  mintInvite(kind: 'platform' | 'org'): Promise<string>;
+}
+
+/** Sharding · public tokens carry the org tag so the router needs no lookup. */
+const tagged = (deps: AppDeps, token: string): string =>
+  deps.orgTag ? `${deps.orgTag}.${token}` : token;
 
 /** I6 · Per-IP and per-schedule limits, counted in the database. */
 async function overLimit(
@@ -153,6 +193,9 @@ export async function handle(
     query?: Record<string, string>;
     authorization?: string;
     rawBody?: string;
+    /** Set ONLY by the worker router after a directory claim — never by users. */
+    trusted?: { signupEmail?: string; displayName?: string; timezone?: string;
+      newOrg?: boolean; ssoEmail?: string };
   },
 ): Promise<Reply> {
   try {
@@ -179,6 +222,9 @@ async function handleRoutes(
     query?: Record<string, string>;
     authorization?: string;
     rawBody?: string;
+    /** Set ONLY by the worker router after a directory claim — never by users. */
+    trusted?: { signupEmail?: string; displayName?: string; timezone?: string;
+      newOrg?: boolean; ssoEmail?: string };
   },
 ): Promise<Reply> {
   const { sql, config, mail } = deps;
@@ -342,10 +388,16 @@ async function handleRoutes(
         `SELECT owner_id FROM owners WHERE lower(email) = lower($1)`, [email]);
       let memberId = existing.rows[0] ? String(existing.rows[0]['owner_id']) : undefined;
       if (!memberId) {
+        if (deps.directory) {
+          const claim = await deps.directory.claimEmail(email);
+          if (claim !== 'ok') return scimJson(409, { detail: claim });
+        }
         const made = await createOwnerDirect(sql, deps.tx,
-          { email, displayName: display, timezone: 'UTC' }, config.maxOwnerAccounts);
+          { email, displayName: display, timezone: 'UTC' },
+          deps.directory ? Number.MAX_SAFE_INTEGER : config.maxOwnerAccounts);
         if (!made.ok) return scimJson(409, { detail: made.reason });
         memberId = made.owner.owner_id;
+        await registerOwnerLink(deps, sql, memberId);
         await sql.query(`UPDATE owners SET provisioned_by = $2 WHERE owner_id = $1`,
           [memberId, `scim:${scimOrg}`]);
       }
@@ -377,11 +429,17 @@ async function handleRoutes(
       await sql.query(`DELETE FROM sessions WHERE owner_id = $1`, [parts[3]]);
       // An account this org's IdP created, this org's IdP may remove (D3).
       if (String(member.rows[0]['provisioned_by'] ?? '') === `scim:${scimOrg}`) {
+        const gone = await sql.query(
+          `SELECT email, link_slug FROM owners WHERE owner_id = $1`, [parts[3]]);
         await deps.tx.transaction(async (tx) => {
           await tx.query(`DELETE FROM bookings WHERE owner_id = $1`, [parts[3]]);
           await tx.query(`DELETE FROM event_hosts WHERE owner_id = $1`, [parts[3]]);
           await tx.query(`DELETE FROM owners WHERE owner_id = $1`, [parts[3]]);
         });
+        if (gone.rows[0]) {
+          await deps.directory?.releaseOwner(String(gone.rows[0]['email']),
+            gone.rows[0]['link_slug'] === null ? undefined : String(gone.rows[0]['link_slug']));
+        }
       }
       await audit(sql, { ownerId: parts[3], orgId: scimOrg, actor: 'scim',
         action: 'member_deprovisioned' });
@@ -412,6 +470,9 @@ async function handleRoutes(
     const r = rows[0];
     // L2 · reveals nothing about any other booking, including whether one exists.
     if (!r) return html(404, errorPage(404, 'This link is not valid.'));
+    // Sharding · pages and mails speak the PUBLIC (tagged) token; the database
+    // speaks the raw one.
+    const publicToken = tagged(deps, token);
 
     const bookingId = String(r['booking_id']);
     const startIso = new Date(String(r['starts_at'])).toISOString().replace('.000Z', 'Z');
@@ -433,7 +494,7 @@ async function handleRoutes(
     };
 
     if (req.method === 'GET') {
-      return html(200, managePage({ title, start: startIso, token, status, slots: await moveOptions() }));
+      return html(200, managePage({ title, start: startIso, token: publicToken, status, slots: await moveOptions() }));
     }
 
     // L4 · reschedule. Atomic in the store (B6, P2a); a losing move returns
@@ -449,20 +510,20 @@ async function handleRoutes(
       const newStart = req.form?.['start'];
       const newEnd = req.form?.['end'];
       if (!newStart || !newEnd) {
-        return html(400, managePage({ title, start: startIso, token, status,
+        return html(400, managePage({ title, start: startIso, token: publicToken, status,
           slots: await moveOptions(), error: 'Pick a time to move to.' }));
       }
       // F1 · the same rule as booking. A token holder may move the meeting, but
       // only to a time the engine offers.
       const options = await moveOptions();
       if (!offeredSlot(options, newStart, newEnd)) {
-        return html(409, managePage({ title, start: startIso, token, status,
+        return html(409, managePage({ title, start: startIso, token: publicToken, status,
           slots: options, error: 'That time is not available. Here are the times that are.' }));
       }
       const store = new PostgresBookingStore(sql, String(r['owner_id']), deps.tx);
       const moved = await store.move(bookingId, newStart, newEnd, `move:${token}:${newStart}`);
       if (!moved.ok) {
-        return html(409, managePage({ title, start: startIso, token, status,
+        return html(409, managePage({ title, start: startIso, token: publicToken, status,
           slots: await moveOptions(), error: 'Someone just took that time. Here are the rest.' }));
       }
       // SPEC-0003 · the owner's calendar follows the move (never fatal, M3).
@@ -481,13 +542,13 @@ async function handleRoutes(
       const booker = await bookerFor(sql, bookingId);
       if (booker?.email) {
         await mail.send({ kind: 'rescheduled', to: booker.email, bookingId,
-          start: newStart, token, timezone: booker.timezone });
+          start: newStart, token: publicToken, timezone: booker.timezone });
       }
       if (owner) {
         await mail.send({ kind: 'rescheduled', to: owner.email, bookingId,
           start: newStart, timezone: owner.timezone });
       }
-      return html(200, managePage({ title, start: newStart, token, status: 'confirmed',
+      return html(200, managePage({ title, start: newStart, token: publicToken, status: 'confirmed',
         slots: await moveOptions() }));
     }
     if (req.method === 'POST' && parts[2] === 'cancel') {
@@ -519,7 +580,7 @@ async function handleRoutes(
           }
         }
       }
-      return html(200, managePage({ title, start: startIso, token, status: 'cancelled' }));
+      return html(200, managePage({ title, start: startIso, token: publicToken, status: 'cancelled' }));
     }
     // D8 · a bearer link may cancel, but deleting personal data needs a
     // confirmation from that same link — a forwarded email must not destroy a
@@ -539,7 +600,60 @@ async function handleRoutes(
   }
 
   // ── owner surfaces (I1–I4) ───────────────────────────────────────────────
+  // ── internal SSO landing (sharding): the worker verified the identity and
+  // the directory said this org owns the email; we only start the session. ──
+  if (parts[0] === 'internal' && parts[1] === 'sso-login' && req.trusted?.ssoEmail) {
+    const found = await sql.query(
+      `SELECT owner_id FROM owners WHERE lower(email) = lower($1)`, [req.trusted.ssoEmail]);
+    if (!found.rows[0]) return html(403, errorPage(403, 'No account for that identity here.'));
+    const sid = await createSession(sql, String(found.rows[0]['owner_id']), now, config.sessionTtlHours);
+    return {
+      status: 303,
+      headers: { location: '/app', 'set-cookie': sessionCookie(sid, secure, config.sessionTtlHours) },
+      body: '',
+    };
+  }
+
   if (parts[0] === 'signup') {
+    // Sharding · trusted signup: the directory already spent the invite,
+    // claimed the email, and enforced the global ceiling. This org's world
+    // just creates its owner — founding the tenant org on first arrival.
+    if (req.method === 'POST' && req.trusted?.signupEmail) {
+      const input = {
+        email: req.trusted.signupEmail,
+        displayName: (req.trusted.displayName ?? req.trusted.signupEmail.split('@')[0]!).trim(),
+        timezone: (req.trusted.timezone ?? 'UTC').trim() || 'UTC',
+      };
+      const made = await createOwnerDirect(sql, deps.tx, input, Number.MAX_SAFE_INTEGER);
+      if (!made.ok) {
+        return html(400, errorPage(400, 'That address already has an account here. Sign in instead.'));
+      }
+      if (req.trusted.newOrg) {
+        const orgId = randomUUID();
+        await sql.query(`INSERT INTO orgs (org_id, name) VALUES ($1, $2)`,
+          [orgId, `${input.displayName}'s team`]);
+        await sql.query(
+          `INSERT INTO org_members (org_id, owner_id, role) VALUES ($1, $2, 'admin')`,
+          [orgId, made.owner.owner_id]);
+      } else {
+        // Joining an existing tenant: membership in its founding org.
+        const tenant = await sql.query(
+          `SELECT org_id FROM orgs ORDER BY created_at LIMIT 1`);
+        if (tenant.rows[0]) {
+          await sql.query(
+            `INSERT INTO org_members (org_id, owner_id, role) VALUES ($1, $2, 'member')
+             ON CONFLICT (org_id, owner_id) DO NOTHING`,
+            [String(tenant.rows[0]['org_id']), made.owner.owner_id]);
+        }
+      }
+      await registerOwnerLink(deps, sql, made.owner.owner_id);
+      const sid = await createSession(sql, made.owner.owner_id, now, config.sessionTtlHours);
+      return {
+        status: 303,
+        headers: { location: '/app', 'set-cookie': sessionCookie(sid, secure, config.sessionTtlHours) },
+        body: '',
+      };
+    }
     // I2 · public signup stays blocked while D-105 is open; an invite is the
     // only way in. When the flag opens (steward review), the same page works
     // without one.
@@ -600,13 +714,21 @@ async function handleRoutes(
   if (parts[0] === 'login' && parts[1] === 'sso' && parts[2]) {
     const hub = deps.calendars;
     if (!hub) return html(404, errorPage(404, 'SSO is not configured on this deployment.'));
+    // Sharding · the public entry addresses the TENANT ('main' = founding org).
+    let ssoOrgId = parts[2];
+    if (ssoOrgId === 'main') {
+      const first = await sql.query(`SELECT org_id FROM orgs ORDER BY created_at LIMIT 1`);
+      if (!first.rows[0]) return html(404, errorPage(404, 'This organization has no SSO configured.'));
+      ssoOrgId = String(first.rows[0]['org_id']);
+    }
     const ssoQ = await sql.query(
-      `SELECT issuer, client_id FROM org_sso WHERE org_id = $1`, [parts[2]]);
+      `SELECT issuer, client_id FROM org_sso WHERE org_id = $1`, [ssoOrgId]);
     const sso = ssoQ.rows[0];
     if (!sso) return html(404, errorPage(404, 'This organization has no SSO configured.'));
     try {
       const endpoints = await discoverOidc(String(sso['issuer']));
-      const state = await hub.sealState({ purpose: 'oidc', org: parts[2] });
+      const state = await hub.sealState({ purpose: 'oidc', org: ssoOrgId,
+        tag: deps.orgTag ?? '' });
       return {
         status: 303,
         headers: {
@@ -642,7 +764,8 @@ async function handleRoutes(
     const { rows } = await sql.query(`SELECT owner_id FROM owners WHERE lower(email) = lower($1)`, [email]);
     if (rows[0]) {
       const token = await issueSignInToken(sql, String(rows[0]['owner_id']), now);
-      await mail.send({ kind: 'signin', to: email, bookingId: '', start: now, token });
+      await mail.send({ kind: 'signin', to: email, bookingId: '', start: now,
+        token: tagged(deps, token) });
     }
     // The same answer either way: whether an address has an account is not
     // something an unauthenticated caller gets to learn.
@@ -786,9 +909,21 @@ async function handleRoutes(
         `SELECT owner_id FROM owners WHERE lower(email) = lower($1)`, [email]);
       let memberId = found.rows[0] ? String(found.rows[0]['owner_id']) : undefined;
       if (!memberId) {
+        // Sharding · the directory owns emails and the global ceiling.
+        if (deps.directory) {
+          const claim = await deps.directory.claimEmail(email);
+          if (claim === 'ceiling') {
+            return html(400, errorPage(400,
+              'This service has reached its account limit and is not taking more.'));
+          }
+          if (claim === 'taken') {
+            return html(403, errorPage(403,
+              'That identity already belongs to a different organization here.'));
+          }
+        }
         const made = await createOwnerDirect(sql, deps.tx, {
           email, displayName: email.split('@')[0]!, timezone: 'UTC',
-        }, config.maxOwnerAccounts);
+        }, deps.directory ? Number.MAX_SAFE_INTEGER : config.maxOwnerAccounts);
         if (!made.ok) {
           return html(400, errorPage(400,
             made.reason === 'ceiling'
@@ -798,6 +933,7 @@ async function handleRoutes(
         memberId = made.owner.owner_id;
         await sql.query(`UPDATE owners SET provisioned_by = $2 WHERE owner_id = $1`,
           [memberId, `sso:${state['org']}`]);
+        await registerOwnerLink(deps, sql, memberId);
       }
       await sql.query(
         `INSERT INTO org_members (org_id, owner_id, role) VALUES ($1, $2, 'member')
@@ -844,6 +980,8 @@ async function handleRoutes(
       if (req.form?.['confirm'] !== 'yes') {
         return html(400, errorPage(400, 'Deletion needs the confirmation box ticked.'));
       }
+      const dirRow = await sql.query(
+        `SELECT email, link_slug FROM owners WHERE owner_id = $1`, [owner.owner_id]);
       await deps.tx.transaction(async (tx) => {
         await tx.query(`DELETE FROM bookings WHERE owner_id = $1`, [owner.owner_id]);
         // D3 · calendar credentials are the most protected datum; deletion of
@@ -872,6 +1010,10 @@ async function handleRoutes(
         await tx.query(`DELETE FROM event_hosts WHERE owner_id = $1`, [owner.owner_id]);
         await tx.query(`DELETE FROM owners WHERE owner_id = $1`, [owner.owner_id]);
       });
+      if (dirRow.rows[0]) {
+        await deps.directory?.releaseOwner(String(dirRow.rows[0]['email']),
+          dirRow.rows[0]['link_slug'] === null ? undefined : String(dirRow.rows[0]['link_slug']));
+      }
       return {
         status: 303,
         headers: { location: '/login', 'set-cookie': clearedCookie(secure) },
@@ -1025,7 +1167,7 @@ async function handleRoutes(
       }
       let freshKey: string | undefined;
       if (req.method === 'POST') {
-        freshKey = `pk_${newToken()}`;
+        freshKey = deps.orgTag ? `pk_${deps.orgTag}_${newToken()}` : `pk_${newToken()}`;
         await sql.query(
           `INSERT INTO api_keys (key_hash, owner_id, name) VALUES ($1, $2, $3)`,
           [await sha256Hex(freshKey), owner.owner_id,
@@ -1048,6 +1190,9 @@ async function handleRoutes(
         if (!/^[a-z0-9-]{2,40}$/.test(rSlug)) {
           return html(400, errorPage(400, 'A link may use lowercase letters, digits and dashes.'));
         }
+        if (deps.directory && !(await deps.directory.registerForm(rSlug))) {
+          return html(409, errorPage(409, 'That link is already taken.'));
+        }
         try {
           await sql.query(
             `INSERT INTO routing_forms (form_id, owner_id, slug, title, question)
@@ -1055,6 +1200,7 @@ async function handleRoutes(
             [randomUUID(), owner.owner_id, rSlug, (f['title'] ?? 'Routing').trim(),
              (f['question'] ?? 'What do you need?').trim()]);
         } catch {
+          await deps.directory?.releaseForm(rSlug);
           return html(409, errorPage(409, 'That link is already taken.'));
         }
         return { status: 303, headers: { location: '/app/routing' }, body: '' };
@@ -1093,8 +1239,12 @@ async function handleRoutes(
         return { status: 303, headers: { location: '/app/routing' }, body: '' };
       }
       if (req.method === 'POST' && parts[2] && parts[3] === 'delete') {
+        const gone = await sql.query(
+          `SELECT slug FROM routing_forms WHERE form_id = $1 AND owner_id = $2`,
+          [parts[2], owner.owner_id]);
         await sql.query(`DELETE FROM routing_forms WHERE form_id = $1 AND owner_id = $2`,
           [parts[2], owner.owner_id]);
+        if (gone.rows[0]) await deps.directory?.releaseForm(String(gone.rows[0]['slug']));
         return { status: 303, headers: { location: '/app/routing' }, body: '' };
       }
       // GET /app/routing — every form with its options, editable in place.
@@ -1205,7 +1355,7 @@ async function handleRoutes(
             bookingId, start, timezone: 'UTC' });
         }
         await mail.send({ kind: 'confirmed', to: owner.email, bookingId, start,
-          token: tok, timezone: owner.timezone });
+          token: tagged(deps, tok), timezone: owner.timezone });
         return { status: 303, headers: { location: `/app/polls/${parts[2]}` }, body: '' };
       }
 
@@ -1234,7 +1384,7 @@ async function handleRoutes(
         }
         return html(200, pollDetailPage({
           poll_id: String(p['poll_id']), title: String(p['title']),
-          status: String(p['status']), token: String(p['token']),
+          status: String(p['status']), token: tagged(deps, String(p['token'])),
         }, opts.rows.map((t) => {
           const k = String(t['option_id']);
           return {
@@ -1256,6 +1406,15 @@ async function handleRoutes(
 
     // ── invites (P5): any owner may mint one while seats remain ──────────
     if (parts[1] === 'invites' && req.method === 'POST') {
+      // Sharding · the directory owns invites and the global ceiling. 'org'
+      // invites bring a teammate into THIS org; 'platform' invites found a
+      // new customer org.
+      if (deps.directory) {
+        const kind = req.form?.['kind'] === 'platform' ? 'platform' : 'org';
+        const code = await deps.directory.mintInvite(kind);
+        return { status: 303,
+          headers: { location: `/app/team?invite=${encodeURIComponent(code)}` }, body: '' };
+      }
       const seats = await sql.query(`SELECT count(*)::int AS c FROM owners`);
       if (Number(seats.rows[0]?.['c'] ?? 0) >= config.maxOwnerAccounts) {
         return html(400, errorPage(400, 'Every seat is taken (D-105 holds the ceiling).'));
@@ -1314,6 +1473,7 @@ async function handleRoutes(
         const f = req.form ?? {};
         if (f['remove']) {
           await sql.query(`DELETE FROM org_sso WHERE org_id = $1`, [parts[2]]);
+          await deps.directory?.registerDomain(null);
           await audit(sql, { orgId: parts[2], actor: owner.email, action: 'sso_removed' });
           return { status: 303, headers: { location: '/app/team' }, body: '' };
         }
@@ -1321,7 +1481,8 @@ async function handleRoutes(
         if (!/^https:\/\//.test(issuer)) {
           return html(400, errorPage(400, 'The issuer is an https:// URL from your IdP.'));
         }
-        const scimToken = `scim_${newToken()}`;
+        const scimToken = deps.orgTag
+          ? `scim_${deps.orgTag}_${newToken()}` : `scim_${newToken()}`;
         await sql.query(
           `INSERT INTO org_sso (org_id, issuer, client_id, client_secret, email_domain, scim_token_hash)
            VALUES ($1, $2, $3, $4, $5, $6)
@@ -1329,6 +1490,8 @@ async function handleRoutes(
              email_domain = $5, scim_token_hash = $6`,
           [parts[2], issuer, (f['client_id'] ?? '').trim(), (f['client_secret'] ?? '').trim(),
            (f['email_domain'] ?? '').trim().toLowerCase() || null, await sha256Hex(scimToken)]);
+        await deps.directory?.registerDomain(
+          (f['email_domain'] ?? '').trim().toLowerCase() || null);
         await audit(sql, { orgId: parts[2], actor: owner.email, action: 'sso_configured',
           detail: issuer });
         // The SCIM token is shown exactly once, on the redirect target.
@@ -1378,7 +1541,7 @@ async function handleRoutes(
       }
       return html(200, teamPage(orgs, owner.owner_id,
         openInvites.rows.map((r) => String(r['code'])), config.baseUrl,
-        ssoByOrg, req.query?.['scim']));
+        ssoByOrg, req.query?.['scim'], req.query?.['invite']));
     }
 
     // ── audit (P8): what happened to this account ────────────────────────
@@ -1451,6 +1614,10 @@ async function handleRoutes(
             `SELECT 1 FROM owners WHERE link_slug = $1 AND owner_id <> $2`,
             [newSlug, owner.owner_id]);
           if (clash.rows[0]) {
+            return html(400, settingsPage(current, config.baseUrl, 'That link is already taken.'));
+          }
+          // Sharding · the rename must also win the GLOBAL name.
+          if (deps.directory && !(await deps.directory.registerLink(newSlug, current.link_slug))) {
             return html(400, settingsPage(current, config.baseUrl, 'That link is already taken.'));
           }
         }
@@ -1768,7 +1935,7 @@ async function handleRoutes(
         const hosts = await loadHosts(sql, sched.schedule_id);
         return html(200, eventTypeEditor(sched, sets.rows.map((r) => ({
           set_id: String(r['set_id']), name: String(r['name']),
-        })), linkSlug, config.baseUrl, su.rows.map((r) => String(r['token'])),
+        })), linkSlug, config.baseUrl, su.rows.map((r) => tagged(deps, String(r['token']))),
           choices, hosts.map((h) => h.owner_id)));
       }
       if (req.method === 'POST') {
@@ -1846,7 +2013,8 @@ async function handleRoutes(
       const provider = hub.provider(parts[2] ?? '');
       if (provider && (parts[3] === 'connect' || parts[3] === 'upgrade')) {
         const scopeLevel = parts[3] === 'upgrade' ? 'events' : 'freebusy';
-        const state = await hub.sealState({ owner_id: owner.owner_id, level: scopeLevel });
+        const state = await hub.sealState({ owner_id: owner.owner_id, level: scopeLevel,
+          tag: deps.orgTag ?? '' });
         const location = provider.authUrl({
           state,
           redirectUri: `${config.baseUrl}/oauth/${provider.id}/callback`,
@@ -1956,10 +2124,10 @@ async function handleRoutes(
         return html(429, errorPage(429, 'Too many requests. Try again shortly.'));
       }
       const slots = await slotsFor(deps, schedule, now);
-      return html(200, bookingPage(schedule, slots.slots, { action: `/s/${parts[1]}/book` }));
+      return html(200, bookingPage(schedule, slots.slots, { action: `/s/${tagged(deps, parts[1])}/book` }));
     }
     if (req.method === 'POST' && parts[2] === 'book') {
-      return bookHandler(deps, schedule, req, now, parts[1]);
+      return bookHandler(deps, schedule, req, now, parts[1], `/s/${tagged(deps, parts[1])}/book`);
     }
     return html(404, errorPage(404, 'Nothing here.'));
   }
@@ -2018,7 +2186,7 @@ async function handleRoutes(
       end: new Date(String(o['ends_at'])).toISOString().replace('.000Z', 'Z'),
     }));
     if (req.method === 'GET') {
-      return html(200, pollVotePage(String(poll['title']), `/p/${parts[1]}`,
+      return html(200, pollVotePage(String(poll['title']), `/p/${tagged(deps, parts[1])}`,
         optionViews, String(poll['status'])));
     }
     if (req.method === 'POST' && String(poll['status']) === 'open') {
@@ -2028,7 +2196,7 @@ async function handleRoutes(
       const vName = (req.form?.['name'] ?? '').trim();
       const vEmail = (req.form?.['email'] ?? '').trim().toLowerCase();
       if (!vName || !vEmail.includes('@')) {
-        return html(400, pollVotePage(String(poll['title']), `/p/${parts[1]}`,
+        return html(400, pollVotePage(String(poll['title']), `/p/${tagged(deps, parts[1])}`,
           optionViews, 'open', 'Give a name and email so the organiser knows who answered.'));
       }
       // Re-voting replaces the previous answer wholesale.
@@ -2079,12 +2247,13 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
   if (parts.length >= 2 && parts[1] !== 'book') {
     const schedule = await findScheduleByOwnerSlug(sql, slug, parts[1]!);
     if (!schedule) return html(404, errorPage(404, 'No such booking page.'));
+    const bookAction = `/${slug}/${parts[1]}/book`;
     if (req.method === 'GET' && parts.length === 2) {
       const slots = await slotsFor(deps, schedule, now);
-      return html(200, bookingPage(schedule, slots.slots));
+      return html(200, bookingPage(schedule, slots.slots, { action: bookAction }));
     }
     if (req.method === 'POST' && parts[2] === 'book') {
-      return bookHandler(deps, schedule, req, now);
+      return bookHandler(deps, schedule, req, now, undefined, bookAction);
     }
     return html(404, errorPage(404, 'Nothing here.'));
   }
@@ -2289,6 +2458,8 @@ async function bookHandler(
   now: string,
   /** P3 · a single-use link token to consume iff the booking commits. */
   singleUse?: string,
+  /** Sharding · where the page's form posts back to on an error re-render. */
+  action?: string,
 ): Promise<Reply> {
   const { sql, config, mail } = deps;
   const form = req.form ?? {};
@@ -2310,7 +2481,7 @@ async function bookHandler(
 
   if (!start || !end || !name || !email) {
     const slots = await slotsFor(deps, schedule, now);
-    return html(400, bookingPage(schedule, slots.slots, { error: 'Pick a time and give a name and email.' }));
+    return html(400, bookingPage(schedule, slots.slots, { action, error: 'Pick a time and give a name and email.' }));
   }
 
   // D1 · the ceiling is enforced, not intended.
@@ -2350,6 +2521,7 @@ async function bookHandler(
     return html(
       409,
       bookingPage(schedule, offered.slots, {
+        action,
         error: 'That time is not available. Here are the times that are.',
       }),
     );
@@ -2360,7 +2532,7 @@ async function bookHandler(
   // against nothing and confirm a slot that should have expired.
   if (noticeExpired(start, now, schedule.minimum_notice_minutes)) {
     const slots = await slotsFor(deps, schedule, now);
-    return html(409, bookingPage(schedule, slots.slots, { error: 'That time has passed. Pick another.' }));
+    return html(409, bookingPage(schedule, slots.slots, { action, error: 'That time has passed. Pick another.' }));
   }
 
   // F4 · the page is a snapshot. Losing the race is normal operation.
@@ -2394,7 +2566,7 @@ async function bookHandler(
     }
     if (!winner) {
       const slots = await slotsFor(deps, schedule, now);
-      return html(409, bookingPage(schedule, slots.slots, { error: 'Someone just took that time. Here are the rest.' }));
+      return html(409, bookingPage(schedule, slots.slots, { action, error: 'Someone just took that time. Here are the rest.' }));
     }
     occupied = [{ ownerId: winner, bookingId }];
   } else if (schedule.scheduling_kind === 'collective' && offered.team) {
@@ -2407,7 +2579,7 @@ async function bookHandler(
     const r = await store.insertConfirmedGroup(groupId, entries, start, end, idempotencyKey, booker);
     if (!r.ok) {
       const slots = await slotsFor(deps, schedule, now);
-      return html(409, bookingPage(schedule, slots.slots, { error: 'Someone just took that time. Here are the rest.' }));
+      return html(409, bookingPage(schedule, slots.slots, { action, error: 'Someone just took that time. Here are the rest.' }));
     }
     await sql.query(`UPDATE bookings SET schedule_id = $1 WHERE group_id = $2`,
       [schedule.schedule_id, groupId]);
@@ -2416,7 +2588,7 @@ async function bookHandler(
     const inserted = await store.insertConfirmed(bookingId, start, end, idempotencyKey, booker);
     if (!inserted.ok) {
       const slots = await slotsFor(deps, schedule, now);
-      return html(409, bookingPage(schedule, slots.slots, { error: 'Someone just took that time. Here are the rest.' }));
+      return html(409, bookingPage(schedule, slots.slots, { action, error: 'Someone just took that time. Here are the rest.' }));
     }
     occupied = [{ ownerId: schedule.owner_id, bookingId }];
   }
@@ -2473,7 +2645,8 @@ async function bookHandler(
   // as a marker -- the SMTP adapter refuses a non-address, which is how the
   // placeholder was caught.
   await mail.send({
-    kind: 'confirmed', to: email, bookingId, start, token, timezone: bookerTz, location,
+    kind: 'confirmed', to: email, bookingId, start, token: tagged(deps, token),
+    timezone: bookerTz, location,
     // P3 · the booker's copy carries an .ics any calendar can import.
     ics: icsFor({ bookingId, title: schedule.title, start, end, location }),
   });
