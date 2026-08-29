@@ -451,6 +451,10 @@ async function handleRoutes(
         const gone = await sql.query(
           `SELECT email, link_slug FROM owners WHERE owner_id = $1`, [parts[3]]);
         await deps.tx.transaction(async (tx) => {
+          // D3 · same rule as the account path: answers go by their bookings.
+          await tx.query(
+            `DELETE FROM booking_answers WHERE booking_id IN
+               (SELECT booking_id FROM bookings WHERE owner_id = $1)`, [parts[3]]);
           await tx.query(`DELETE FROM bookings WHERE owner_id = $1`, [parts[3]]);
           await tx.query(`DELETE FROM event_hosts WHERE owner_id = $1`, [parts[3]]);
           await tx.query(`DELETE FROM owners WHERE owner_id = $1`, [parts[3]]);
@@ -614,30 +618,42 @@ async function handleRoutes(
       // address all go in one transaction. Sent mail cannot be recalled and
       // the privacy notice says so rather than implying otherwise.
       const bookerRow = await sql.query(
-        `SELECT booker_email, owner_id FROM bookings WHERE booking_id = $1 ORDER BY id DESC LIMIT 1`,
+        `SELECT booker_email, owner_id, group_id FROM bookings WHERE booking_id = $1 ORDER BY id DESC LIMIT 1`,
         [bookingId],
       );
       const goneEmail = bookerRow.rows[0]?.['booker_email'];
       const goneOwner = bookerRow.rows[0]?.['owner_id'];
+      // D3 · The management token rides the FIRST row of a series, but a
+      // recurring booking is a dozen rows and each carries the booker's name,
+      // address and answers. Deletion follows the group, or it reaches one
+      // occurrence and quietly keeps eleven — a cross-family review (grok)
+      // caught exactly that.
+      const groupId = bookerRow.rows[0]?.['group_id'] ?? null;
+      const groupIds = groupId
+        ? (await sql.query(`SELECT booking_id FROM bookings WHERE group_id = $1`, [groupId]))
+            .rows.map((r) => String(r['booking_id']))
+        : [bookingId];
       await deps.tx.transaction(async (tx) => {
-        await tx.query(
-          `UPDATE bookings SET status='cancelled', booker_name=NULL, booker_email=NULL, booker_tz=NULL,
-                  owner_note=NULL
-            WHERE booking_id = $1`,
-          [bookingId],
-        );
-        // Queued workflow mail and webhook payloads embed the booker's details.
-        await tx.query(`DELETE FROM jobs WHERE booking_id = $1`, [bookingId]);
-        // Answers to custom questions are the most sensitive thing a booking
-        // holds — free text the booker wrote. A deletion that reached the name
-        // but not the answer would make the promise on this page false.
-        await tx.query(`DELETE FROM booking_answers WHERE booking_id = $1`, [bookingId]);
+        for (const b of groupIds) {
+          await tx.query(
+            `UPDATE bookings SET status='cancelled', booker_name=NULL, booker_email=NULL, booker_tz=NULL,
+                    owner_note=NULL
+              WHERE booking_id = $1`,
+            [b],
+          );
+          // Queued workflow mail and webhook payloads embed the booker's details.
+          await tx.query(`DELETE FROM jobs WHERE booking_id = $1`, [b]);
+          // Answers to custom questions are the most sensitive thing a booking
+          // holds — free text the booker wrote. A deletion that reached the name
+          // but not the answer would make the promise on this page false.
+          await tx.query(`DELETE FROM booking_answers WHERE booking_id = $1`, [b]);
+        }
         if (goneEmail && goneOwner) {
           await tx.query(`DELETE FROM contacts WHERE owner_id = $1 AND email = $2`,
             [goneOwner, String(goneEmail).toLowerCase()]);
         }
       });
-      await deps.calendars?.onCancelled(sql, bookingId);
+      for (const b of groupIds) await deps.calendars?.onCancelled(sql, b);
       return html(200, errorPage(200, 'Your booking is cancelled and your details are deleted.'));
     }
     return html(405, errorPage(405, 'Method not allowed.'));
@@ -1048,6 +1064,13 @@ async function handleRoutes(
       const dirRow = await sql.query(
         `SELECT email, link_slug FROM owners WHERE owner_id = $1`, [owner.owner_id]);
       await deps.tx.transaction(async (tx) => {
+        // D3 · answers are deleted BY THE BOOKINGS THAT OWN THEM, before the
+        // booking rows go. The earlier join through event_questions silently
+        // matched nothing once a question had been removed — a cross-family
+        // review (grok) caught a booker's free text surviving the account.
+        await tx.query(
+          `DELETE FROM booking_answers WHERE booking_id IN
+             (SELECT booking_id FROM bookings WHERE owner_id = $1)`, [owner.owner_id]);
         await tx.query(`DELETE FROM bookings WHERE owner_id = $1`, [owner.owner_id]);
         // D3 · calendar credentials are the most protected datum; deletion of
         // the account deletes them in the same transaction.

@@ -617,6 +617,12 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
           // people it invited. Google asserted email_verified, so I7's mailbox
           // proof is already met and the session may begin now. A taken
           // address cannot reach here: the lookup above signs it in instead.
+          // I9 · The ceiling is on SIGN-UPS, not on mail — this path sends
+          // none, and it is limited anyway (grok, second review).
+          const ssoIp = request.headers.get('cf-connecting-ip') ?? 'unknown';
+          if (await dir('overSignupLimit', ssoIp, RATE_LIMITS.signups_per_ip_per_hour, 3600)) {
+            return htmlResponse(429, errorPage(429, 'Too many sign-up attempts. Try again later.'));
+          }
           const claim = (await dir('claimSignupPublic', email)) as
             | { ok: true; tag: string; newOrg: boolean }
             | { ok: false; reason: string };

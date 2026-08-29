@@ -236,3 +236,26 @@ test('one owner cannot add or remove questions on another owner\'s event', async
   const none = await db.query(`SELECT count(*)::int AS c FROM event_questions`);
   assert.equal(Number(none.rows[0]!['c']), 0);
 });
+
+test('D3 · answers survive question removal but NOT account deletion (composed)', async () => {
+  // The two halves each passed alone; composed, the old delete joined through
+  // event_questions and silently kept the booker's free text after the owner
+  // was gone. Found by cross-family review, kept here so it stays found.
+  const { cookie, id } = await ownerWithEvent();
+  const q = await addQuestion(cookie, id, { label: 'What do you need?', kind: 'text' });
+  const qid = String(q['question_id']);
+  await bookWith({ [`q:${qid}`]: 'the most sensitive free text in the system' });
+  const before = await db.query(`SELECT count(*)::int AS c FROM booking_answers`);
+  assert.ok(Number(before.rows[0]!['c']) >= 1, 'the answer exists');
+
+  // 1 · owner removes the question — answers stay, per spec (the record of what was asked)
+  await call('POST', `/app/event/${id}/questions`, { cookie, form: { remove: qid } });
+  const mid = await db.query(`SELECT count(*)::int AS c FROM booking_answers`);
+  assert.ok(Number(mid.rows[0]!['c']) >= 1, 'answers survive question removal');
+
+  // 2 · owner deletes the account — NOW everything must go
+  await call('POST', '/app/delete', { cookie, form: { confirm: 'yes' } });
+  const after = await db.query(`SELECT count(*)::int AS c FROM booking_answers`);
+  assert.equal(Number(after.rows[0]!['c']), 0,
+    'no booker free text survives the account it was given to');
+});

@@ -205,3 +205,30 @@ test('an unparseable rule is refused rather than stored', async () => {
   const row = await db.query(`SELECT recurrence_rule FROM schedules WHERE schedule_id = $1`, [id]);
   assert.equal(row.rows[0]!['recurrence_rule'], null);
 });
+
+test('D3 · the management link deletes the WHOLE series: names, notes, answers', async () => {
+  // The token rides the first row, but a series is many rows, each carrying
+  // the booker's name and email. Deletion that reached one occurrence and
+  // kept the rest was found by cross-family review; this composes it.
+  await recurringEvent('FREQ=WEEKLY;COUNT=3');
+  await call('POST', '/standup/book', {
+    form: { start: '2026-06-01T09:00:00Z', end: '2026-06-01T09:30:00Z',
+            name: 'Ada', email: 'ada@example.com', repeat: 'on' } });
+  const all = await db.query(`SELECT booking_id, token FROM bookings ORDER BY starts_at`);
+  assert.equal(all.rows.length, 3);
+  const token = String(all.rows.find((r) => r['token'])!['token']);
+
+  const r = await call('POST', `/b/${token}/delete`, { form: { confirm: 'yes' } });
+  assert.equal(r.status, 200);
+
+  const left = await db.query(
+    `SELECT count(*)::int AS c FROM bookings
+      WHERE booker_email IS NOT NULL OR booker_name IS NOT NULL`);
+  assert.equal(Number(left.rows[0]!['c']), 0,
+    'no sibling row keeps the booker\'s identity after the link deletes');
+  const ans = await db.query(`SELECT count(*)::int AS c FROM booking_answers`);
+  assert.equal(Number(ans.rows[0]!['c']), 0, 'no sibling row keeps answers');
+  const cancelled = await db.query(
+    `SELECT count(*)::int AS c FROM bookings WHERE status = 'cancelled'`);
+  assert.equal(Number(cancelled.rows[0]!['c']), 3, 'every occurrence is cancelled');
+});
