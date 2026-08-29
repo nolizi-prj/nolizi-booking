@@ -13,8 +13,8 @@ import {
   type Schedule,
 } from './schedules.ts';
 import {
-  availabilityEditor, bookingPage, confirmedPage, errorPage, eventTypeEditor, homePage, loginPage,
-  managePage, ownerHome, ownerLanding, signupPage,
+  availabilityEditor, bookingPage, confirmedPage, contactsPage, errorPage, eventTypeEditor,
+  homePage, loginPage, managePage, meetingsPage, ownerHome, ownerLanding, signupPage, snippetPage,
   type ScheduleSummary,
 } from './pages.ts';
 import {
@@ -23,6 +23,7 @@ import {
 } from './identity.ts';
 import { RATE_LIMITS, type Config } from './config.ts';
 import type { CalendarHub } from './calendars.ts';
+import { icsFor } from './ics.ts';
 import type { MailPort } from './mail.ts';
 import type { Interval, Slot } from '@pumasi/booking-core';
 
@@ -399,6 +400,19 @@ async function handleRoutes(
           [owner.owner_id],
         );
         await tx.query(`DELETE FROM calendar_connections WHERE owner_id = $1`, [owner.owner_id]);
+        // P3 · contacts and sharing artefacts go with the account (D3).
+        await tx.query(`DELETE FROM contacts WHERE owner_id = $1`, [owner.owner_id]);
+        await tx.query(`DELETE FROM contact_exclusions WHERE owner_id = $1`, [owner.owner_id]);
+        await tx.query(
+          `DELETE FROM single_use_links WHERE schedule_id IN
+             (SELECT schedule_id FROM schedules WHERE owner_id = $1)`, [owner.owner_id]);
+        await tx.query(
+          `DELETE FROM set_rules WHERE set_id IN
+             (SELECT set_id FROM availability_sets WHERE owner_id = $1)`, [owner.owner_id]);
+        await tx.query(
+          `DELETE FROM set_overrides WHERE set_id IN
+             (SELECT set_id FROM availability_sets WHERE owner_id = $1)`, [owner.owner_id]);
+        await tx.query(`DELETE FROM availability_sets WHERE owner_id = $1`, [owner.owner_id]);
         await tx.query(`DELETE FROM owners WHERE owner_id = $1`, [owner.owner_id]);
       });
       return {
@@ -483,6 +497,147 @@ async function handleRoutes(
         }
       });
       return { status: 303, headers: { location: '/app' }, body: '' };
+    }
+
+    // ── meetings (P3) ────────────────────────────────────────────────────
+    if (parts[1] === 'meetings') {
+      if (req.method === 'GET' && !parts[2]) {
+        const range = req.query?.['range'] === 'past' ? 'past' : 'upcoming';
+        const q = (req.query?.['q'] ?? '').trim().toLowerCase();
+        const cmp = range === 'past' ? '<=' : '>';
+        const order = range === 'past' ? 'DESC' : 'ASC';
+        const { rows } = await sql.query(
+          `SELECT b.booking_id, b.starts_at, b.ends_at, b.status, b.booker_name, b.booker_email,
+                  b.no_show, b.owner_note, s.title
+             FROM bookings b LEFT JOIN schedules s ON s.schedule_id = b.schedule_id
+            WHERE b.owner_id = $1 AND b.starts_at ${cmp} $2
+              AND (b.status = 'confirmed' OR $3 = 'past')
+            ORDER BY b.starts_at ${order} LIMIT 100`,
+          [owner.owner_id, now, range],
+        );
+        const items = rows
+          .map((r) => ({
+            booking_id: String(r['booking_id']),
+            start: new Date(String(r['starts_at'])).toISOString().replace('.000Z', 'Z'),
+            end: new Date(String(r['ends_at'])).toISOString().replace('.000Z', 'Z'),
+            status: String(r['status']),
+            name: r['booker_name'] === null ? '' : String(r['booker_name']),
+            email: r['booker_email'] === null ? '' : String(r['booker_email']),
+            no_show: Number(r['no_show']) === 1,
+            note: r['owner_note'] === null ? '' : String(r['owner_note']),
+            title: String(r['title'] ?? 'Booking'),
+          }))
+          .filter((m) => !q || m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q));
+        return html(200, meetingsPage(items, range, q, owner.timezone));
+      }
+
+      // Owner actions on one booking — scoped at the query (I4).
+      if (req.method === 'POST' && parts[2] && parts[3]) {
+        const found = await sql.query(
+          `SELECT booking_id, starts_at, status FROM bookings
+            WHERE booking_id = $1 AND owner_id = $2 ORDER BY id DESC LIMIT 1`,
+          [parts[2], owner.owner_id],
+        );
+        const b = found.rows[0];
+        if (!b) return html(404, errorPage(404, 'No such meeting.'));
+        const bookingId = String(b['booking_id']);
+        const startIso = new Date(String(b['starts_at'])).toISOString().replace('.000Z', 'Z');
+
+        if (parts[3] === 'cancel' && String(b['status']) === 'confirmed') {
+          const store = new PostgresBookingStore(sql, owner.owner_id, deps.tx);
+          await store.cancel(bookingId, `owner-cancel:${bookingId}`);
+          await deps.calendars?.onCancelled(sql, bookingId);
+          const booker = await bookerFor(sql, bookingId);
+          if (booker?.email) {
+            await mail.send({ kind: 'cancelled', to: booker.email, bookingId,
+              start: startIso, timezone: booker.timezone });
+          }
+        }
+        if (parts[3] === 'noshow') {
+          await sql.query(
+            `UPDATE bookings SET no_show = CASE no_show WHEN 1 THEN 0 ELSE 1 END
+              WHERE booking_id = $1 AND owner_id = $2`,
+            [bookingId, owner.owner_id],
+          );
+        }
+        if (parts[3] === 'note') {
+          await sql.query(
+            `UPDATE bookings SET owner_note = $3 WHERE booking_id = $1 AND owner_id = $2`,
+            [bookingId, owner.owner_id, (req.form?.['note'] ?? '').slice(0, 2000)],
+          );
+        }
+        const back = req.form?.['range'] === 'past' ? '?range=past' : '';
+        return { status: 303, headers: { location: `/app/meetings${back}` }, body: '' };
+      }
+      return html(404, errorPage(404, 'Nothing here.'));
+    }
+
+    // ── contacts (P3) ────────────────────────────────────────────────────
+    if (parts[1] === 'contacts') {
+      if (req.method === 'POST' && parts[2] === 'exclusions') {
+        const f = req.form ?? {};
+        if (f['remove']) {
+          await sql.query(`DELETE FROM contact_exclusions WHERE owner_id = $1 AND pattern = $2`,
+            [owner.owner_id, f['remove']]);
+        } else {
+          const pattern = (f['pattern'] ?? '').trim().toLowerCase();
+          if (pattern) {
+            await sql.query(
+              `INSERT INTO contact_exclusions (owner_id, pattern) VALUES ($1, $2)
+               ON CONFLICT (owner_id, pattern) DO NOTHING`,
+              [owner.owner_id, pattern]);
+          }
+        }
+        return { status: 303, headers: { location: '/app/contacts' }, body: '' };
+      }
+      if (req.method === 'POST' && parts[2] === 'delete') {
+        await sql.query(`DELETE FROM contacts WHERE owner_id = $1 AND email = $2`,
+          [owner.owner_id, (req.form?.['email'] ?? '').toLowerCase()]);
+        return { status: 303, headers: { location: '/app/contacts' }, body: '' };
+      }
+      const contacts = await sql.query(
+        `SELECT email, name, times_booked, last_booked_at FROM contacts
+          WHERE owner_id = $1 ORDER BY last_booked_at DESC LIMIT 200`,
+        [owner.owner_id],
+      );
+      const exclusions = await sql.query(
+        `SELECT pattern FROM contact_exclusions WHERE owner_id = $1 ORDER BY pattern`,
+        [owner.owner_id],
+      );
+      return html(200, contactsPage(
+        contacts.rows.map((r) => ({
+          email: String(r['email']), name: String(r['name']),
+          times_booked: Number(r['times_booked']),
+          last_booked_at: String(r['last_booked_at']).slice(0, 10),
+        })),
+        exclusions.rows.map((r) => String(r['pattern'])),
+      ));
+    }
+
+    // ── sharing (P3): single-use links and the times snippet ─────────────
+    if (parts[1] === 'event' && parts[2] && parts[3] === 'single-use' && req.method === 'POST') {
+      const sched = await findScheduleById(sql, parts[2]);
+      if (!sched || sched.owner_id !== owner.owner_id) {
+        return html(404, errorPage(404, 'No such booking page.'));
+      }
+      const token = newToken();
+      await sql.query(
+        `INSERT INTO single_use_links (token, schedule_id) VALUES ($1, $2)`,
+        [token, sched.schedule_id],
+      );
+      return { status: 303, headers: { location: `/app/event/${sched.schedule_id}` }, body: '' };
+    }
+    if (parts[1] === 'event' && parts[2] && parts[3] === 'snippet' && req.method === 'GET') {
+      const sched = await findScheduleById(sql, parts[2]);
+      if (!sched || sched.owner_id !== owner.owner_id) {
+        return html(404, errorPage(404, 'No such booking page.'));
+      }
+      const slots = await slotsFor(deps, sched, now);
+      const link = await sql.query(`SELECT link_slug FROM owners WHERE owner_id = $1`, [owner.owner_id]);
+      const url = link.rows[0]?.['link_slug']
+        ? `${config.baseUrl}/${String(link.rows[0]['link_slug'])}/${sched.slug}`
+        : `${config.baseUrl}/${sched.slug}`;
+      return html(200, snippetPage(sched.title, url, owner.timezone, slots.slots.slice(0, 12)));
     }
 
     // ── availability sets (P2) ───────────────────────────────────────────
@@ -612,9 +767,14 @@ async function handleRoutes(
       if (req.method === 'GET') {
         const link = await sql.query(`SELECT link_slug FROM owners WHERE owner_id = $1`, [owner.owner_id]);
         const linkSlug = link.rows[0]?.['link_slug'] ? String(link.rows[0]['link_slug']) : '';
+        const su = await sql.query(
+          `SELECT token FROM single_use_links WHERE schedule_id = $1 AND used_at IS NULL
+            ORDER BY created_at DESC LIMIT 10`,
+          [sched.schedule_id],
+        );
         return html(200, eventTypeEditor(sched, sets.rows.map((r) => ({
           set_id: String(r['set_id']), name: String(r['name']),
-        })), linkSlug, config.baseUrl));
+        })), linkSlug, config.baseUrl, su.rows.map((r) => String(r['token']))));
       }
       if (req.method === 'POST') {
         const f = req.form ?? {};
@@ -747,6 +907,43 @@ async function handleRoutes(
     return html(200, ownerHome(owner, summaries, config.baseUrl, undefined, connections,
       setsRows.rows.map((r) => ({ set_id: String(r['set_id']), name: String(r['name']) })),
       linkRow.rows[0]?.['link_slug'] ? String(linkRow.rows[0]['link_slug']) : undefined));
+  }
+
+  // ── single-use links (P3): /s/<token> works once, then is a dead page ────
+  if (parts[0] === 's' && parts[1]) {
+    const link = await sql.query(
+      `SELECT schedule_id, used_at FROM single_use_links WHERE token = $1`, [parts[1]]);
+    const l = link.rows[0];
+    if (!l || l['used_at'] !== null) {
+      return html(404, errorPage(404, 'This link has been used or does not exist.'));
+    }
+    const schedule = await findScheduleById(sql, String(l['schedule_id']));
+    if (!schedule) return html(404, errorPage(404, 'No such booking page.'));
+    if (req.method === 'GET' && !parts[2]) {
+      if (await overLimit(sql, `view:${req.ip}`, RATE_LIMITS.page_views_per_ip_per_minute, 60, now)) {
+        return html(429, errorPage(429, 'Too many requests. Try again shortly.'));
+      }
+      const slots = await slotsFor(deps, schedule, now);
+      return html(200, bookingPage(schedule, slots.slots, { action: `/s/${parts[1]}/book` }));
+    }
+    if (req.method === 'POST' && parts[2] === 'book') {
+      return bookHandler(deps, schedule, req, now, parts[1]);
+    }
+    return html(404, errorPage(404, 'Nothing here.'));
+  }
+
+  // ── the embed loader (P3): one script, one iframe ────────────────────────
+  if (req.path === '/embed.js' && req.method === 'GET') {
+    const js = `(function(){var s=document.currentScript;var p=s.getAttribute('data-pumasi');if(!p)return;
+var f=document.createElement('iframe');f.src=${JSON.stringify(config.baseUrl)}+p;
+f.style.cssText='width:100%;height:'+(s.getAttribute('data-height')||'720')+'px;border:0;border-radius:8px';
+f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
+    return {
+      status: 200,
+      headers: { 'content-type': 'application/javascript; charset=utf-8',
+                 'cache-control': 'public, max-age=3600' },
+      body: js,
+    };
   }
 
   // ── the public surfaces (P2) ─────────────────────────────────────────────
@@ -905,6 +1102,8 @@ async function bookHandler(
   schedule: Schedule,
   req: { ip: string; form?: Record<string, string> },
   now: string,
+  /** P3 · a single-use link token to consume iff the booking commits. */
+  singleUse?: string,
 ): Promise<Reply> {
   const { sql, config, mail } = deps;
   const form = req.form ?? {};
@@ -999,6 +1198,30 @@ async function bookHandler(
 
   // SPEC-0003 · the booking lands in the owner's calendar (never fatal, M3),
   // BEFORE the mails so a minted Meet link can ride along in them.
+  // P3 · a single-use link dies with the booking that used it.
+  if (singleUse) {
+    await sql.query(`UPDATE single_use_links SET used_at = $2 WHERE token = $1`, [singleUse, now]);
+  }
+
+  // P3 · the booker joins the owner's contacts, unless excluded by address or
+  // domain. Being excluded never blocks the booking itself.
+  const domain = email.slice(email.indexOf('@') + 1).toLowerCase();
+  const excluded = await sql.query(
+    `SELECT 1 FROM contact_exclusions WHERE owner_id = $1 AND (pattern = $2 OR pattern = $3)`,
+    [schedule.owner_id, email.toLowerCase(), domain],
+  );
+  if (!excluded.rows[0]) {
+    await sql.query(
+      `INSERT INTO contacts (owner_id, email, name, times_booked, last_booked_at)
+       VALUES ($1, $2, $3, 1, $4)
+       ON CONFLICT (owner_id, email) DO UPDATE SET
+         name = excluded.name,
+         times_booked = contacts.times_booked + 1,
+         last_booked_at = excluded.last_booked_at`,
+      [schedule.owner_id, email.toLowerCase(), name, now],
+    );
+  }
+
   const written = await deps.calendars?.writeBack(sql, schedule.owner_id, bookingId, {
     title: `${schedule.title} — ${name}`,
     description: `Booked via ${config.baseUrl}/${schedule.slug}\nWith: ${name} <${email}>`,
@@ -1014,7 +1237,11 @@ async function bookHandler(
   // as a marker -- the SMTP adapter refuses a non-address, which is how the
   // placeholder was caught.
   const owner = await ownerContact(sql, schedule.owner_id);
-  await mail.send({ kind: 'confirmed', to: email, bookingId, start, token, timezone: bookerTz, location });
+  await mail.send({
+    kind: 'confirmed', to: email, bookingId, start, token, timezone: bookerTz, location,
+    // P3 · the booker's copy carries an .ics any calendar can import.
+    ics: icsFor({ bookingId, title: schedule.title, start, end, location }),
+  });
   if (owner) {
     // The owner gets no management token: it is the booker's credential.
     await mail.send({ kind: 'confirmed', to: owner.email, bookingId, start, timezone: owner.timezone, location });

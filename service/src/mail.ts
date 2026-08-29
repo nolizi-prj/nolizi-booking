@@ -16,6 +16,8 @@ export interface MailMessage {
   timezone?: string;
   /** P2 · where the meeting happens — an address, a phone note, a Meet link. */
   location?: string;
+  /** P3 · an iCalendar attachment (ics.ts), sent with confirmations. */
+  ics?: string;
 }
 
 export interface MailPort {

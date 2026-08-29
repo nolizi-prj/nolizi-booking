@@ -48,7 +48,7 @@ const SHELL = (title: string, body: string): string => `<!doctype html>
 export function bookingPage(
   schedule: Schedule,
   slots: Slot[],
-  opts: { error?: string; csrf?: string } = {},
+  opts: { error?: string; csrf?: string; action?: string } = {},
 ): string {
   const err = opts.error ? `<p class="err">${esc(opts.error)}</p>` : '';
   // Rendered server-side so the page works without JavaScript. The script
@@ -89,7 +89,7 @@ ${err}${empty}
 </div>
 <div id="list"><div class="slots">${buttons}</div></div>
 <script type="application/json" id="slots-data">${JSON.stringify(slots).replace(/</g, '\\u003c')}</script>
-<form method="post" action="/${esc(schedule.slug)}/book" id="f">
+<form method="post" action="${esc(opts.action ?? `/${schedule.slug}/book`)}" id="f">
   <noscript><p class="muted">Times above are shown in UTC. With JavaScript on they
     appear in your own timezone.</p></noscript>
   <input type="hidden" name="start" id="start"><input type="hidden" name="end" id="end">
@@ -365,6 +365,152 @@ const DAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const;
 
 const DAYS_FULL = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const;
 
+const CARD_CSS = `<style>
+ .card{border:1px solid var(--line);border-radius:.5rem;padding:1rem;margin:1rem 0}
+ .card h2{font-size:1.1rem;margin:0 0 .25rem}
+ .linkish{background:none;border:0;color:var(--accent);font:inherit;cursor:pointer;padding:0}
+ table.rows{border-collapse:collapse;width:100%}
+ table.rows td,table.rows th{padding:.4rem .5rem;border-bottom:1px solid var(--line);text-align:left;font-size:.92rem}
+ .pill{font-size:.75rem;border:1px solid var(--line);border-radius:1rem;padding:.1rem .5rem;color:var(--muted)}
+ .navrow{display:flex;gap:1rem;margin:.25rem 0 1rem;flex-wrap:wrap}
+</style>`;
+
+/** P3 — the owner's meetings, filterable, actionable. */
+export function meetingsPage(
+  items: {
+    booking_id: string; start: string; end: string; status: string;
+    name: string; email: string; no_show: boolean; note: string; title: string;
+  }[],
+  range: string,
+  q: string,
+  timezone: string,
+): string {
+  const rows = items
+    .map(
+      (m) => `<div class="card">
+  <p><b>${esc(m.title)}</b> &middot; <time datetime="${esc(m.start)}" class="lt">${esc(m.start)}</time>
+    ${m.status === 'cancelled' ? '<span class="pill">cancelled</span>' : ''}
+    ${m.no_show ? '<span class="pill">no-show</span>' : ''}</p>
+  <p class="muted">${esc(m.name)} &middot; ${esc(m.email)}</p>
+  <form method="post" action="/app/meetings/${esc(m.booking_id)}/note" class="noterow">
+    <input type="hidden" name="range" value="${esc(range)}">
+    <input name="note" value="${esc(m.note)}" placeholder="Private note (only you see this)">
+    <button class="linkish" type="submit">save note</button>
+  </form>
+  <p>
+  ${m.status === 'confirmed' ? `<form method="post" action="/app/meetings/${esc(m.booking_id)}/cancel" style="display:inline">
+    <input type="hidden" name="range" value="${esc(range)}">
+    <button class="linkish" type="submit">cancel meeting</button></form> &middot; ` : ''}
+  <form method="post" action="/app/meetings/${esc(m.booking_id)}/noshow" style="display:inline">
+    <input type="hidden" name="range" value="${esc(range)}">
+    <button class="linkish" type="submit">${m.no_show ? 'clear no-show' : 'mark no-show'}</button></form>
+  </p>
+</div>`,
+    )
+    .join('');
+
+  return SHELL(
+    'Meetings',
+    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+<h1>Meetings</h1>
+<div class="navrow">
+  <a href="/app/meetings" ${range !== 'past' ? 'style="font-weight:600"' : ''}>Upcoming</a>
+  <a href="/app/meetings?range=past" ${range === 'past' ? 'style="font-weight:600"' : ''}>Past</a>
+  <form method="get" action="/app/meetings" style="margin:0">
+    <input type="hidden" name="range" value="${esc(range)}">
+    <input name="q" value="${esc(q)}" placeholder="Search name or email" size="24">
+  </form>
+</div>
+${rows || '<p class="muted">Nothing here.</p>'}
+${CARD_CSS}
+<style>.noterow{display:flex;gap:.5rem;margin:.5rem 0}.noterow input[name=note]{flex:1}</style>
+<script>document.querySelectorAll('time.lt').forEach(function(t){
+  t.textContent = new Date(t.getAttribute('datetime')).toLocaleString(undefined,
+    {weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+});</script>`,
+  );
+}
+
+/** P3 — contacts accreted from bookings, with exclusions. */
+export function contactsPage(
+  contacts: { email: string; name: string; times_booked: number; last_booked_at: string }[],
+  exclusions: string[],
+): string {
+  const rows = contacts
+    .map(
+      (c) => `<tr><td>${esc(c.name)}</td><td>${esc(c.email)}</td>
+  <td>${c.times_booked}</td><td>${esc(c.last_booked_at)}</td>
+  <td><form method="post" action="/app/contacts/delete" style="margin:0">
+    <input type="hidden" name="email" value="${esc(c.email)}">
+    <button class="linkish" type="submit">delete</button></form></td></tr>`,
+    )
+    .join('');
+  const ex = exclusions
+    .map(
+      (p) => `<li>${esc(p)} <form method="post" action="/app/contacts/exclusions" style="display:inline">
+  <input type="hidden" name="remove" value="${esc(p)}">
+  <button class="linkish" type="submit">remove</button></form></li>`,
+    )
+    .join('');
+  return SHELL(
+    'Contacts',
+    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+<h1>Contacts</h1>
+<p class="muted">People who booked with you, newest first. Deleting a contact
+  does not touch their bookings.</p>
+${rows ? `<table class="rows"><tr><th>Name</th><th>Email</th><th>Bookings</th><th>Last</th><th></th></tr>${rows}</table>` : '<p class="muted">No contacts yet.</p>'}
+<div class="card">
+  <h2>Exclusions</h2>
+  <p class="muted">Addresses or whole domains that never become contacts.</p>
+  ${ex ? `<ul>${ex}</ul>` : ''}
+  <form method="post" action="/app/contacts/exclusions">
+    <input name="pattern" placeholder="person@company.com or company.com">
+    <button class="submit" type="submit">Exclude</button>
+  </form>
+</div>
+${CARD_CSS}`,
+  );
+}
+
+/** P3 — "offer times in email": a paste-ready list of upcoming openings. */
+export function snippetPage(
+  title: string,
+  url: string,
+  timezone: string,
+  slots: Slot[],
+): string {
+  return SHELL(
+    'Offer times',
+    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+<h1>Offer times in an email</h1>
+<p class="muted">Copy this into a message. Times are in your timezone
+  (${esc(timezone)}); the link lets them pick anything else.</p>
+<textarea id="snip" rows="12" style="width:100%;font:inherit;padding:.75rem;border:1px solid var(--line);border-radius:.4rem;background:transparent;color:var(--fg)"></textarea>
+<p><button class="submit" id="copy" type="button">Copy to clipboard</button></p>
+<script type="application/json" id="snip-data">${JSON.stringify({ title, url, timezone, slots }).replace(/</g, '\\u003c')}</script>
+<script>
+(function(){
+  var d = JSON.parse(document.getElementById('snip-data').textContent);
+  var fmt = new Intl.DateTimeFormat(undefined,{weekday:'long',month:'long',day:'numeric',
+    hour:'numeric',minute:'2-digit',timeZone:d.timezone});
+  var lines = ['Here are some times that work for a ' + d.title + ':', ''];
+  var seen = {};
+  d.slots.forEach(function(s){
+    var t = fmt.format(new Date(s.start));
+    if (!seen[t]) { seen[t] = 1; lines.push('  - ' + t); }
+  });
+  lines.push('', 'Or pick any other time here: ' + d.url);
+  var ta = document.getElementById('snip');
+  ta.value = lines.join('\\n');
+  document.getElementById('copy').onclick = function(){
+    ta.select(); navigator.clipboard.writeText(ta.value);
+    this.textContent = 'Copied';
+  };
+})();
+</script>`,
+  );
+}
+
 /** P2 — the editor for one named availability set. */
 export function availabilityEditor(set: {
   set_id: string;
@@ -443,6 +589,7 @@ export function eventTypeEditor(
   sets: { set_id: string; name: string }[],
   linkSlug: string,
   baseUrl: string,
+  singleUseTokens: string[] = [],
 ): string {
   const setOptions = sets
     .map(
@@ -493,11 +640,23 @@ export function eventTypeEditor(
 </div>
 <button class="submit" type="submit">Save event type</button>
 </form>
+<div class="card"><h2>Share</h2>
+  <p class="muted"><a href="/app/event/${esc(s.schedule_id)}/snippet">Offer times in an email</a> —
+    a paste-ready list of your next openings.</p>
+  <p class="muted">Single-use links work exactly once, then die:</p>
+  ${singleUseTokens.map((t) => `<p><code>${esc(baseUrl)}/s/${esc(t)}</code></p>`).join('')}
+  <form method="post" action="/app/event/${esc(s.schedule_id)}/single-use">
+    <button class="submit" type="submit">Create single-use link</button>
+  </form>
+  <p class="muted" style="margin-top:1rem">Embed on your own site:</p>
+  <pre style="overflow-x:auto"><code>&lt;script src="${esc(baseUrl)}/embed.js" data-pumasi="/${esc(linkSlug ? `${linkSlug}/${s.slug}` : s.slug)}"&gt;&lt;/script&gt;</code></pre>
+</div>
 <style>
  .card{border:1px solid var(--line);border-radius:.5rem;padding:1rem;margin:1rem 0}
  .card h2{font-size:1.1rem;margin:0 0 .25rem}
  select{width:100%;padding:.55rem;border:1px solid var(--line);border-radius:.4rem;
    background:transparent;color:var(--fg);font:inherit}
+ code{font-size:.85em;background:var(--line);padding:.1em .3em;border-radius:.25rem}
 </style>`,
   );
 }
@@ -631,6 +790,7 @@ export function ownerHome(
   &middot; <form method="post" action="/logout" style="display:inline">
     <button type="submit" class="linkish">sign out</button></form></p>
 ${notice ? `<p class="ok">${esc(notice)}</p>` : ''}
+<p class="muted"><a href="/app/meetings">Meetings</a> &middot; <a href="/app/contacts">Contacts</a></p>
 ${linkSlug ? `<p class="muted">Your page: <a href="${esc(baseUrl)}/${esc(linkSlug)}">${esc(baseUrl)}/${esc(linkSlug)}</a></p>` : ''}
 ${schedules.length === 0 ? '<p class="muted">No booking pages yet.</p>' : list}
 <div class="card">

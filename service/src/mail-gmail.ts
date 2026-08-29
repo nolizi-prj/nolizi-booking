@@ -132,17 +132,44 @@ export class GmailMail implements MailPort {
 
     // Body as base64 so the message is 7-bit clean whatever the text holds.
     const bodyB64 = b64(utf8(text)).replace(/(.{76})/g, '$1\r\n');
-    const rfc822 =
-      [
-        `From: ${this.config.from}`,
-        `To: ${message.to}`,
-        `Subject: ${encodeSubject(subject)}`,
-        'MIME-Version: 1.0',
+    const headers = [
+      `From: ${this.config.from}`,
+      `To: ${message.to}`,
+      `Subject: ${encodeSubject(subject)}`,
+      'MIME-Version: 1.0',
+    ];
+    let rfc822: string;
+    if (message.ics) {
+      // P3 · multipart/mixed: the text part plus an .ics the recipient's
+      // calendar can import.
+      const boundary = `=_pumasi_${Date.now().toString(36)}`;
+      const icsB64 = b64(utf8(message.ics)).replace(/(.{76})/g, '$1\r\n');
+      rfc822 = [
+        ...headers,
+        `Content-Type: multipart/mixed; boundary="${boundary}"`,
+        '',
+        `--${boundary}`,
+        'Content-Type: text/plain; charset=utf-8',
+        'Content-Transfer-Encoding: base64',
+        '',
+        bodyB64,
+        `--${boundary}`,
+        'Content-Type: text/calendar; charset=utf-8; method=PUBLISH',
+        'Content-Transfer-Encoding: base64',
+        'Content-Disposition: attachment; filename="invite.ics"',
+        '',
+        icsB64,
+        `--${boundary}--`,
+      ].join('\r\n');
+    } else {
+      rfc822 = [
+        ...headers,
         'Content-Type: text/plain; charset=utf-8',
         'Content-Transfer-Encoding: base64',
         '',
         bodyB64,
       ].join('\r\n');
+    }
 
     const res = await fetch(SEND_URL, {
       method: 'POST',

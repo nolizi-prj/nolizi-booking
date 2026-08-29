@@ -48,6 +48,10 @@ export class SmtpMail implements MailPort {
       to: message.to,
       subject,
       text,
+      // P3 · calendar attachment on confirmations.
+      attachments: message.ics
+        ? [{ filename: 'invite.ics', content: message.ics, contentType: 'text/calendar; method=PUBLISH' }]
+        : undefined,
     })) as { messageId?: string; accepted?: unknown[] };
 
     // Say what was actually accepted, by whom. A mail path that reports nothing
