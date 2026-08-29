@@ -232,6 +232,7 @@ export function bookingPage(
     schedule.title,
     `<div class="book-grid">
 <div class="book-meta">
+  ${schedule.owner_name ? `<p class="muted" style="margin:0 0 .2rem">${esc(schedule.owner_name)}</p>` : ''}
   <h1>${esc(schedule.title)}</h1>
   <p class="muted">${schedule.duration_minutes} minutes${where ? ` &middot; ${esc(where)}` : ''}</p>
   ${schedule.description ? `<p>${esc(schedule.description)}</p>` : ''}
@@ -267,6 +268,7 @@ ${err}${empty}
   <button class="submit" type="submit">Confirm booking</button>
 </form>
 </div></div>
+${FOOTER}
 <style>
  .book-grid{display:grid;grid-template-columns:1fr;gap:0;background:var(--surface);
    border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}

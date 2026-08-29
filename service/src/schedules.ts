@@ -27,6 +27,8 @@ export interface Schedule {
   slug: string;
   title: string;
   owner_timezone: string;
+  /** Who the booker is meeting — shown on the public page. */
+  owner_name: string;
   duration_minutes: number;
   granularity_minutes: number;
   buffer_before_minutes: number;
@@ -48,7 +50,7 @@ export interface Schedule {
   org_id: string | null;
 }
 
-const SCHEDULE_COLS = `sc.schedule_id, sc.owner_id, sc.slug, sc.title, o.timezone AS owner_timezone,
+const SCHEDULE_COLS = `sc.schedule_id, sc.owner_id, sc.slug, sc.title, o.timezone AS owner_timezone, o.display_name AS owner_name,
             sc.duration_minutes, sc.granularity_minutes, sc.buffer_before_minutes,
             sc.buffer_after_minutes, sc.minimum_notice_minutes, sc.maximum_horizon_days,
             sc.max_bookings_per_day, sc.availability_set_id, sc.description, sc.color,
@@ -63,6 +65,7 @@ function toSchedule(r: Record<string, unknown>): Schedule {
     slug: s(r['slug']),
     title: s(r['title']),
     owner_timezone: s(r['owner_timezone']),
+    owner_name: s(r['owner_name'] ?? ''),
     duration_minutes: n(r['duration_minutes']),
     granularity_minutes: n(r['granularity_minutes']),
     buffer_before_minutes: n(r['buffer_before_minutes']),
