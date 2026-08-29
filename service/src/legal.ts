@@ -62,6 +62,9 @@ and they carry different duties.
   it; we hold it on their behalf and act on their instructions. If you booked a
   meeting and want your details removed, the fastest route is the link in your
   confirmation email, described below; you may also contact us and we will act.
+  **This matters most where an organiser has added their own questions to their
+  page**: we did not choose those questions and do not control what they ask.
+  See *What is collected*.
 
 Operator: **ATX APPLE LLC**, a Texas limited liability company, United States.
 Contact us about anything on this page at **admin@pumasi.ai** — that address
@@ -81,8 +84,27 @@ nothing at all.
   so the meeting appears correctly for both of you;
 - a **single-use management link** which is emailed to you and to nobody else. It
   is the credential that lets you change or cancel the booking without an account.
+- **your answers to any questions the organiser added to their own page**, along
+  with the question exactly as it was worded when you answered it.
 
-That is all. There is no other field on the form, and no hidden one.
+There is no other field on the form, and no hidden one.
+
+**The questions are the organiser's, and so are the answers.** Anyone running a
+booking page may add their own questions to it, and we do not choose, review, or
+limit what they ask. For those answers **the organiser is the controller** — they
+decide what to ask and why — and we hold the answers on their behalf, as their
+processor, exactly as we do the rest of the booking. If you want to know why a
+question was asked, or you want those answers removed, the organiser is the right
+person to ask; you can also delete them yourself with the link in your
+confirmation email, and you can also contact us and we will act.
+
+Two details that follow from that, and that we would rather state than have you
+discover: the wording of a question is **saved onto your answer**, so an
+organiser who later rewrites the question cannot change the record of what you
+were actually asked; and if an organiser deletes a question, answers already
+given **are not deleted with it**, because they are the record of an exchange
+that happened. Deleting your booking details deletes the answers too — that
+path reaches them.
 
 **The person you are meeting** may afterwards add, about that booking:
 - a **private note** (visible only to them), and a **no-show marker**.
@@ -329,6 +351,15 @@ processing takes place in the United States — see **Transfers** below.
 You are the **controller**. We are the **processor**. We process personal data
 only on your documented instructions, which consist of these terms, the
 [Terms of Service](/terms), and your use of the service's features.
+
+## Subject matter, duration, nature and purpose
+
+**Categories, including the ones you choose.** We process what the booking form
+collects — a booker's name, email address, chosen time and timezone — and, where
+you add your own questions to a booking page, **whatever those questions collect**.
+We do not choose, review or limit what you ask. You are the controller for it, you
+are responsible for having a lawful basis for it (see *Your obligations*), and we
+process it only to run the service for you.
 
 ## Subject matter, duration, nature and purpose
 

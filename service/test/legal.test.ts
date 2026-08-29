@@ -158,3 +158,18 @@ test('nobody can claim a legal page as their public link', () => {
     assert.ok(RESERVED_SLUGS.has(slug), `${slug} is claimable as an owner link`);
   }
 });
+
+test('the notice says who controls what custom questions collect', () => {
+  // Custom questions are the first feature that stores personal data whose
+  // shape the service did not choose, so "name and email and nothing else"
+  // stopped being the whole truth. If this ever fails, the notice has drifted
+  // behind the product, which is the one thing this pack must never do.
+  const privacy = LEGAL_DOCS.find((d) => d.slug === 'privacy')!.body;
+  assert.match(privacy, /organiser is the controller/i,
+    'the notice must say the organiser controls what their own questions collect');
+  assert.match(privacy, /answers/i, 'and must name the answers among what is collected');
+
+  const dpa = LEGAL_DOCS.find((d) => d.slug === 'dpa')!.body;
+  assert.match(dpa, /whatever those questions collect/i,
+    'the DPA must put the organiser-chosen categories in scope');
+});
