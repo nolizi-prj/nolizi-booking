@@ -647,6 +647,211 @@ export function availabilityEditor(set: {
 }
 
 /** P2 — the editor for one event type. */
+/** P6 — a plain page carrying one message, for routing/poll endpoints. */
+export function messagePage(title: string, message: string): string {
+  return SHELL(title, `<h1>${esc(title)}</h1>\n<p class="ok">${esc(message)}</p>`);
+}
+
+/** P6 — the routing forms manager: every form, editable in place. */
+export function routingPage(
+  forms: {
+    form_id: string; slug: string; title: string; question: string;
+    options: { option_id: string; label: string; kind: string; value: string }[];
+  }[],
+  myEvents: { schedule_id: string; title: string }[],
+  baseUrl: string,
+): string {
+  const evOptions = myEvents
+    .map((e) => `<option value="${esc(e.schedule_id)}">${esc(e.title)}</option>`).join('');
+  const list = forms
+    .map(
+      (f) => `<div class="card">
+  <h2>${esc(f.title)}</h2>
+  <p class="muted"><a href="${esc(baseUrl)}/r/${esc(f.slug)}">${esc(baseUrl)}/r/${esc(f.slug)}</a>
+    &middot; “${esc(f.question)}”</p>
+  ${f.options
+    .map(
+      (o) => `<p>${esc(o.label)} <span class="muted">→ ${esc(o.kind)}${o.kind !== 'event' ? `: ${esc(o.value.slice(0, 60))}` : ''}</span>
+    <form method="post" action="/app/routing/${esc(f.form_id)}/options" style="display:inline">
+      <input type="hidden" name="remove" value="${esc(o.option_id)}">
+      <button class="linkish" type="submit">remove</button></form></p>`,
+    )
+    .join('')}
+  <form method="post" action="/app/routing/${esc(f.form_id)}/options" class="optrow">
+    <input name="label" placeholder="Answer (e.g. Sales)" required>
+    <select name="destination_kind" onchange="this.parentNode.querySelectorAll('[data-k]').forEach(x=>x.hidden=x.dataset.k!==this.value)">
+      <option value="event">→ booking page</option>
+      <option value="url">→ external URL</option>
+      <option value="message">→ message</option>
+    </select>
+    <select name="destination_value" data-k="event">${evOptions}</select>
+    <input name="destination_value" data-k="url" placeholder="https://…" hidden disabled>
+    <input name="destination_value" data-k="message" placeholder="What to tell them" hidden disabled>
+    <button class="submit" type="submit">Add option</button>
+  </form>
+  <form method="post" action="/app/routing/${esc(f.form_id)}/delete">
+    <button class="linkish" type="submit">Delete form</button>
+  </form>
+</div>`,
+    )
+    .join('');
+  return SHELL(
+    'Routing',
+    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+<h1>Routing forms</h1>
+<p class="muted">Ask one question first; the answer sends people to the right
+  booking page, an external link, or a message. Answers are not stored.</p>
+${list}
+<div class="card">
+  <h2>New routing form</h2>
+  <form method="post" action="/app/routing">
+    <label for="rt">Title</label><input id="rt" name="title" required placeholder="Talk to us">
+    <label for="rs">Link</label><input id="rs" name="slug" required pattern="[a-z0-9-]{2,40}" placeholder="talk">
+    <label for="rq">The question</label><input id="rq" name="question" required placeholder="What do you need?">
+    <button class="submit" type="submit">Create</button>
+  </form>
+</div>
+${CARD_CSS}
+<script>
+// keep only the matching destination input enabled so one value posts
+document.querySelectorAll('.optrow').forEach(function(f){
+  var sel=f.querySelector('select[name=destination_kind]');
+  function sync(){ f.querySelectorAll('[data-k]').forEach(function(x){
+    var on = x.dataset.k===sel.value; x.hidden=!on; x.disabled=!on; }); }
+  sel.onchange=sync; sync();
+});
+</script>`,
+  );
+}
+
+/** P6 — the public routing form. */
+export function routeFormPage(
+  title: string,
+  question: string,
+  action: string,
+  options: { option_id: string; label: string }[],
+): string {
+  return SHELL(
+    title,
+    `<h1>${esc(title)}</h1>
+<form method="post" action="${esc(action)}" style="margin-top:.5rem">
+  <p><b>${esc(question)}</b></p>
+  ${options
+    .map(
+      (o) => `<label style="display:block;margin:.4rem 0">
+    <input type="radio" name="answer" value="${esc(o.option_id)}" required style="width:auto"> ${esc(o.label)}</label>`,
+    )
+    .join('')}
+  <button class="submit" type="submit">Continue</button>
+</form>`,
+  );
+}
+
+/** P6 — the owner's poll list and creator. */
+export function pollsPage(
+  polls: { poll_id: string; title: string; status: string }[],
+  timezone: string,
+): string {
+  const list = polls
+    .map(
+      (p) => `<p><a href="/app/polls/${esc(p.poll_id)}">${esc(p.title)}</a>
+  <span class="pill">${esc(p.status)}</span></p>`,
+    )
+    .join('');
+  return SHELL(
+    'Meeting polls',
+    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+<h1>Meeting polls</h1>
+<p class="muted">Propose times, let people vote, book the winner.</p>
+${list || '<p class="muted">No polls yet.</p>'}
+<div class="card">
+  <h2>New poll</h2>
+  <form method="post" action="/app/polls">
+    <label for="pt">Title</label><input id="pt" name="title" required placeholder="Q3 retro">
+    <label for="pd">Duration (minutes)</label><input id="pd" name="duration_minutes" type="number" value="30" min="1">
+    <p class="notice">Proposed times, in your timezone (${esc(timezone)}). At least two.</p>
+    ${[1, 2, 3, 4, 5]
+      .map((i) => `<label>Option ${i}</label><input name="opt${i}" type="datetime-local">`)
+      .join('')}
+    <button class="submit" type="submit">Create poll</button>
+  </form>
+</div>
+${CARD_CSS}`,
+  );
+}
+
+/** P6 — one poll's tally, and the button that books the winner. */
+export function pollDetailPage(
+  poll: { poll_id: string; title: string; status: string; token: string },
+  tally: { option_id: string; start: string; votes: number; names: string }[],
+  baseUrl: string,
+): string {
+  return SHELL(
+    poll.title,
+    `<p class="muted"><a href="/app/polls">&lsaquo; polls</a></p>
+<h1>${esc(poll.title)} <span class="pill">${esc(poll.status)}</span></h1>
+<p class="muted">Voting link: <code>${esc(baseUrl)}/p/${esc(poll.token)}</code></p>
+${tally
+  .map(
+    (t) => `<div class="card">
+  <p><time datetime="${esc(t.start)}" class="lt">${esc(t.start)}</time>
+    &middot; <b>${t.votes}</b> vote${t.votes === 1 ? '' : 's'}
+    ${t.names ? `<span class="muted">— ${esc(t.names)}</span>` : ''}</p>
+  ${poll.status === 'open'
+    ? `<form method="post" action="/app/polls/${esc(poll.poll_id)}/book">
+    <input type="hidden" name="option" value="${esc(t.option_id)}">
+    <button class="submit" type="submit">Book this time</button></form>` : ''}
+</div>`,
+  )
+  .join('')}
+<form method="post" action="/app/polls/${esc(poll.poll_id)}/delete">
+  <button class="linkish" type="submit">Delete poll (and its votes)</button>
+</form>
+${CARD_CSS}
+<style>code{font-size:.85em;background:var(--line);padding:.1em .3em;border-radius:.25rem}</style>
+<script>document.querySelectorAll('time.lt').forEach(function(t){
+  t.textContent = new Date(t.getAttribute('datetime')).toLocaleString(undefined,
+    {weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+});</script>`,
+  );
+}
+
+/** P6 — the public voting page. */
+export function pollVotePage(
+  title: string,
+  action: string,
+  options: { option_id: string; start: string; end: string }[],
+  status: string,
+  error?: string,
+): string {
+  return SHELL(
+    title,
+    `<h1>${esc(title)}</h1>
+${status !== 'open'
+    ? '<p class="ok">This poll has closed — the organiser is confirming the time by email.</p>'
+    : `${error ? `<p class="err">${esc(error)}</p>` : ''}
+<p class="muted">Tick every time that works for you (shown in your timezone).</p>
+<form method="post" action="${esc(action)}">
+  ${options
+    .map(
+      (o) => `<label style="display:block;margin:.4rem 0">
+    <input type="checkbox" name="vote:${esc(o.option_id)}" style="width:auto">
+    <time datetime="${esc(o.start)}" class="lt">${esc(o.start)}</time></label>`,
+    )
+    .join('')}
+  <label for="vn">Your name</label><input id="vn" name="name" required autocomplete="name">
+  <label for="ve">Your email</label><input id="ve" name="email" type="email" required autocomplete="email">
+  <p class="notice">The organiser sees your name, email and choices; the vote is
+    deleted with the poll.</p>
+  <button class="submit" type="submit">Send my answer</button>
+</form>
+<script>document.querySelectorAll('time.lt').forEach(function(t){
+  t.textContent = new Date(t.getAttribute('datetime')).toLocaleString(undefined,
+    {weekday:'long',month:'long',day:'numeric',hour:'numeric',minute:'2-digit'});
+});</script>`}`,
+  );
+}
+
 /** P5 — organizations and their members. */
 export function teamPage(
   orgs: {
@@ -945,7 +1150,7 @@ export function ownerHome(
   &middot; <form method="post" action="/logout" style="display:inline">
     <button type="submit" class="linkish">sign out</button></form></p>
 ${notice ? `<p class="ok">${esc(notice)}</p>` : ''}
-<p class="muted"><a href="/app/meetings">Meetings</a> &middot; <a href="/app/contacts">Contacts</a> &middot; <a href="/app/team">Team</a> &middot; <a href="/app/settings">Settings</a></p>
+<p class="muted"><a href="/app/meetings">Meetings</a> &middot; <a href="/app/contacts">Contacts</a> &middot; <a href="/app/team">Team</a> &middot; <a href="/app/routing">Routing</a> &middot; <a href="/app/polls">Polls</a> &middot; <a href="/app/settings">Settings</a></p>
 ${setupBanner}
 ${linkSlug ? `<p class="muted">Your page: <a href="${esc(baseUrl)}/${esc(linkSlug)}">${esc(baseUrl)}/${esc(linkSlug)}</a></p>` : ''}
 ${schedules.length === 0 ? '<p class="muted">No booking pages yet.</p>' : list}

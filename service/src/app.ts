@@ -14,7 +14,8 @@ import {
 } from './schedules.ts';
 import {
   availabilityEditor, bookingPage, confirmedPage, contactsPage, errorPage, eventTypeEditor,
-  homePage, loginPage, managePage, meetingsPage, ownerHome, ownerLanding, settingsPage, signupPage,
+  homePage, loginPage, managePage, meetingsPage, messagePage, ownerHome, ownerLanding,
+  pollDetailPage, pollsPage, pollVotePage, routeFormPage, routingPage, settingsPage, signupPage,
   teamPage,
   snippetPage,
   type ScheduleSummary,
@@ -627,6 +628,220 @@ async function handleRoutes(
         }
       });
       return { status: 303, headers: { location: '/app' }, body: '' };
+    }
+
+    // ── routing forms (P6) ───────────────────────────────────────────────
+    if (parts[1] === 'routing') {
+      if (req.method === 'POST' && !parts[2]) {
+        const f = req.form ?? {};
+        const rSlug = (f['slug'] ?? '').trim().toLowerCase();
+        if (!/^[a-z0-9-]{2,40}$/.test(rSlug)) {
+          return html(400, errorPage(400, 'A link may use lowercase letters, digits and dashes.'));
+        }
+        try {
+          await sql.query(
+            `INSERT INTO routing_forms (form_id, owner_id, slug, title, question)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [randomUUID(), owner.owner_id, rSlug, (f['title'] ?? 'Routing').trim(),
+             (f['question'] ?? 'What do you need?').trim()]);
+        } catch {
+          return html(409, errorPage(409, 'That link is already taken.'));
+        }
+        return { status: 303, headers: { location: '/app/routing' }, body: '' };
+      }
+      if (req.method === 'POST' && parts[2] && parts[3] === 'options') {
+        const owned = await sql.query(
+          `SELECT form_id FROM routing_forms WHERE form_id = $1 AND owner_id = $2`,
+          [parts[2], owner.owner_id]);
+        if (!owned.rows[0]) return html(404, errorPage(404, 'No such form.'));
+        const f = req.form ?? {};
+        if (f['remove']) {
+          await sql.query(`DELETE FROM routing_options WHERE option_id = $1 AND form_id = $2`,
+            [f['remove'], parts[2]]);
+          return { status: 303, headers: { location: '/app/routing' }, body: '' };
+        }
+        const kind = ['event', 'url', 'message'].includes(f['destination_kind'] ?? '')
+          ? f['destination_kind']! : 'message';
+        let value = (f['destination_value'] ?? '').trim();
+        if (kind === 'event') {
+          // The destination must be the owner's own event type (I4).
+          const ev = await sql.query(
+            `SELECT slug FROM schedules WHERE schedule_id = $1 AND owner_id = $2`,
+            [value, owner.owner_id]);
+          if (!ev.rows[0]) return html(400, errorPage(400, 'Pick one of your own booking pages.'));
+        }
+        if (kind === 'url' && !/^https?:\/\//.test(value)) {
+          return html(400, errorPage(400, 'A URL destination starts with http(s)://.'));
+        }
+        const pos = await sql.query(
+          `SELECT count(*)::int AS c FROM routing_options WHERE form_id = $1`, [parts[2]]);
+        await sql.query(
+          `INSERT INTO routing_options (option_id, form_id, position, label, destination_kind, destination_value)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [randomUUID(), parts[2], Number(pos.rows[0]?.['c'] ?? 0),
+           (f['label'] ?? 'Option').trim(), kind, value]);
+        return { status: 303, headers: { location: '/app/routing' }, body: '' };
+      }
+      if (req.method === 'POST' && parts[2] && parts[3] === 'delete') {
+        await sql.query(`DELETE FROM routing_forms WHERE form_id = $1 AND owner_id = $2`,
+          [parts[2], owner.owner_id]);
+        return { status: 303, headers: { location: '/app/routing' }, body: '' };
+      }
+      // GET /app/routing — every form with its options, editable in place.
+      const formsQ = await sql.query(
+        `SELECT form_id, slug, title, question FROM routing_forms
+          WHERE owner_id = $1 ORDER BY title`, [owner.owner_id]);
+      const forms = [];
+      for (const r of formsQ.rows) {
+        const opts = await sql.query(
+          `SELECT option_id, label, destination_kind, destination_value FROM routing_options
+            WHERE form_id = $1 ORDER BY position`, [String(r['form_id'])]);
+        forms.push({
+          form_id: String(r['form_id']), slug: String(r['slug']),
+          title: String(r['title']), question: String(r['question']),
+          options: opts.rows.map((o) => ({
+            option_id: String(o['option_id']), label: String(o['label']),
+            kind: String(o['destination_kind']), value: String(o['destination_value']),
+          })),
+        });
+      }
+      const myEvents = await sql.query(
+        `SELECT schedule_id, title FROM schedules WHERE owner_id = $1 ORDER BY title`,
+        [owner.owner_id]);
+      return html(200, routingPage(forms, myEvents.rows.map((e) => ({
+        schedule_id: String(e['schedule_id']), title: String(e['title']),
+      })), config.baseUrl));
+    }
+
+    // ── meeting polls (P6) ───────────────────────────────────────────────
+    if (parts[1] === 'polls') {
+      if (req.method === 'POST' && !parts[2]) {
+        const f = req.form ?? {};
+        const title = (f['title'] ?? '').trim() || 'Meeting poll';
+        const dur = Number(f['duration_minutes'] ?? 30);
+        const options: { start: string; end: string }[] = [];
+        for (let i = 1; i <= 5; i++) {
+          const raw = (f[`opt${i}`] ?? '').trim();
+          if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) continue;
+          try {
+            const startInstant = Temporal.PlainDateTime.from(raw)
+              .toZonedDateTime(owner.timezone).toInstant();
+            options.push({
+              start: startInstant.toString(),
+              end: startInstant.add({ minutes: dur }).toString(),
+            });
+          } catch { /* an unparseable time is simply skipped */ }
+        }
+        if (options.length < 2) {
+          return html(400, errorPage(400, 'A poll needs at least two proposed times.'));
+        }
+        const pollId = randomUUID();
+        const pollToken = newToken();
+        await deps.tx.transaction(async (tx) => {
+          await tx.query(
+            `INSERT INTO polls (poll_id, owner_id, token, title, duration_minutes)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [pollId, owner.owner_id, pollToken, title, dur]);
+          for (const o of options) {
+            await tx.query(
+              `INSERT INTO poll_options (option_id, poll_id, starts_at, ends_at)
+               VALUES ($1, $2, $3, $4)`, [randomUUID(), pollId, o.start, o.end]);
+          }
+        });
+        return { status: 303, headers: { location: `/app/polls/${pollId}` }, body: '' };
+      }
+
+      const pollFor = async (pollId: string) => {
+        const p = await sql.query(
+          `SELECT poll_id, token, title, duration_minutes, status FROM polls
+            WHERE poll_id = $1 AND owner_id = $2`, [pollId, owner.owner_id]);
+        return p.rows[0];
+      };
+
+      if (req.method === 'POST' && parts[2] && parts[3] === 'book') {
+        const p = await pollFor(parts[2]);
+        if (!p) return html(404, errorPage(404, 'No such poll.'));
+        const optRow = await sql.query(
+          `SELECT option_id, starts_at, ends_at FROM poll_options
+            WHERE option_id = $1 AND poll_id = $2`, [req.form?.['option'] ?? '', parts[2]]);
+        const o = optRow.rows[0];
+        if (!o) return html(400, errorPage(400, 'Pick one of the proposed times.'));
+        const start = new Date(String(o['starts_at'])).toISOString().replace('.000Z', 'Z');
+        const end = new Date(String(o['ends_at'])).toISOString().replace('.000Z', 'Z');
+        const store = new PostgresBookingStore(sql, owner.owner_id, deps.tx);
+        const bookingId = randomUUID();
+        const tok = newToken();
+        const inserted = await store.insertConfirmed(bookingId, start, end,
+          `poll:${parts[2]}`, {
+            name: `Poll — ${String(p['title'])}`, email: owner.email,
+            timezone: owner.timezone, token: tok,
+          });
+        if (!inserted.ok) {
+          return html(409, errorPage(409, 'That time now conflicts with another booking. Pick a different winner.'));
+        }
+        await sql.query(`UPDATE polls SET status = 'booked' WHERE poll_id = $1`, [parts[2]]);
+        await deps.calendars?.writeBack(sql, owner.owner_id, bookingId, {
+          title: String(p['title']),
+          description: `Booked from a meeting poll.`,
+          start, end,
+        });
+        // Everyone who voted learns the chosen time — whichever way they voted.
+        const voters = await sql.query(
+          `SELECT DISTINCT v.voter_email FROM poll_votes v
+             JOIN poll_options po ON po.option_id = v.option_id
+            WHERE po.poll_id = $1`, [parts[2]]);
+        for (const v of voters.rows) {
+          await mail.send({ kind: 'confirmed', to: String(v['voter_email']),
+            bookingId, start, timezone: 'UTC' });
+        }
+        await mail.send({ kind: 'confirmed', to: owner.email, bookingId, start,
+          token: tok, timezone: owner.timezone });
+        return { status: 303, headers: { location: `/app/polls/${parts[2]}` }, body: '' };
+      }
+
+      if (req.method === 'POST' && parts[2] && parts[3] === 'delete') {
+        await sql.query(`DELETE FROM polls WHERE poll_id = $1 AND owner_id = $2`,
+          [parts[2], owner.owner_id]);
+        return { status: 303, headers: { location: '/app/polls' }, body: '' };
+      }
+
+      if (req.method === 'GET' && parts[2]) {
+        const p = await pollFor(parts[2]);
+        if (!p) return html(404, errorPage(404, 'No such poll.'));
+        // Aggregated in JS: string_agg/group_concat differ by dialect.
+        const opts = await sql.query(
+          `SELECT option_id, starts_at FROM poll_options WHERE poll_id = $1 ORDER BY starts_at`,
+          [parts[2]]);
+        const votes = await sql.query(
+          `SELECT v.option_id, v.voter_name FROM poll_votes v
+             JOIN poll_options po ON po.option_id = v.option_id
+            WHERE po.poll_id = $1`, [parts[2]]);
+        const byOption = new Map<string, string[]>();
+        for (const v of votes.rows) {
+          const k = String(v['option_id']);
+          if (!byOption.has(k)) byOption.set(k, []);
+          byOption.get(k)!.push(String(v['voter_name']));
+        }
+        return html(200, pollDetailPage({
+          poll_id: String(p['poll_id']), title: String(p['title']),
+          status: String(p['status']), token: String(p['token']),
+        }, opts.rows.map((t) => {
+          const k = String(t['option_id']);
+          return {
+            option_id: k,
+            start: new Date(String(t['starts_at'])).toISOString().replace('.000Z', 'Z'),
+            votes: (byOption.get(k) ?? []).length,
+            names: (byOption.get(k) ?? []).join(', '),
+          };
+        }), config.baseUrl));
+      }
+
+      const list = await sql.query(
+        `SELECT poll_id, title, status FROM polls WHERE owner_id = $1 ORDER BY created_at DESC`,
+        [owner.owner_id]);
+      return html(200, pollsPage(list.rows.map((r) => ({
+        poll_id: String(r['poll_id']), title: String(r['title']), status: String(r['status']),
+      })), owner.timezone));
     }
 
     // ── invites (P5): any owner may mint one while seats remain ──────────
@@ -1256,6 +1471,92 @@ async function handleRoutes(
       return bookHandler(deps, schedule, req, now, parts[1]);
     }
     return html(404, errorPage(404, 'Nothing here.'));
+  }
+
+  // ── routing forms, public side (P6): the answer routes, and is gone ──────
+  if (parts[0] === 'r' && parts[1]) {
+    const formQ = await sql.query(
+      `SELECT form_id, owner_id, title, question FROM routing_forms WHERE slug = $1`, [parts[1]]);
+    const form = formQ.rows[0];
+    if (!form) return html(404, errorPage(404, 'No such page.'));
+    const opts = await sql.query(
+      `SELECT option_id, label FROM routing_options WHERE form_id = $1 ORDER BY position`,
+      [String(form['form_id'])]);
+    if (req.method === 'GET') {
+      return html(200, routeFormPage(String(form['title']), String(form['question']),
+        `/r/${parts[1]}`,
+        opts.rows.map((o) => ({ option_id: String(o['option_id']), label: String(o['label']) }))));
+    }
+    if (req.method === 'POST') {
+      const chosen = await sql.query(
+        `SELECT destination_kind, destination_value FROM routing_options
+          WHERE option_id = $1 AND form_id = $2`,
+        [req.form?.['answer'] ?? '', String(form['form_id'])]);
+      const dest = chosen.rows[0];
+      if (!dest) return html(400, errorPage(400, 'Pick one of the options.'));
+      const kind = String(dest['destination_kind']);
+      const value = String(dest['destination_value']);
+      if (kind === 'url') return { status: 303, headers: { location: value }, body: '' };
+      if (kind === 'event') {
+        const ev = await sql.query(
+          `SELECT sc.slug, o.link_slug FROM schedules sc JOIN owners o ON o.owner_id = sc.owner_id
+            WHERE sc.schedule_id = $1`, [value]);
+        const e = ev.rows[0];
+        if (!e) return html(404, errorPage(404, 'That destination no longer exists.'));
+        const path = e['link_slug'] ? `/${String(e['link_slug'])}/${String(e['slug'])}` : `/${String(e['slug'])}`;
+        return { status: 303, headers: { location: path }, body: '' };
+      }
+      return html(200, messagePage(String(form['title']), value));
+    }
+    return html(404, errorPage(404, 'Nothing here.'));
+  }
+
+  // ── meeting polls, public side (P6) ──────────────────────────────────────
+  if (parts[0] === 'p' && parts[1]) {
+    const pollQ = await sql.query(
+      `SELECT poll_id, title, status FROM polls WHERE token = $1`, [parts[1]]);
+    const poll = pollQ.rows[0];
+    if (!poll) return html(404, errorPage(404, 'No such poll.'));
+    const pollId = String(poll['poll_id']);
+    const opts = await sql.query(
+      `SELECT option_id, starts_at, ends_at FROM poll_options WHERE poll_id = $1 ORDER BY starts_at`,
+      [pollId]);
+    const optionViews = opts.rows.map((o) => ({
+      option_id: String(o['option_id']),
+      start: new Date(String(o['starts_at'])).toISOString().replace('.000Z', 'Z'),
+      end: new Date(String(o['ends_at'])).toISOString().replace('.000Z', 'Z'),
+    }));
+    if (req.method === 'GET') {
+      return html(200, pollVotePage(String(poll['title']), `/p/${parts[1]}`,
+        optionViews, String(poll['status'])));
+    }
+    if (req.method === 'POST' && String(poll['status']) === 'open') {
+      if (await overLimit(sql, `vote:${req.ip}`, RATE_LIMITS.booking_attempts_per_ip_per_minute, 60, now)) {
+        return html(429, errorPage(429, 'Too many attempts. Try again shortly.'));
+      }
+      const vName = (req.form?.['name'] ?? '').trim();
+      const vEmail = (req.form?.['email'] ?? '').trim().toLowerCase();
+      if (!vName || !vEmail.includes('@')) {
+        return html(400, pollVotePage(String(poll['title']), `/p/${parts[1]}`,
+          optionViews, 'open', 'Give a name and email so the organiser knows who answered.'));
+      }
+      // Re-voting replaces the previous answer wholesale.
+      await deps.tx.transaction(async (tx) => {
+        await tx.query(
+          `DELETE FROM poll_votes WHERE voter_email = $1 AND option_id IN
+             (SELECT option_id FROM poll_options WHERE poll_id = $2)`, [vEmail, pollId]);
+        for (const o of optionViews) {
+          if (req.form?.[`vote:${o.option_id}`] === 'on') {
+            await tx.query(
+              `INSERT INTO poll_votes (option_id, voter_email, voter_name) VALUES ($1, $2, $3)`,
+              [o.option_id, vEmail, vName]);
+          }
+        }
+      });
+      return html(200, messagePage(String(poll['title']),
+        'Your answer is recorded. The organiser will confirm the chosen time by email.'));
+    }
+    return html(409, errorPage(409, 'This poll is closed.'));
   }
 
   // ── the embed loader (P3): one script, one iframe ────────────────────────
