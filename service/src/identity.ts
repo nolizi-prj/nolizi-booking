@@ -48,6 +48,72 @@ export type RedeemResult =
  * time-of-check-to-time-of-use race, which is the same mistake the booking path
  * refuses to make.
  */
+/** P4 · reserved first-segment routes an owner's link may never claim. */
+export const RESERVED_SLUGS = new Set(['app', 'auth', 'login', 'logout', 'signup', 'oauth', 'b',
+  's', 'embed.js', 'healthz', 'readyz', 'assets']);
+
+/**
+ * P2 · every owner gets a public link slug from their address's local part;
+ * on collision (or a reserved word) a numbered variant, so signup never fails
+ * over a vanity string.
+ */
+async function insertOwner(
+  t: SqlClient,
+  ownerId: string,
+  input: { email: string; displayName: string; timezone: string },
+): Promise<void> {
+  const base = input.email.split('@')[0]!.toLowerCase().replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'user';
+  let linkSlug = RESERVED_SLUGS.has(base) ? `${base}-1` : base;
+  for (let i = 2; i < 50; i++) {
+    const clash = await t.query(`SELECT 1 FROM owners WHERE link_slug = $1`, [linkSlug]);
+    if (!clash.rows[0]) break;
+    linkSlug = `${base}-${i}`;
+  }
+  await t.query(
+    `INSERT INTO owners (owner_id, email, display_name, timezone, link_slug)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [ownerId, input.email, input.displayName, input.timezone, linkSlug],
+  );
+}
+
+/**
+ * P4 — direct account creation, for when public signup is lawful (D-105
+ * closed) or an SSO identity arrives with a valid invite consumed elsewhere.
+ * Same ceiling, same duplicate check, no invite.
+ */
+export async function createOwnerDirect(
+  sql: SqlClient,
+  tx: { transaction<T>(fn: (tx: SqlClient) => Promise<T>): Promise<T> },
+  input: { email: string; displayName: string; timezone: string },
+  maxOwnerAccounts: number,
+): Promise<RedeemResult> {
+  const ownerId = randomUUID();
+  try {
+    await tx.transaction(async (t) => {
+      const count = await t.query(`SELECT count(*)::int AS c FROM owners`);
+      if (Number(count.rows[0]?.['c'] ?? 0) >= maxOwnerAccounts) throw new Refused('ceiling');
+      const existing = await t.query(`SELECT owner_id FROM owners WHERE lower(email) = lower($1)`, [
+        input.email,
+      ]);
+      if (existing.rows[0]) throw new Refused('already_registered');
+      await insertOwner(t, ownerId, input);
+    });
+  } catch (err) {
+    if (err instanceof Refused) return { ok: false, reason: err.reason };
+    throw err;
+  }
+  return {
+    ok: true,
+    owner: {
+      owner_id: ownerId,
+      email: input.email,
+      display_name: input.displayName,
+      timezone: input.timezone,
+    },
+  };
+}
+
 export async function redeemInvite(
   sql: SqlClient,
   tx: { transaction<T>(fn: (tx: SqlClient) => Promise<T>): Promise<T> },
@@ -76,25 +142,8 @@ export async function redeemInvite(
       ]);
       if (existing.rows[0]) throw new Refused('already_registered');
 
-      // The owner must exist before the invite can reference it. P2: every
-      // owner gets a public link slug from their address's local part; on
-      // collision (or a reserved word) a numbered variant, so signup never
-      // fails over a vanity string.
-      const base = input.email.split('@')[0]!.toLowerCase().replace(/[^a-z0-9-]+/g, '-')
-        .replace(/^-+|-+$/g, '') || 'user';
-      const reserved = new Set(['app', 'auth', 'login', 'logout', 'signup', 'oauth', 'b',
-        'healthz', 'readyz', 'assets']);
-      let linkSlug = reserved.has(base) ? `${base}-1` : base;
-      for (let i = 2; i < 50; i++) {
-        const clash = await t.query(`SELECT 1 FROM owners WHERE link_slug = $1`, [linkSlug]);
-        if (!clash.rows[0]) break;
-        linkSlug = `${base}-${i}`;
-      }
-      await t.query(
-        `INSERT INTO owners (owner_id, email, display_name, timezone, link_slug)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [ownerId, input.email, input.displayName, input.timezone, linkSlug],
-      );
+      // The owner must exist before the invite can reference it.
+      await insertOwner(t, ownerId, input);
 
       // Spentness is `consumed_at`, not `consumed_by`. The latter is cleared
       // when an owner deletes their account, and guarding on it would let

@@ -14,13 +14,15 @@ import {
 } from './schedules.ts';
 import {
   availabilityEditor, bookingPage, confirmedPage, contactsPage, errorPage, eventTypeEditor,
-  homePage, loginPage, managePage, meetingsPage, ownerHome, ownerLanding, signupPage, snippetPage,
+  homePage, loginPage, managePage, meetingsPage, ownerHome, ownerLanding, settingsPage, signupPage,
+  snippetPage,
   type ScheduleSummary,
 } from './pages.ts';
 import {
-  clearedCookie, consumeSignInToken, createSession, destroySession, issueSignInToken,
-  ownerForSession, readCookie, redeemInvite, sessionCookie,
+  clearedCookie, consumeSignInToken, createOwnerDirect, createSession, destroySession,
+  issueSignInToken, ownerForSession, readCookie, redeemInvite, RESERVED_SLUGS, sessionCookie,
 } from './identity.ts';
+import { googleSsoExchange, googleSsoUrl } from './sso-google.ts';
 import { RATE_LIMITS, type Config } from './config.ts';
 import type { CalendarHub } from './calendars.ts';
 import { icsFor } from './ics.ts';
@@ -289,18 +291,42 @@ async function handleRoutes(
 
   // ── owner surfaces (I1–I4) ───────────────────────────────────────────────
   if (parts[0] === 'signup') {
-    // I2 · public signup stays blocked; an invite is the only way in.
+    // I2 · public signup stays blocked while D-105 is open; an invite is the
+    // only way in. When the flag opens (steward review), the same page works
+    // without one.
     if (req.method === 'GET') {
-      return html(200, signupPage(req.query?.['invite'] ?? ''));
+      return html(200, signupPage(req.query?.['invite'] ?? '', undefined,
+        { sso: Boolean(config.googleClientId), publicSignup: config.publicSignup }));
     }
     const f = req.form ?? {};
+    const inviteCode = (f['invite'] ?? '').trim();
+    const input = {
+      email: (f['email'] ?? '').trim(),
+      displayName: (f['display_name'] ?? '').trim(),
+      timezone: (f['timezone'] ?? 'UTC').trim(),
+    };
+    if (!inviteCode && config.publicSignup) {
+      const made = await createOwnerDirect(sql, deps.tx, input, config.maxOwnerAccounts);
+      if (!made.ok) {
+        const message = made.reason === 'ceiling'
+          ? 'This service has reached its account limit and is not taking more.'
+          : 'That address already has an account. Sign in instead.';
+        return html(400, signupPage('', message));
+      }
+      const sid = await createSession(sql, made.owner.owner_id, now, config.sessionTtlHours);
+      return {
+        status: 303,
+        headers: { location: '/app', 'set-cookie': sessionCookie(sid, secure, config.sessionTtlHours) },
+        body: '',
+      };
+    }
     const result = await redeemInvite(
       sql, deps.tx,
       {
-        code: (f['invite'] ?? '').trim(),
-        email: (f['email'] ?? '').trim(),
-        displayName: (f['display_name'] ?? '').trim(),
-        timezone: (f['timezone'] ?? 'UTC').trim(),
+        code: inviteCode,
+        email: input.email,
+        displayName: input.displayName,
+        timezone: input.timezone,
       },
       config.maxOwnerAccounts,
     );
@@ -322,7 +348,7 @@ async function handleRoutes(
   }
 
   if (parts[0] === 'login') {
-    if (req.method === 'GET') return html(200, loginPage());
+    if (req.method === 'GET') return html(200, loginPage(undefined, undefined, Boolean(config.googleClientId)));
     const email = (req.form?.['email'] ?? '').trim();
     if (await overLimit(sql, `login:${req.ip}`, RATE_LIMITS.booking_attempts_per_ip_per_minute, 60, now)) {
       return html(429, errorPage(429, 'Too many attempts. Try again shortly.'));
@@ -335,6 +361,30 @@ async function handleRoutes(
     // The same answer either way: whether an address has an account is not
     // something an unauthenticated caller gets to learn.
     return html(200, loginPage(true));
+  }
+
+  // ── "Sign in with Google" (P4) — openid+email only, never calendar ───────
+  if (parts[0] === 'auth' && parts[1] === 'google' && parts[2] === 'start' && req.method === 'POST') {
+    const hub = deps.calendars;
+    if (!hub || !config.googleClientId) {
+      return html(404, errorPage(404, 'Google sign-in is not configured.'));
+    }
+    const state = await hub.sealState({
+      purpose: 'sso',
+      invite: (req.form?.['invite'] ?? '').trim(),
+      timezone: (req.form?.['timezone'] ?? '').trim(),
+    });
+    return {
+      status: 303,
+      headers: {
+        location: googleSsoUrl({
+          clientId: config.googleClientId,
+          redirectUri: `${config.baseUrl}/oauth/google/callback`,
+          state,
+        }),
+      },
+      body: '',
+    };
   }
 
   if (parts[0] === 'auth' && parts[1]) {
@@ -353,14 +403,76 @@ async function handleRoutes(
   // sealed state, not the session, says whose connection this is.
   if (parts[0] === 'oauth' && parts[2] === 'callback' && req.method === 'GET') {
     const hub = deps.calendars;
-    const provider = hub?.provider(parts[1] ?? '');
-    if (!hub || !provider) return html(404, errorPage(404, 'Calendar integration is not configured.'));
+    if (!hub) return html(404, errorPage(404, 'Calendar integration is not configured.'));
     if (req.query?.['error']) {
       return html(400, errorPage(400, 'The calendar connection was declined. Nothing was stored.'));
     }
     const state = await hub.openState(req.query?.['state'] ?? '');
     const code = req.query?.['code'];
-    if (!state || !state['owner_id'] || !code) {
+    if (!state || !code) {
+      return html(400, errorPage(400, 'This connection attempt is stale or invalid. Start again from your dashboard.'));
+    }
+
+    // P4 · the same callback serves sign-in; the sealed state says which.
+    if (state['purpose'] === 'sso') {
+      if (!config.googleClientId || !config.googleClientSecret) {
+        return html(404, errorPage(404, 'Google sign-in is not configured.'));
+      }
+      let email: string;
+      try {
+        const who = await googleSsoExchange({
+          clientId: config.googleClientId,
+          clientSecret: config.googleClientSecret,
+          code,
+          redirectUri: `${config.baseUrl}/oauth/google/callback`,
+        });
+        if (!who.emailVerified) {
+          return html(403, errorPage(403, 'That Google account has no verified email address.'));
+        }
+        email = who.email;
+      } catch (err) {
+        console.warn(`[sso] google exchange failed: ${(err as Error).message}`);
+        return html(502, errorPage(502, 'Google did not complete the sign-in. Try again.'));
+      }
+      const found = await sql.query(
+        `SELECT owner_id FROM owners WHERE lower(email) = lower($1)`, [email]);
+      let ownerId = found.rows[0] ? String(found.rows[0]['owner_id']) : undefined;
+      if (!ownerId) {
+        const input = {
+          email,
+          displayName: email.split('@')[0]!,
+          timezone: state['timezone'] || 'UTC',
+        };
+        const made = state['invite']
+          ? await redeemInvite(sql, deps.tx, { code: state['invite'], ...input }, config.maxOwnerAccounts)
+          : config.publicSignup
+            ? await createOwnerDirect(sql, deps.tx, input, config.maxOwnerAccounts)
+            : undefined;
+        if (!made) {
+          return html(403, errorPage(403,
+            'No account for that address. Accounts are invite-only while this service is small.'));
+        }
+        if (!made.ok) {
+          const message = made.reason === 'ceiling'
+            ? 'This service has reached its account limit and is not taking more.'
+            : made.reason === 'already_registered'
+              ? 'That address already has an account. Sign in instead.'
+              : 'That invite is not valid or has already been used.';
+          return html(400, errorPage(400, message));
+        }
+        ownerId = made.owner.owner_id;
+      }
+      const sid = await createSession(sql, ownerId, now, config.sessionTtlHours);
+      return {
+        status: 303,
+        headers: { location: '/app', 'set-cookie': sessionCookie(sid, secure, config.sessionTtlHours) },
+        body: '',
+      };
+    }
+
+    const provider = hub.provider(parts[1] ?? '');
+    if (!provider) return html(404, errorPage(404, 'Calendar integration is not configured.'));
+    if (!state['owner_id']) {
       return html(400, errorPage(400, 'This connection attempt is stale or invalid. Start again from your dashboard.'));
     }
     try {
@@ -497,6 +609,59 @@ async function handleRoutes(
         }
       });
       return { status: 303, headers: { location: '/app' }, body: '' };
+    }
+
+    // ── settings (P4): profile, brand, my link ───────────────────────────
+    if (parts[1] === 'settings') {
+      const me = await sql.query(
+        `SELECT display_name, email, timezone, link_slug, welcome_message, brand_color
+           FROM owners WHERE owner_id = $1`, [owner.owner_id]);
+      const row = me.rows[0]!;
+      const current = {
+        display_name: String(row['display_name']),
+        email: String(row['email']),
+        timezone: String(row['timezone']),
+        link_slug: row['link_slug'] === null ? '' : String(row['link_slug']),
+        welcome_message: row['welcome_message'] === null ? '' : String(row['welcome_message']),
+        brand_color: row['brand_color'] === null ? '' : String(row['brand_color']),
+      };
+      if (req.method === 'GET') {
+        return html(200, settingsPage(current, config.baseUrl));
+      }
+      if (req.method === 'POST') {
+        const f = req.form ?? {};
+        const name = (f['display_name'] ?? '').trim() || current.display_name;
+        const tz = (f['timezone'] ?? '').trim() || current.timezone;
+        try {
+          Temporal.Now.zonedDateTimeISO(tz); // refuse an unknown zone loudly
+        } catch {
+          return html(400, settingsPage(current, config.baseUrl, 'That timezone is not recognised.'));
+        }
+        const welcome = (f['welcome_message'] ?? '').trim().slice(0, 500);
+        const color = (f['brand_color'] ?? '').trim();
+        if (color && !/^#[0-9a-fA-F]{6}$/.test(color)) {
+          return html(400, settingsPage(current, config.baseUrl, 'A color looks like #1a56db.'));
+        }
+        const newSlug = (f['link_slug'] ?? '').trim().toLowerCase();
+        if (newSlug !== current.link_slug) {
+          if (!/^[a-z0-9-]{2,40}$/.test(newSlug) || RESERVED_SLUGS.has(newSlug)) {
+            return html(400, settingsPage(current, config.baseUrl,
+              'A link uses lowercase letters, digits and dashes, and some names are reserved.'));
+          }
+          const clash = await sql.query(
+            `SELECT 1 FROM owners WHERE link_slug = $1 AND owner_id <> $2`,
+            [newSlug, owner.owner_id]);
+          if (clash.rows[0]) {
+            return html(400, settingsPage(current, config.baseUrl, 'That link is already taken.'));
+          }
+        }
+        await sql.query(
+          `UPDATE owners SET display_name = $2, timezone = $3, welcome_message = $4,
+                  brand_color = $5, link_slug = $6
+            WHERE owner_id = $1`,
+          [owner.owner_id, name, tz, welcome || null, color || null, newSlug || current.link_slug]);
+        return { status: 303, headers: { location: '/app/settings' }, body: '' };
+      }
     }
 
     // ── meetings (P3) ────────────────────────────────────────────────────
@@ -904,9 +1069,19 @@ async function handleRoutes(
     );
     const linkRow = await sql.query(
       `SELECT link_slug FROM owners WHERE owner_id = $1`, [owner.owner_id]);
+    // P4 · the getting-started checklist, until all three are true.
+    const anyHours = await sql.query(
+      `SELECT 1 FROM set_rules r JOIN availability_sets s ON s.set_id = r.set_id
+        WHERE s.owner_id = $1 LIMIT 1`, [owner.owner_id]);
+    const setup = {
+      calendar: (connections?.length ?? 0) > 0,
+      hours: Boolean(anyHours.rows[0]),
+      event: summaries.length > 0,
+    };
     return html(200, ownerHome(owner, summaries, config.baseUrl, undefined, connections,
       setsRows.rows.map((r) => ({ set_id: String(r['set_id']), name: String(r['name']) })),
-      linkRow.rows[0]?.['link_slug'] ? String(linkRow.rows[0]['link_slug']) : undefined));
+      linkRow.rows[0]?.['link_slug'] ? String(linkRow.rows[0]['link_slug']) : undefined,
+      setup));
   }
 
   // ── single-use links (P3): /s/<token> works once, then is a dead page ────
@@ -974,7 +1149,8 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
   // One segment: an owner landing page, or a legacy event slug.
   if (parts.length === 1 && req.method === 'GET') {
     const ownerRow = await sql.query(
-      `SELECT owner_id, display_name, link_slug FROM owners WHERE link_slug = $1`,
+      `SELECT owner_id, display_name, link_slug, welcome_message, brand_color
+         FROM owners WHERE link_slug = $1`,
       [slug],
     );
     if (ownerRow.rows[0]) {
@@ -983,6 +1159,7 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
           WHERE owner_id = $1 ORDER BY title`,
         [String(ownerRow.rows[0]['owner_id'])],
       );
+      const opt = (v: unknown) => (v === null || v === undefined ? undefined : String(v));
       return html(200, ownerLanding(
         String(ownerRow.rows[0]['display_name']),
         String(ownerRow.rows[0]['link_slug']),
@@ -993,6 +1170,8 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
           description: r['description'] === null ? undefined : String(r['description']),
           color: r['color'] === null ? undefined : String(r['color']),
         })),
+        opt(ownerRow.rows[0]['welcome_message']),
+        opt(ownerRow.rows[0]['brand_color']),
       ));
     }
     const schedule = await findScheduleBySlug(sql, slug);

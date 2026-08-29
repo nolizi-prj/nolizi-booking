@@ -314,17 +314,36 @@ export function errorPage(code: number, message: string): string {
 
 // ── owner surfaces ─────────────────────────────────────────────────────────
 
-export function signupPage(inviteCode: string, error?: string): string {
+/** P4 — the "Continue with Google" form, shared by sign-in and sign-up. */
+function googleButton(inviteCode = ''): string {
+  return `<form method="post" action="/auth/google/start" class="ssoform">
+  <input type="hidden" name="invite" value="${esc(inviteCode)}">
+  <input type="hidden" name="timezone" class="tzauto">
+  <button class="submit sso" type="submit">Continue with Google</button>
+</form>
+<p class="muted" style="text-align:center">or</p>
+<script>document.querySelectorAll('.tzauto').forEach(function(i){
+  try{i.value=Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'}catch(e){}});</script>
+<style>.sso{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.ssoform{margin:1rem 0 .25rem}</style>`;
+}
+
+export function signupPage(
+  inviteCode: string,
+  error?: string,
+  opts: { sso?: boolean; publicSignup?: boolean } = {},
+): string {
   return SHELL(
     'Create your account',
     `<h1>Create your account</h1>
 ${error ? `<p class="err">${esc(error)}</p>` : ''}
+${opts.sso ? googleButton(inviteCode) : ''}
 <form method="post" action="/signup">
   <input type="hidden" name="invite" value="${esc(inviteCode)}">
   <label for="e">Email</label><input id="e" name="email" type="email" required autocomplete="email">
   <label for="n">Your name</label><input id="n" name="display_name" required autocomplete="name">
   <label for="tz">Your timezone</label><input id="tz" name="timezone" required value="UTC">
-  <p class="notice">Invite-only. Your address is used to sign you in and to tell
+  <p class="notice">${opts.publicSignup ? '' : 'Invite-only. '}Your address is used to sign you in and to tell
     you about your own bookings, nothing else.</p>
   <button class="submit" type="submit">Create account</button>
 </form>
@@ -333,7 +352,7 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
   );
 }
 
-export function loginPage(sent?: boolean, error?: string): string {
+export function loginPage(sent?: boolean, error?: string, sso?: boolean): string {
   return SHELL(
     'Sign in',
     `<h1>Sign in</h1>
@@ -342,13 +361,57 @@ ${
   sent
     ? `<p class="ok">If that address has an account, a sign-in link is on its way.
          It works once and expires in 20 minutes.</p>`
-    : `<form method="post" action="/login">
+    : `${sso ? googleButton() : ''}
+       <form method="post" action="/login">
          <label for="e">Email</label><input id="e" name="email" type="email" required autocomplete="email">
          <p class="notice">We send a link rather than asking for a password. There
            is no password on this account to forget or to leak.</p>
          <button class="submit" type="submit">Send me a link</button>
        </form>`
 }`,
+  );
+}
+
+/** P4 — profile, brand, and the owner's link. */
+export function settingsPage(
+  s: {
+    display_name: string; email: string; timezone: string; link_slug: string;
+    welcome_message: string; brand_color: string;
+  },
+  baseUrl: string,
+  error?: string,
+): string {
+  return SHELL(
+    'Settings',
+    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+<h1>Settings</h1>
+${error ? `<p class="err">${esc(error)}</p>` : ''}
+<form method="post" action="/app/settings">
+<div class="card"><h2>Profile</h2>
+  <label for="dn">Your name</label><input id="dn" name="display_name" value="${esc(s.display_name)}">
+  <label>Email</label><input value="${esc(s.email)}" disabled>
+  <label for="tz">Timezone</label><input id="tz" name="timezone" value="${esc(s.timezone)}">
+  <label for="wm">Welcome message (shown on your public page)</label>
+  <input id="wm" name="welcome_message" value="${esc(s.welcome_message)}" maxlength="500"
+    placeholder="Pick a meeting to see available times.">
+</div>
+<div class="card"><h2>Brand</h2>
+  <label for="bc">Accent color</label>
+  <input id="bc" name="brand_color" value="${esc(s.brand_color)}" placeholder="#1a56db" size="8">
+</div>
+<div class="card"><h2>Your link</h2>
+  <p class="muted">${esc(baseUrl)}/<b>${esc(s.link_slug)}</b></p>
+  <label for="ls">Link name</label>
+  <input id="ls" name="link_slug" value="${esc(s.link_slug)}" pattern="[a-z0-9-]{2,40}">
+  <p class="notice">Changing this breaks every link you have already shared —
+    they will need the new address.</p>
+</div>
+<button class="submit" type="submit">Save settings</button>
+</form>
+<style>
+ .card{border:1px solid var(--line);border-radius:.5rem;padding:1rem;margin:1rem 0}
+ .card h2{font-size:1.1rem;margin:0 0 .25rem}
+</style>`,
   );
 }
 
@@ -666,6 +729,8 @@ export function ownerLanding(
   displayName: string,
   linkSlug: string,
   events: { slug: string; title: string; duration_minutes: number; description?: string; color?: string }[],
+  welcome?: string,
+  brandColor?: string,
 ): string {
   const cards = events
     .map(
@@ -679,8 +744,9 @@ export function ownerLanding(
     .join('');
   return SHELL(
     displayName,
-    `<h1>${esc(displayName)}</h1>
-<p class="muted">Pick a meeting to see available times.</p>
+    `${brandColor ? `<style>:root{--accent:${esc(brandColor)}}</style>` : ''}
+<h1>${esc(displayName)}</h1>
+<p class="muted">${welcome ? esc(welcome) : 'Pick a meeting to see available times.'}</p>
 ${cards || '<p class="muted">No booking pages yet.</p>'}
 <style>
  .ev{display:flex;flex-direction:column;gap:.15rem;border:1px solid var(--line);
@@ -756,7 +822,19 @@ export function ownerHome(
   connections?: ConnectionView[],
   sets?: { set_id: string; name: string }[],
   linkSlug?: string,
+  setup?: { calendar: boolean; hours: boolean; event: boolean },
 ): string {
+  const setupBanner =
+    setup && !(setup.calendar && setup.hours && setup.event)
+      ? `<div class="card" style="border-left:3px solid var(--accent)">
+  <h2>Getting started</h2>
+  <p>${setup.calendar ? '✓' : '○'} <a href="#cal-section">Connect your calendar</a>
+    <span class="muted">— so busy times block your pages</span></p>
+  <p>${setup.hours ? '✓' : '○'} Set your weekly hours
+    <span class="muted">— in an availability schedule below</span></p>
+  <p>${setup.event ? '✓' : '○'} Create your first booking page</p>
+</div>`
+      : '';
   const pageUrl = (slug: string) =>
     linkSlug ? `${baseUrl}/${linkSlug}/${slug}` : `${baseUrl}/${slug}`;
   const list = schedules
@@ -790,7 +868,8 @@ export function ownerHome(
   &middot; <form method="post" action="/logout" style="display:inline">
     <button type="submit" class="linkish">sign out</button></form></p>
 ${notice ? `<p class="ok">${esc(notice)}</p>` : ''}
-<p class="muted"><a href="/app/meetings">Meetings</a> &middot; <a href="/app/contacts">Contacts</a></p>
+<p class="muted"><a href="/app/meetings">Meetings</a> &middot; <a href="/app/contacts">Contacts</a> &middot; <a href="/app/settings">Settings</a></p>
+${setupBanner}
 ${linkSlug ? `<p class="muted">Your page: <a href="${esc(baseUrl)}/${esc(linkSlug)}">${esc(baseUrl)}/${esc(linkSlug)}</a></p>` : ''}
 ${schedules.length === 0 ? '<p class="muted">No booking pages yet.</p>' : list}
 <div class="card">
