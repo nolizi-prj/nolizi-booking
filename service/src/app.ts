@@ -14,7 +14,7 @@ import {
 } from './schedules.ts';
 import {
   availabilityEditor, bookingPage, confirmedPage, contactsPage, errorPage, eventTypeEditor,
-  apiKeysPage, homePage, loginPage, managePage, meetingsPage, messagePage, ownerHome,
+  apiKeysPage, auditPage, homePage, loginPage, managePage, meetingsPage, messagePage, ownerHome,
   ownerLanding, pollDetailPage, pollsPage, pollVotePage, routeFormPage, routingPage, settingsPage,
   signupPage, webhooksPage, workflowsPage,
   teamPage,
@@ -26,6 +26,7 @@ import {
   issueSignInToken, ownerForSession, readCookie, redeemInvite, RESERVED_SLUGS, sessionCookie,
 } from './identity.ts';
 import { googleSsoExchange, googleSsoUrl } from './sso-google.ts';
+import { discoverOidc, oidcAuthUrl, oidcExchange } from './sso-oidc.ts';
 import { RATE_LIMITS, type Config } from './config.ts';
 import type { CalendarHub } from './calendars.ts';
 import { icsFor } from './ics.ts';
@@ -52,6 +53,21 @@ const json = (status: number, body: unknown): Reply => ({
 
 /** L1 · At least 128 bits from a CSPRNG. Not a booking id, not a sequence. */
 export const newToken = (): string => randomBytes(32).toString('base64url');
+
+/** P8 · one line in the ledger. Never throws; an audit line is not worth a 500. */
+async function audit(
+  sql: SqlClient,
+  e: { ownerId?: string; orgId?: string; actor: string; action: string; detail?: string },
+): Promise<void> {
+  try {
+    await sql.query(
+      `INSERT INTO audit_events (owner_id, org_id, actor, action, detail)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [e.ownerId ?? null, e.orgId ?? null, e.actor, e.action, e.detail ?? null]);
+  } catch (err) {
+    console.warn(`[audit] write failed: ${(err as Error).message}`);
+  }
+}
 
 /** P7 · API keys are stored as digests; the raw key exists only in transit. */
 async function sha256Hex(value: string): Promise<string> {
@@ -136,6 +152,7 @@ export async function handle(
     cookie?: string;
     query?: Record<string, string>;
     authorization?: string;
+    rawBody?: string;
   },
 ): Promise<Reply> {
   try {
@@ -161,6 +178,7 @@ async function handleRoutes(
     cookie?: string;
     query?: Record<string, string>;
     authorization?: string;
+    rawBody?: string;
   },
 ): Promise<Reply> {
   const { sql, config, mail } = deps;
@@ -278,6 +296,99 @@ async function handleRoutes(
     }
 
     return json(404, { error: 'no such endpoint' });
+  }
+
+  // ── SCIM v2 (P8): the org's IdP provisions and deprovisions members ──────
+  if (parts[0] === 'scim' && parts[1] === 'v2') {
+    const scimJson = (status: number, body: unknown): Reply => ({
+      status,
+      headers: { 'content-type': 'application/scim+json; charset=utf-8', 'cache-control': 'no-store' },
+      body: JSON.stringify(body),
+    });
+    const raw = (req.authorization ?? '').replace(/^Bearer\s+/i, '').trim();
+    if (!raw) return scimJson(401, { detail: 'missing bearer token' });
+    const orgQ = await sql.query(
+      `SELECT org_id FROM org_sso WHERE scim_token_hash = $1`, [await sha256Hex(raw)]);
+    if (!orgQ.rows[0]) return scimJson(401, { detail: 'invalid token' });
+    const scimOrg = String(orgQ.rows[0]['org_id']);
+    const userShape = (id: string, email: string, name: string) => ({
+      schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
+      id, userName: email, displayName: name, active: true,
+    });
+
+    if (req.method === 'GET' && parts[2] === 'Users' && !parts[3]) {
+      const { rows } = await sql.query(
+        `SELECT o.owner_id, o.email, o.display_name FROM org_members m
+           JOIN owners o ON o.owner_id = m.owner_id WHERE m.org_id = $1`, [scimOrg]);
+      return scimJson(200, {
+        schemas: ['urn:ietf:params:scim:api:messages:2.0:ListResponse'],
+        totalResults: rows.length,
+        Resources: rows.map((r) =>
+          userShape(String(r['owner_id']), String(r['email']), String(r['display_name']))),
+      });
+    }
+
+    if (req.method === 'POST' && parts[2] === 'Users') {
+      let body: { userName?: string; displayName?: string; name?: { formatted?: string } };
+      try {
+        body = JSON.parse(req.rawBody ?? '{}');
+      } catch {
+        return scimJson(400, { detail: 'invalid JSON' });
+      }
+      const email = (body.userName ?? '').trim();
+      if (!email.includes('@')) return scimJson(400, { detail: 'userName must be an email' });
+      const display = body.displayName ?? body.name?.formatted ?? email.split('@')[0]!;
+      const existing = await sql.query(
+        `SELECT owner_id FROM owners WHERE lower(email) = lower($1)`, [email]);
+      let memberId = existing.rows[0] ? String(existing.rows[0]['owner_id']) : undefined;
+      if (!memberId) {
+        const made = await createOwnerDirect(sql, deps.tx,
+          { email, displayName: display, timezone: 'UTC' }, config.maxOwnerAccounts);
+        if (!made.ok) return scimJson(409, { detail: made.reason });
+        memberId = made.owner.owner_id;
+        await sql.query(`UPDATE owners SET provisioned_by = $2 WHERE owner_id = $1`,
+          [memberId, `scim:${scimOrg}`]);
+      }
+      await sql.query(
+        `INSERT INTO org_members (org_id, owner_id, role) VALUES ($1, $2, 'member')
+         ON CONFLICT (org_id, owner_id) DO NOTHING`, [scimOrg, memberId]);
+      await audit(sql, { ownerId: memberId, orgId: scimOrg, actor: 'scim',
+        action: 'member_provisioned', detail: email });
+      return scimJson(201, userShape(memberId, email, display));
+    }
+
+    if ((req.method === 'DELETE' || req.method === 'PATCH') && parts[2] === 'Users' && parts[3]) {
+      // PATCH is honoured only as deactivation; anything else is a no-op 200.
+      if (req.method === 'PATCH' && !(req.rawBody ?? '').includes('"active":false')) {
+        const who = await sql.query(
+          `SELECT email, display_name FROM owners WHERE owner_id = $1`, [parts[3]]);
+        return who.rows[0]
+          ? scimJson(200, userShape(parts[3], String(who.rows[0]['email']),
+              String(who.rows[0]['display_name'])))
+          : scimJson(404, { detail: 'not found' });
+      }
+      const member = await sql.query(
+        `SELECT m.owner_id, o.provisioned_by FROM org_members m
+           JOIN owners o ON o.owner_id = m.owner_id
+          WHERE m.org_id = $1 AND m.owner_id = $2`, [scimOrg, parts[3]]);
+      if (!member.rows[0]) return scimJson(404, { detail: 'not found' });
+      await sql.query(`DELETE FROM org_members WHERE org_id = $1 AND owner_id = $2`,
+        [scimOrg, parts[3]]);
+      await sql.query(`DELETE FROM sessions WHERE owner_id = $1`, [parts[3]]);
+      // An account this org's IdP created, this org's IdP may remove (D3).
+      if (String(member.rows[0]['provisioned_by'] ?? '') === `scim:${scimOrg}`) {
+        await deps.tx.transaction(async (tx) => {
+          await tx.query(`DELETE FROM bookings WHERE owner_id = $1`, [parts[3]]);
+          await tx.query(`DELETE FROM event_hosts WHERE owner_id = $1`, [parts[3]]);
+          await tx.query(`DELETE FROM owners WHERE owner_id = $1`, [parts[3]]);
+        });
+      }
+      await audit(sql, { ownerId: parts[3], orgId: scimOrg, actor: 'scim',
+        action: 'member_deprovisioned' });
+      return { status: 204, headers: { 'cache-control': 'no-store' }, body: '' };
+    }
+
+    return scimJson(404, { detail: 'no such endpoint' });
   }
 
   // ── manage a booking by bearer token (L1, L2) ────────────────────────────
@@ -485,9 +596,46 @@ async function handleRoutes(
     };
   }
 
+  // ── org SSO entry (P8): /login/sso/<orgId> starts the customer IdP flow ──
+  if (parts[0] === 'login' && parts[1] === 'sso' && parts[2]) {
+    const hub = deps.calendars;
+    if (!hub) return html(404, errorPage(404, 'SSO is not configured on this deployment.'));
+    const ssoQ = await sql.query(
+      `SELECT issuer, client_id FROM org_sso WHERE org_id = $1`, [parts[2]]);
+    const sso = ssoQ.rows[0];
+    if (!sso) return html(404, errorPage(404, 'This organization has no SSO configured.'));
+    try {
+      const endpoints = await discoverOidc(String(sso['issuer']));
+      const state = await hub.sealState({ purpose: 'oidc', org: parts[2] });
+      return {
+        status: 303,
+        headers: {
+          location: oidcAuthUrl({
+            authorizationEndpoint: endpoints.authorization_endpoint,
+            clientId: String(sso['client_id']),
+            redirectUri: `${config.baseUrl}/oauth/oidc/callback`,
+            state,
+          }),
+        },
+        body: '',
+      };
+    } catch (err) {
+      console.warn(`[sso] discovery failed: ${(err as Error).message}`);
+      return html(502, errorPage(502, "The organization's identity provider did not answer."));
+    }
+  }
+
   if (parts[0] === 'login') {
     if (req.method === 'GET') return html(200, loginPage(undefined, undefined, Boolean(config.googleClientId)));
     const email = (req.form?.['email'] ?? '').trim();
+    // P8 · a domain claimed by an organization's SSO is steered to its IdP.
+    const domain = email.slice(email.indexOf('@') + 1).toLowerCase();
+    const steered = await sql.query(
+      `SELECT org_id FROM org_sso WHERE email_domain = $1`, [domain]);
+    if (steered.rows[0]) {
+      return { status: 303,
+        headers: { location: `/login/sso/${String(steered.rows[0]['org_id'])}` }, body: '' };
+    }
     if (await overLimit(sql, `login:${req.ip}`, RATE_LIMITS.booking_attempts_per_ip_per_minute, 60, now)) {
       return html(429, errorPage(429, 'Too many attempts. Try again shortly.'));
     }
@@ -601,6 +749,62 @@ async function handleRoutes(
         ownerId = made.owner.owner_id;
       }
       const sid = await createSession(sql, ownerId, now, config.sessionTtlHours);
+      return {
+        status: 303,
+        headers: { location: '/app', 'set-cookie': sessionCookie(sid, secure, config.sessionTtlHours) },
+        body: '',
+      };
+    }
+
+    // P8 · a customer IdP's answer: sign the member in, provisioning them on
+    // first arrival (JIT) inside the org, ceiling respected.
+    if (state['purpose'] === 'oidc' && state['org']) {
+      const ssoQ = await sql.query(
+        `SELECT issuer, client_id, client_secret, email_domain FROM org_sso WHERE org_id = $1`,
+        [state['org']]);
+      const sso = ssoQ.rows[0];
+      if (!sso) return html(404, errorPage(404, 'This organization has no SSO configured.'));
+      let email: string;
+      try {
+        const endpoints = await discoverOidc(String(sso['issuer']));
+        email = (await oidcExchange({
+          tokenEndpoint: endpoints.token_endpoint,
+          clientId: String(sso['client_id']),
+          clientSecret: String(sso['client_secret']),
+          code,
+          redirectUri: `${config.baseUrl}/oauth/oidc/callback`,
+        })).email;
+      } catch (err) {
+        console.warn(`[sso] oidc exchange failed: ${(err as Error).message}`);
+        return html(502, errorPage(502, 'The identity provider did not complete the sign-in.'));
+      }
+      const claimedDomain = sso['email_domain'] === null ? undefined : String(sso['email_domain']);
+      if (claimedDomain && !email.toLowerCase().endsWith(`@${claimedDomain}`)) {
+        return html(403, errorPage(403, 'That identity does not belong to this organization.'));
+      }
+      const found = await sql.query(
+        `SELECT owner_id FROM owners WHERE lower(email) = lower($1)`, [email]);
+      let memberId = found.rows[0] ? String(found.rows[0]['owner_id']) : undefined;
+      if (!memberId) {
+        const made = await createOwnerDirect(sql, deps.tx, {
+          email, displayName: email.split('@')[0]!, timezone: 'UTC',
+        }, config.maxOwnerAccounts);
+        if (!made.ok) {
+          return html(400, errorPage(400,
+            made.reason === 'ceiling'
+              ? 'This service has reached its account limit and is not taking more.'
+              : 'Could not provision this identity.'));
+        }
+        memberId = made.owner.owner_id;
+        await sql.query(`UPDATE owners SET provisioned_by = $2 WHERE owner_id = $1`,
+          [memberId, `sso:${state['org']}`]);
+      }
+      await sql.query(
+        `INSERT INTO org_members (org_id, owner_id, role) VALUES ($1, $2, 'member')
+         ON CONFLICT (org_id, owner_id) DO NOTHING`, [state['org'], memberId]);
+      await audit(sql, { ownerId: memberId, orgId: state['org'], actor: email,
+        action: 'sso_login' });
+      const sid = await createSession(sql, memberId, now, config.sessionTtlHours);
       return {
         status: 303,
         headers: { location: '/app', 'set-cookie': sessionCookie(sid, secure, config.sessionTtlHours) },
@@ -1101,6 +1305,37 @@ async function handleRoutes(
           [parts[2], String(found.rows[0]['owner_id'])]);
         return { status: 303, headers: { location: '/app/team' }, body: '' };
       }
+      // P8 · SSO + SCIM configuration, admin-only, checked at the query.
+      if (req.method === 'POST' && parts[2] && parts[3] === 'sso') {
+        const admin = await sql.query(
+          `SELECT 1 FROM org_members WHERE org_id = $1 AND owner_id = $2 AND role = 'admin'`,
+          [parts[2], owner.owner_id]);
+        if (!admin.rows[0]) return html(404, errorPage(404, 'No such team.'));
+        const f = req.form ?? {};
+        if (f['remove']) {
+          await sql.query(`DELETE FROM org_sso WHERE org_id = $1`, [parts[2]]);
+          await audit(sql, { orgId: parts[2], actor: owner.email, action: 'sso_removed' });
+          return { status: 303, headers: { location: '/app/team' }, body: '' };
+        }
+        const issuer = (f['issuer'] ?? '').trim().replace(/\/$/, '');
+        if (!/^https:\/\//.test(issuer)) {
+          return html(400, errorPage(400, 'The issuer is an https:// URL from your IdP.'));
+        }
+        const scimToken = `scim_${newToken()}`;
+        await sql.query(
+          `INSERT INTO org_sso (org_id, issuer, client_id, client_secret, email_domain, scim_token_hash)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (org_id) DO UPDATE SET issuer = $2, client_id = $3, client_secret = $4,
+             email_domain = $5, scim_token_hash = $6`,
+          [parts[2], issuer, (f['client_id'] ?? '').trim(), (f['client_secret'] ?? '').trim(),
+           (f['email_domain'] ?? '').trim().toLowerCase() || null, await sha256Hex(scimToken)]);
+        await audit(sql, { orgId: parts[2], actor: owner.email, action: 'sso_configured',
+          detail: issuer });
+        // The SCIM token is shown exactly once, on the redirect target.
+        return { status: 303,
+          headers: { location: `/app/team?scim=${encodeURIComponent(scimToken)}` }, body: '' };
+      }
+
       // GET /app/team — my organizations, with members where I admin.
       const myOrgs = await sql.query(
         `SELECT o.org_id, o.name, m.role FROM orgs o
@@ -1128,8 +1363,51 @@ async function handleRoutes(
       }
       const openInvites = await sql.query(
         `SELECT code FROM invites WHERE consumed_at IS NULL ORDER BY code`);
+      // P8 · attach each org's SSO state for admins.
+      const ssoByOrg = new Map<string, { issuer: string; email_domain?: string }>();
+      for (const o of orgs) {
+        const s = await sql.query(
+          `SELECT issuer, email_domain FROM org_sso WHERE org_id = $1`, [o.org_id]);
+        if (s.rows[0]) {
+          ssoByOrg.set(o.org_id, {
+            issuer: String(s.rows[0]['issuer']),
+            email_domain: s.rows[0]['email_domain'] === null ? undefined
+              : String(s.rows[0]['email_domain']),
+          });
+        }
+      }
       return html(200, teamPage(orgs, owner.owner_id,
-        openInvites.rows.map((r) => String(r['code'])), config.baseUrl));
+        openInvites.rows.map((r) => String(r['code'])), config.baseUrl,
+        ssoByOrg, req.query?.['scim']));
+    }
+
+    // ── audit (P8): what happened to this account ────────────────────────
+    if (parts[1] === 'audit' && req.method === 'GET') {
+      const myOrgIds = await sql.query(
+        `SELECT org_id FROM org_members WHERE owner_id = $1 AND role = 'admin'`,
+        [owner.owner_id]);
+      const orgIds = myOrgIds.rows.map((r) => String(r['org_id']));
+      const events: { actor: string; action: string; detail: string; at: string }[] = [];
+      const mine = await sql.query(
+        `SELECT actor, action, detail, created_at FROM audit_events
+          WHERE owner_id = $1 ORDER BY id DESC LIMIT 100`, [owner.owner_id]);
+      for (const r of mine.rows) {
+        events.push({ actor: String(r['actor']), action: String(r['action']),
+          detail: r['detail'] === null ? '' : String(r['detail']),
+          at: String(r['created_at']) });
+      }
+      for (const orgId of orgIds) {
+        const theirs = await sql.query(
+          `SELECT actor, action, detail, created_at FROM audit_events
+            WHERE org_id = $1 ORDER BY id DESC LIMIT 100`, [orgId]);
+        for (const r of theirs.rows) {
+          events.push({ actor: String(r['actor']), action: String(r['action']),
+            detail: r['detail'] === null ? '' : String(r['detail']),
+            at: String(r['created_at']) });
+        }
+      }
+      events.sort((a, b) => (a.at < b.at ? 1 : -1));
+      return html(200, auditPage(events.slice(0, 100)));
     }
 
     // ── settings (P4): profile, brand, my link ───────────────────────────

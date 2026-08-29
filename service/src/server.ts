@@ -181,6 +181,7 @@ export async function start(): Promise<{ close: () => Promise<void>; port: numbe
         form,
         cookie: req.headers.cookie,
         authorization: req.headers.authorization,
+        rawBody: raw,
         query: Object.fromEntries(url.searchParams),
       })
         .then((reply) => {

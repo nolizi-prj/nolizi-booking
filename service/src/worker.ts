@@ -45,6 +45,8 @@ import schema006 from '../migrations-sqlite/006_teams.sql';
 import schema007 from '../migrations-sqlite/007_routing_polls.sql';
 // @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema008 from '../migrations-sqlite/008_automation.sql';
+// @ts-expect-error — .sql imports exist only under wrangler's bundler
+import schema009 from '../migrations-sqlite/009_enterprise.sql';
 
 /** Mirrors server.ts: a form here is a name, an address and two timestamps. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -99,6 +101,7 @@ export class PumasiService extends DurableObject {
           { name: '006_teams.sql', sql: schema006 as string },
           { name: '007_routing_polls.sql', sql: schema007 as string },
           { name: '008_automation.sql', sql: schema008 as string },
+          { name: '009_enterprise.sql', sql: schema009 as string },
         ],
       }),
     );
@@ -194,9 +197,11 @@ export class PumasiService extends DurableObject {
     const deps = await this.#init();
 
     let form: Record<string, string> | undefined;
-    if (request.method === 'POST' || request.method === 'PUT') {
+    let rawBody: string | undefined;
+    if (request.method === 'POST' || request.method === 'PUT' || request.method === 'PATCH' || request.method === 'DELETE') {
       const raw = await request.text();
       if (raw.length > MAX_BODY_BYTES) return new Response('request too large', { status: 413 });
+      rawBody = raw;
       form = Object.fromEntries(new URLSearchParams(raw));
     }
 
@@ -208,6 +213,7 @@ export class PumasiService extends DurableObject {
       form,
       cookie: request.headers.get('cookie') ?? undefined,
       authorization: request.headers.get('authorization') ?? undefined,
+      rawBody,
       query: Object.fromEntries(url.searchParams),
     });
     return new Response(reply.body, { status: reply.status, headers: reply.headers });

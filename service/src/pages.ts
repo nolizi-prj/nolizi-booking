@@ -789,6 +789,32 @@ ${CARD_CSS}
   );
 }
 
+/** P8 — the audit trail, newest first. */
+export function auditPage(
+  events: { actor: string; action: string; detail: string; at: string }[],
+): string {
+  const rows = events
+    .map(
+      (e) => `<tr><td><time datetime="${esc(e.at)}" class="lt">${esc(e.at.slice(0, 16))}</time></td>
+  <td>${esc(e.actor)}</td><td>${esc(e.action.replace(/_/g, ' '))}</td>
+  <td class="muted">${esc(e.detail)}</td></tr>`,
+    )
+    .join('');
+  return SHELL(
+    'Audit log',
+    `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
+<h1>Audit log</h1>
+<p class="muted">Sign-ins and administrative changes on your account and the
+  teams you administer.</p>
+${rows ? `<table class="rows"><tr><th>When</th><th>Who</th><th>What</th><th></th></tr>${rows}</table>`
+       : '<p class="muted">Nothing yet.</p>'}
+${CARD_CSS}
+<script>document.querySelectorAll('time.lt').forEach(function(t){
+  t.textContent = new Date(t.getAttribute('datetime')).toLocaleString();
+});</script>`,
+  );
+}
+
 /** P6 — a plain page carrying one message, for routing/poll endpoints. */
 export function messagePage(title: string, message: string): string {
   return SHELL(title, `<h1>${esc(title)}</h1>\n<p class="ok">${esc(message)}</p>`);
@@ -1003,7 +1029,32 @@ export function teamPage(
   myOwnerId: string,
   openInvites: string[] = [],
   baseUrl = '',
+  ssoByOrg: Map<string, { issuer: string; email_domain?: string }> = new Map(),
+  freshScimToken?: string,
 ): string {
+  const ssoSection = (o: { org_id: string; my_role: string }): string => {
+    if (o.my_role !== 'admin') return '';
+    const sso = ssoByOrg.get(o.org_id);
+    return `<details style="margin-top:.75rem"><summary class="muted">Single sign-on (OIDC) &amp; SCIM</summary>
+  ${sso
+    ? `<p class="muted">IdP: <code>${esc(sso.issuer)}</code>${sso.email_domain ? ` · domain ${esc(sso.email_domain)} is steered here at login` : ''}<br>
+    Sign-in URL: <code>${esc(baseUrl)}/login/sso/${esc(o.org_id)}</code> ·
+    SCIM base: <code>${esc(baseUrl)}/scim/v2</code></p>
+    <form method="post" action="/app/team/${esc(o.org_id)}/sso" style="display:inline">
+      <input type="hidden" name="remove" value="1">
+      <button class="linkish" type="submit">remove SSO</button></form>`
+    : ''}
+  <form method="post" action="/app/team/${esc(o.org_id)}/sso">
+    <label>Issuer URL <input name="issuer" placeholder="https://login.example.com" required></label>
+    <label>Client ID <input name="client_id" required></label>
+    <label>Client secret <input name="client_secret" required></label>
+    <label>Email domain (optional) <input name="email_domain" placeholder="example.com"></label>
+    <p class="notice">Redirect URI for your IdP: <code>${esc(baseUrl)}/oauth/oidc/callback</code>.
+      Saving (re)generates the SCIM token, shown once.</p>
+    <button class="submit" type="submit">${sso ? 'Update' : 'Enable'} SSO</button>
+  </form>
+</details>`;
+  };
   const list = orgs
     .map(
       (o) => `<div class="card">
@@ -1022,6 +1073,7 @@ export function teamPage(
     <label>Add member by email <input name="email" type="email" required></label>
     <button class="submit" type="submit">Add</button>
   </form>` : ''}
+  ${ssoSection(o)}
 </div>`,
     )
     .join('');
@@ -1029,6 +1081,9 @@ export function teamPage(
     'Team',
     `<p class="muted"><a href="/app">&lsaquo; dashboard</a></p>
 <h1>Team</h1>
+${freshScimToken
+    ? `<p class="ok">SCIM bearer token — copy it now, it is not shown again:<br>
+  <code>${esc(freshScimToken)}</code></p>` : ''}
 <p class="muted">Members can host round-robin and collective event types together.
   New members need their own account here first.</p>
 ${list || '<p class="muted">No teams yet.</p>'}
@@ -1292,7 +1347,7 @@ export function ownerHome(
   &middot; <form method="post" action="/logout" style="display:inline">
     <button type="submit" class="linkish">sign out</button></form></p>
 ${notice ? `<p class="ok">${esc(notice)}</p>` : ''}
-<p class="muted"><a href="/app/meetings">Meetings</a> &middot; <a href="/app/contacts">Contacts</a> &middot; <a href="/app/team">Team</a> &middot; <a href="/app/routing">Routing</a> &middot; <a href="/app/polls">Polls</a> &middot; <a href="/app/workflows">Workflows</a> &middot; <a href="/app/webhooks">Webhooks</a> &middot; <a href="/app/api-keys">API</a> &middot; <a href="/app/settings">Settings</a></p>
+<p class="muted"><a href="/app/meetings">Meetings</a> &middot; <a href="/app/contacts">Contacts</a> &middot; <a href="/app/team">Team</a> &middot; <a href="/app/routing">Routing</a> &middot; <a href="/app/polls">Polls</a> &middot; <a href="/app/workflows">Workflows</a> &middot; <a href="/app/webhooks">Webhooks</a> &middot; <a href="/app/api-keys">API</a> &middot; <a href="/app/audit">Audit</a> &middot; <a href="/app/settings">Settings</a></p>
 ${setupBanner}
 ${linkSlug ? `<p class="muted">Your page: <a href="${esc(baseUrl)}/${esc(linkSlug)}">${esc(baseUrl)}/${esc(linkSlug)}</a></p>` : ''}
 ${schedules.length === 0 ? '<p class="muted">No booking pages yet.</p>' : list}
