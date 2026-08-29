@@ -8,12 +8,15 @@
  */
 
 import { Temporal } from '@js-temporal/polyfill';
-import { computeSlots } from '@pumasi/booking-core';
+import { computeSlots, periodKey } from '@pumasi/booking-core';
 import type {
   ComputeSlotsResponse,
   AvailabilityRule,
   DateOverride,
   Interval,
+  BookingLimit,
+  LimitPeriod,
+  PeriodUsage,
   Slot,
   Weekday,
 } from '@pumasi/booking-core';
@@ -36,6 +39,11 @@ export interface Schedule {
   minimum_notice_minutes: number;
   maximum_horizon_days: number;
   max_bookings_per_day: number | null;
+  /** S9b · caps over longer periods, and over booked time. */
+  max_bookings_per_week: number | null;
+  max_bookings_per_month: number | null;
+  max_minutes_per_day: number | null;
+  max_minutes_per_week: number | null;
   /** P2 · the named availability set this event type draws hours from. */
   availability_set_id: string | null;
   description: string | null;
@@ -53,7 +61,8 @@ export interface Schedule {
 const SCHEDULE_COLS = `sc.schedule_id, sc.owner_id, sc.slug, sc.title, o.timezone AS owner_timezone, o.display_name AS owner_name,
             sc.duration_minutes, sc.granularity_minutes, sc.buffer_before_minutes,
             sc.buffer_after_minutes, sc.minimum_notice_minutes, sc.maximum_horizon_days,
-            sc.max_bookings_per_day, sc.availability_set_id, sc.description, sc.color,
+            sc.max_bookings_per_day, sc.max_bookings_per_week, sc.max_bookings_per_month,
+            sc.max_minutes_per_day, sc.max_minutes_per_week, sc.availability_set_id, sc.description, sc.color,
             sc.location_kind, sc.location_value, sc.available_from, sc.available_until,
             sc.scheduling_kind, sc.org_id`;
 
@@ -73,6 +82,10 @@ function toSchedule(r: Record<string, unknown>): Schedule {
     minimum_notice_minutes: n(r['minimum_notice_minutes']),
     maximum_horizon_days: n(r['maximum_horizon_days']),
     max_bookings_per_day: r['max_bookings_per_day'] === null ? null : n(r['max_bookings_per_day']),
+    max_bookings_per_week: r['max_bookings_per_week'] == null ? null : n(r['max_bookings_per_week']),
+    max_bookings_per_month: r['max_bookings_per_month'] == null ? null : n(r['max_bookings_per_month']),
+    max_minutes_per_day: r['max_minutes_per_day'] == null ? null : n(r['max_minutes_per_day']),
+    max_minutes_per_week: r['max_minutes_per_week'] == null ? null : n(r['max_minutes_per_week']),
     availability_set_id: opt(r['availability_set_id']),
     description: opt(r['description']),
     color: opt(r['color']),
@@ -196,6 +209,45 @@ async function loadBusy(sql: SqlClient, ownerId: string): Promise<Interval[]> {
  * SQL: `AT TIME ZONE` is PostgreSQL-only and broke the SQLite deployment the
  * first time a page was viewed. One dialect-neutral query, one converter.
  */
+function periodUsage(
+  busy: Interval[],
+  timezone: string,
+): Partial<Record<LimitPeriod, Record<string, PeriodUsage>>> {
+  const out: Partial<Record<LimitPeriod, Record<string, PeriodUsage>>> = {};
+  for (const period of ['day', 'week', 'month', 'year'] as LimitPeriod[]) {
+    const bucket: Record<string, PeriodUsage> = {};
+    for (const b of busy) {
+      const start = Temporal.Instant.from(b.start);
+      const key = periodKey(timezone, start, period);
+      const minutes = Math.round(
+        Temporal.Instant.from(b.end).since(start).total({ unit: 'minute' }),
+      );
+      const cur = bucket[key] ?? { bookings: 0, minutes: 0 };
+      bucket[key] = { bookings: cur.bookings + 1, minutes: cur.minutes + minutes };
+    }
+    out[period] = bucket;
+  }
+  return out;
+}
+
+/** The limits this event type declares, in the engine's shape. */
+function limitsOf(schedule: Schedule): BookingLimit[] {
+  const out: BookingLimit[] = [];
+  if (schedule.max_bookings_per_week != null) {
+    out.push({ period: 'week', max_bookings: schedule.max_bookings_per_week });
+  }
+  if (schedule.max_bookings_per_month != null) {
+    out.push({ period: 'month', max_bookings: schedule.max_bookings_per_month });
+  }
+  if (schedule.max_minutes_per_day != null) {
+    out.push({ period: 'day', max_minutes: schedule.max_minutes_per_day });
+  }
+  if (schedule.max_minutes_per_week != null) {
+    out.push({ period: 'week', max_minutes: schedule.max_minutes_per_week });
+  }
+  return out;
+}
+
 function dailyCounts(busy: Interval[], timezone: string): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const b of busy) {
@@ -327,6 +379,8 @@ export async function availableSlots(
     maximum_horizon_days: schedule.maximum_horizon_days,
     max_bookings_per_day: schedule.max_bookings_per_day,
     bookings_per_local_date: counts,
+    booking_limits: limitsOf(schedule),
+    booked_by_period: periodUsage(busy, schedule.owner_timezone),
     query: { from: q.from, to: q.to },
     // P2b — the clock is supplied here. The engine never reads one.
     now: q.now,

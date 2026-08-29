@@ -140,6 +140,33 @@ export function ownerLocalDate(timezone: string, instant: Temporal.Instant): Loc
   return instant.toZonedDateTimeISO(timezone).toPlainDate().toString();
 }
 
+/**
+ * S9b · The key a booking counts against, in the OWNER's calendar.
+ *
+ * The week is the ISO week — Monday-based, and belonging to the year that owns
+ * that week, which is why 2027-01-01 can be week 53 of 2026. Getting this wrong
+ * is the classic off-by-one in "max N per week": both incumbents have shipped
+ * it, so the boundary is derived from the calendar rather than from arithmetic
+ * on day numbers.
+ */
+export function periodKey(
+  timezone: string,
+  instant: Temporal.Instant,
+  period: 'day' | 'week' | 'month' | 'year',
+): string {
+  const d = instant.toZonedDateTimeISO(timezone).toPlainDate();
+  switch (period) {
+    case 'day':
+      return d.toString();
+    case 'week':
+      return `${d.yearOfWeek}-W${String(d.weekOfYear).padStart(2, '0')}`;
+    case 'month':
+      return `${d.year}-${String(d.month).padStart(2, '0')}`;
+    case 'year':
+      return String(d.year);
+  }
+}
+
 const WEEKDAY_CODES = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const;
 
 /** ISO weekday (1 = Monday) as the two-letter code the spec uses. */

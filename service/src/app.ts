@@ -1971,6 +1971,12 @@ async function handleRoutes(
           const t = (v ?? '').trim();
           return t === '' ? null : t;
         };
+        const cap = (v: string | undefined): number | null => {
+          const t = (v ?? '').trim();
+          if (t === '') return null;
+          const x = Number(t);
+          return Number.isInteger(x) && x > 0 ? x : null;
+        };
         const kind = ['custom', 'phone', 'in_person', 'meet'].includes(f['location_kind'] ?? '')
           ? f['location_kind']! : 'custom';
         const chosenSet = sets.rows.some((r) => String(r['set_id']) === f['availability_set_id'])
@@ -1981,7 +1987,9 @@ async function handleRoutes(
                   granularity_minutes = $5, buffer_before_minutes = $6, buffer_after_minutes = $7,
                   minimum_notice_minutes = $8, maximum_horizon_days = $9, max_bookings_per_day = $10,
                   location_kind = $11, location_value = $12, availability_set_id = $13,
-                  available_from = $14, available_until = $15, color = $16
+                  available_from = $14, available_until = $15, color = $16,
+                  max_bookings_per_week = $18, max_bookings_per_month = $19,
+                  max_minutes_per_day = $20, max_minutes_per_week = $21
             WHERE schedule_id = $1 AND owner_id = $17`,
           [sched.schedule_id,
            (f['title'] ?? sched.title).trim() || sched.title,
@@ -1996,7 +2004,11 @@ async function handleRoutes(
            kind, opt(f['location_value']), chosenSet,
            dateRe.test(f['available_from'] ?? '') ? f['available_from']! : null,
            dateRe.test(f['available_until'] ?? '') ? f['available_until']! : null,
-           opt(f['color']), owner.owner_id],
+           opt(f['color']), owner.owner_id,
+           // S9b · blank means no limit; a nonsense value means no limit too,
+           // because a cap nobody can explain is worse than none.
+           cap(f['max_bookings_per_week']), cap(f['max_bookings_per_month']),
+           cap(f['max_minutes_per_day']), cap(f['max_minutes_per_week'])],
         );
 
         // P5 · scheduling kind and hosts. A chosen host must share an org with

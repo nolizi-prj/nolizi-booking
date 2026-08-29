@@ -20,6 +20,7 @@ import {
   candidateLocalDates,
   materializeWindow,
   ownerLocalDate,
+  periodKey,
   weekdayOf,
   type MaterializedWindow,
 } from './zone.ts';
@@ -156,7 +157,26 @@ export function computeSlots(request: ComputeSlotsRequest): ComputeSlotsResponse
       ? slots
       : slots.filter((s) => (perDate[ownerLocalDate(tz, inst(s.start))] ?? 0) < maxPerDay);
 
-  return { slots: capped, diagnostics };
+  // S9b · Longer periods, and caps on booked TIME. A slot is refused when
+  // taking it would CROSS the cap, not when the cap is already met — the
+  // difference is one booking, and it is the difference people notice.
+  const limits = request.booking_limits ?? [];
+  const usage = request.booked_by_period ?? {};
+  const withinLimits =
+    limits.length === 0
+      ? capped
+      : capped.filter((s) => {
+          const start = inst(s.start);
+          return limits.every((limit) => {
+            const key = periodKey(tz, start, limit.period);
+            const used = usage[limit.period]?.[key] ?? { bookings: 0, minutes: 0 };
+            if (limit.max_bookings != null && used.bookings + 1 > limit.max_bookings) return false;
+            if (limit.max_minutes != null && used.minutes + duration > limit.max_minutes) return false;
+            return true;
+          });
+        });
+
+  return { slots: withinLimits, diagnostics };
 
   function collectCandidates(window: MaterializedWindow): void {
     const windowStart = ns(window.start);

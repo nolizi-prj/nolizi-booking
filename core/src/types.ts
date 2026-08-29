@@ -53,10 +53,39 @@ export interface ComputeSlotsRequest {
   maximum_horizon_days?: number;
   max_bookings_per_day?: number | null;
   bookings_per_local_date?: Record<LocalDate, number>;
+  /**
+   * S9b · Caps over longer periods, and over booked TIME rather than count.
+   * Both incumbents ship these and both have had boundary bugs in them, which
+   * is why the period key is computed here from the owner's local calendar
+   * rather than trusted from the caller.
+   */
+  booking_limits?: BookingLimit[];
+  /**
+   * What is already booked, per period key, supplied by the caller: the engine
+   * counts nothing and queries nothing (S12). Keys are those produced by
+   * `periodKey` — 'YYYY-MM-DD', ISO 'YYYY-Www', 'YYYY-MM', 'YYYY'.
+   */
+  booked_by_period?: Partial<Record<LimitPeriod, Record<string, PeriodUsage>>>;
   max_query_span_days?: number;
   query: QueryRange;
   /** Required. Injected clock — the engine never reads one (S12). */
   now: Instant;
+}
+
+/** The calendar periods a limit may be expressed over, in the OWNER's zone. */
+export type LimitPeriod = 'day' | 'week' | 'month' | 'year';
+
+export interface BookingLimit {
+  period: LimitPeriod;
+  /** Cap on the number of bookings in the period. */
+  max_bookings?: number;
+  /** Cap on the total booked minutes in the period. */
+  max_minutes?: number;
+}
+
+export interface PeriodUsage {
+  bookings: number;
+  minutes: number;
 }
 
 export type DiagnosticCode =

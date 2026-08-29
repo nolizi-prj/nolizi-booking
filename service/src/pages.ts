@@ -1361,6 +1361,12 @@ export function eventTypeEditor(
   <label for="mn">Minimum notice (minutes)</label><input id="mn" name="minimum_notice_minutes" type="number" min="0" value="${s.minimum_notice_minutes}">
   <label for="mh">How far ahead people can book (days)</label><input id="mh" name="maximum_horizon_days" type="number" min="1" value="${s.maximum_horizon_days}">
   <label for="mb">Max bookings per day (blank = no limit)</label><input id="mb" name="max_bookings_per_day" type="number" min="1" value="${s.max_bookings_per_day ?? ''}">
+  <label for="mbw">Max bookings per week</label><input id="mbw" name="max_bookings_per_week" type="number" min="1" value="${s.max_bookings_per_week ?? ''}">
+  <label for="mbm">Max bookings per month</label><input id="mbm" name="max_bookings_per_month" type="number" min="1" value="${s.max_bookings_per_month ?? ''}">
+  <label for="mmd">Max booked minutes per day</label><input id="mmd" name="max_minutes_per_day" type="number" min="1" value="${s.max_minutes_per_day ?? ''}">
+  <label for="mmw">Max booked minutes per week</label><input id="mmw" name="max_minutes_per_week" type="number" min="1" value="${s.max_minutes_per_week ?? ''}">
+  <p class="notice">Limits are counted across every booking page you own, in your
+    own timezone, and a time is refused when taking it would cross the limit.</p>
   <label for="af">Only bookable from (date, optional)</label><input id="af" name="available_from" type="date" value="${esc(s.available_from ?? '')}">
   <label for="au">…until (date, optional)</label><input id="au" name="available_until" type="date" value="${esc(s.available_until ?? '')}">
 </div>

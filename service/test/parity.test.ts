@@ -307,3 +307,60 @@ test("another owner cannot edit my set or my event type (I4)", async () => {
   });
   assert.equal(settings.status, 404);
 });
+
+test('S9b · a weekly booking limit closes the rest of that week, not the next', async () => {
+  const { cookie } = await makeOwner();
+  const id = await makeEvent(cookie, 'intro');
+  const setId = await setOf(id);
+  await setHours(cookie, setId, { MO: ['09:00', '17:00'], TU: ['09:00', '17:00'] });
+
+  const save = await call('POST', `/app/event/${id}`, {
+    cookie, form: {
+      title: 'Intro', duration_minutes: '30', granularity_minutes: '30',
+      buffer_before_minutes: '0', buffer_after_minutes: '0',
+      minimum_notice_minutes: '0', maximum_horizon_days: '30',
+      max_bookings_per_day: '', location_kind: 'custom', location_value: '',
+      available_from: '', available_until: '', max_bookings_per_week: '1',
+    },
+  });
+  assert.equal(save.status, 303);
+
+  // Nothing booked yet: the week is open.
+  assert.ok((await call('GET', '/intro')).body.includes('data-start="2026-06-01T09:00:00Z"'));
+
+  await call('POST', '/intro/book', {
+    form: { start: '2026-06-01T09:00:00Z', end: '2026-06-01T09:30:00Z',
+            name: 'Ada', email: 'ada@example.com' } });
+
+  const page = await call('GET', '/intro');
+  assert.ok(!page.body.includes('data-start="2026-06-01T10:00:00Z"'), 'same day still offered');
+  assert.ok(!page.body.includes('data-start="2026-06-02T'), 'the rest of the week still offered');
+  assert.ok(page.body.includes('data-start="2026-06-08T09:00:00Z"'), 'the NEXT week was closed too');
+});
+
+test('S9b · a minutes cap refuses the slot that would overrun it', async () => {
+  const { cookie } = await makeOwner();
+  const id = await makeEvent(cookie, 'intro');
+  const setId = await setOf(id);
+  await setHours(cookie, setId, { MO: ['09:00', '17:00'] });
+  await call('POST', `/app/event/${id}`, {
+    cookie, form: {
+      title: 'Intro', duration_minutes: '30', granularity_minutes: '30',
+      buffer_before_minutes: '0', buffer_after_minutes: '0',
+      minimum_notice_minutes: '0', maximum_horizon_days: '30',
+      max_bookings_per_day: '', location_kind: 'custom', location_value: '',
+      available_from: '', available_until: '', max_minutes_per_day: '60',
+    },
+  });
+  // One 30-minute booking leaves 30 minutes: still offered.
+  await call('POST', '/intro/book', {
+    form: { start: '2026-06-01T09:00:00Z', end: '2026-06-01T09:30:00Z',
+            name: 'A', email: 'a@example.com' } });
+  assert.ok((await call('GET', '/intro')).body.includes('data-start="2026-06-01T10:00:00Z"'));
+  // A second exhausts the hour: the day closes.
+  await call('POST', '/intro/book', {
+    form: { start: '2026-06-01T10:00:00Z', end: '2026-06-01T10:30:00Z',
+            name: 'B', email: 'b@example.com' } });
+  const page = await call('GET', '/intro');
+  assert.ok(!page.body.includes('data-start="2026-06-01T'), 'the day should be closed');
+});
