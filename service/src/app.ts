@@ -700,19 +700,27 @@ async function handleRoutes(
       timezone: (f['timezone'] ?? 'UTC').trim(),
     };
     if (!inviteCode && config.publicSignup) {
-      const made = await createOwnerDirect(sql, deps.tx, input, config.maxOwnerAccounts);
-      if (!made.ok) {
-        const message = made.reason === 'ceiling'
-          ? 'This service has reached its account limit and is not taking more.'
-          : 'That address already has an account. Sign in instead.';
-        return html(400, signupPage('', message));
+      // I7 · A public signup proves nothing about the address it claims. An
+      // invite used to be that proof; with public signup on, nothing is, so the
+      // account is created WITHOUT a session and the session is issued only to
+      // whoever can read the mailbox. Otherwise anyone could hold a live session
+      // as support@somecompany.com and take real bookings under it.
+      if (await overLimit(sql, `signup:${req.ip}`, RATE_LIMITS.signups_per_ip_per_hour, 3600, now)) {
+        return html(429, errorPage(429, 'Too many sign-up attempts. Try again later.'));
       }
-      const sid = await createSession(sql, made.owner.owner_id, now, config.sessionTtlHours);
-      return {
-        status: 303,
-        headers: { location: '/app', 'set-cookie': sessionCookie(sid, secure, config.sessionTtlHours) },
-        body: '',
-      };
+      const made = await createOwnerDirect(sql, deps.tx, input, config.maxOwnerAccounts);
+      if (made.ok) {
+        const token = await issueSignInToken(sql, made.owner.owner_id, now);
+        await mail.send({ kind: 'signin', to: input.email, bookingId: '', start: now,
+          token: tagged(deps, token) });
+      } else if (made.reason === 'ceiling') {
+        return html(400, signupPage('',
+          'This service has reached its account limit and is not taking more.'));
+      }
+      // I8 · Identical answer whether or not the address was already taken —
+      // the same rule /login already follows. A differing response here would
+      // turn public signup into an account-enumeration oracle.
+      return html(200, loginPage(true));
     }
     const result = await redeemInvite(
       sql, deps.tx,

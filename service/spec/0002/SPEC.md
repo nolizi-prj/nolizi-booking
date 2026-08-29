@@ -69,6 +69,34 @@ operator, and the service honours it. It is no longer refused unconditionally:
 the basis D1 refers to is written and in force, so this is a deployment decision
 rather than a governance block.
 
+**I7 · A public signup never yields a session until the address is proven.** An
+invite was the proof that a claimed address belonged to the claimant; public
+signup removes that proof and nothing else supplies it. So on the public path the
+account is created and a single-use sign-in link is **mailed to the address**.
+The session begins when that link is used (I3's existing machinery), never at the
+moment of the request.
+
+*Why this is not optional.* Issuing a session at signup would let anyone hold a
+live, fourteen-day session as `support@somecompany.com`, publish a booking page
+under that identity, and take real strangers' names, addresses and meeting times
+through it. The invite-only deployment was safe from this because a human vouched
+for every account; the flag that removes invites removes exactly that control.
+
+*The SSO path is different and keeps its immediate session*, because Google has
+asserted `email_verified` for the address before we ever see it. Proof by
+identity provider is proof; a typed string is not.
+
+**I8 · The public signup response is identical whether or not the address
+already has an account.** `/login` already follows this rule; signup must too, or
+it becomes an account-enumeration oracle that answers "does this person use this
+service?" to anyone who asks. A ceiling refusal is the one distinguishable
+answer, because it is a fact about the deployment and not about any person.
+
+**I9 · Public signup is rate-limited per IP**, at **5 sign-ups per hour**. It
+creates database rows and sends mail to an address the caller chose, which is the
+mail-amplification surface I6 names — and unlike a booking it had no limit at
+all while it was invite-gated.
+
 **I3 · Sessions** are opaque server-side references in an `HttpOnly`, `Secure`,
 `SameSite=Lax` cookie. Never a token containing claims the client can read, and
 never the account identifier. Logout invalidates server-side, not only by
@@ -89,7 +117,8 @@ real person's calendar, and mail amplification to arbitrary addresses.
 
 Defaults, configurable but never unbounded: **60 page views per IP per minute**,
 **5 booking attempts per IP per minute**, **20 bookings per schedule per hour**,
-**10 management-link lookups per IP per minute**. Exceeding a limit returns a
+**10 management-link lookups per IP per minute**, **5 sign-ups per IP per hour**
+(I9). Exceeding a limit returns a
 retry signal, and **sends no mail**. A rate limit with no number is a promise to
 implement one later; these are the numbers.
 

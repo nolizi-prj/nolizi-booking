@@ -147,14 +147,44 @@ test('an unverified Google email is refused', async () => {
   } finally { restore(); }
 });
 
-test('with the public-signup flag open, no invite is needed (code path only — D-105 keeps it closed in config)', async () => {
+test('I7 public signup creates the account but issues no session until the address is proven', async () => {
+  const recorder = new RecordingMail();
   deps.config = { ...deps.config, publicSignup: true };
+  deps.mail = new RetryingMail(recorder);
   const r = await call('POST', '/signup', {
     form: { email: 'open@example.com', display_name: 'Open', timezone: 'UTC' },
   });
-  assert.equal(r.status, 303);
+
+  assert.equal(r.status, 200, 'no redirect into the app');
+  assert.ok(
+    !JSON.stringify(r.headers ?? {}).toLowerCase().includes('set-cookie'),
+    'no session cookie is issued to whoever merely typed the address',
+  );
   const c = await db.query(`SELECT count(*)::int AS c FROM owners`);
-  assert.equal(Number(c.rows[0]!['c']), 1);
+  assert.equal(Number(c.rows[0]!['c']), 1, 'the account is created');
+
+  const signin = recorder.sent.filter((m) => m.kind === 'signin');
+  assert.equal(signin.length, 1, 'a single-use sign-in link is mailed');
+  assert.equal(signin[0]!.to, 'open@example.com', 'to the claimed address, and nowhere else');
+});
+
+test('I8 public signup answers identically for a taken address, so it cannot enumerate accounts', async () => {
+  const recorder = new RecordingMail();
+  deps.config = { ...deps.config, publicSignup: true };
+  deps.mail = new RetryingMail(recorder);
+  const form = { email: 'taken@example.com', display_name: 'T', timezone: 'UTC' };
+
+  const first = await call('POST', '/signup', { form });
+  const second = await call('POST', '/signup', { form });
+
+  assert.equal(first.status, second.status, 'same status for new and existing');
+  assert.equal(first.body, second.body, 'same body — no oracle');
+  const c = await db.query(`SELECT count(*)::int AS c FROM owners WHERE email = 'taken@example.com'`);
+  assert.equal(Number(c.rows[0]!['c']), 1, 'the second attempt creates nothing');
+  assert.equal(
+    recorder.sent.filter((m) => m.kind === 'signin').length, 1,
+    'and does not mail the existing account holder on demand',
+  );
 });
 
 test('loadConfig leaves public signup off unless the operator turns it on', async () => {

@@ -96,6 +96,11 @@ export const RATE_LIMITS = {
   booking_attempts_per_ip_per_minute: 5,
   bookings_per_schedule_per_hour: 20,
   management_lookups_per_ip_per_minute: 10,
+  /**
+   * I7 · Public signup creates rows and sends mail to an address the caller
+   * chose. Per hour, not per minute: a real person signs up once.
+   */
+  signups_per_ip_per_hour: 5,
 } as const;
 
 export interface ConfigRefusal {
