@@ -12,12 +12,23 @@ of it. This file explains the part that is *code*: how the list is enforced.
 
 ---
 
-## Enforced, not merely written down
+## Enforced on one path, reviewed on the other — and the difference matters
 
-`SPEC-0002` D6: the service **refuses to send mail** through a host that does not
-appear in `service/src/subprocessors.ts`, and says so loudly at startup. Adding a
-provider means editing the register text and that file **together**, in a change
-anyone can read.
+`SPEC-0002` D6: **on the self-hosted Node build**, the service **refuses to send
+mail** through a host that does not appear in `service/src/subprocessors.ts`, and
+says so loudly at startup. Adding a provider means editing the register text and
+that file **together**, in a change anyone can read.
+
+**The deployed service is not covered by that check**, and the scope is stated
+here rather than at the foot of the section, because a reader who stops after the
+first paragraph should not come away believing production has a runtime guard it
+does not have. Cloudflare Workers cannot open SMTP connections, so the deployment
+sends through the Gmail API and never constructs the SMTP transport the check
+guards. What controls the deployed path is not a runtime allowlist but which
+transport `service/src/worker.ts` constructs — a code change, visible in review
+and in history, and disclosed in the table below. That is a weaker control than
+the Node path has, and it is named as weaker rather than described in language
+that borrows the stronger one's credit.
 
 It does **not** refuse to start. Bookings still work and the pages stay up;
 confirmations are queued rather than delivered until the host is disclosed. The
@@ -32,10 +43,9 @@ and no regime requires.
 | `smtp.ethereal.email` | Testing. Ethereal **captures and never delivers**, so nothing reaches a real inbox. |
 | `smtp.gmail.com` | Production mail for pumasi.ai. |
 
-The deployed service does not use SMTP at all: it sends through the **Gmail API**
-(`service/src/mail-gmail.ts`), because Cloudflare Workers cannot open SMTP
-connections. The check above governs the SMTP path that the self-hosted Node
-build uses.
+`smtp.gmail.com` is listed for a self-hosted deployment that chooses it. The
+deployed service does not use SMTP at all — see the scope note above — and sends
+through the **Gmail API** (`service/src/mail-gmail.ts`).
 
 ## In use by the deployed service, as of 2026-08-29
 
