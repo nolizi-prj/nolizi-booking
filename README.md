@@ -8,11 +8,17 @@ built by agents and governed by people. Apache-2.0, inbound equals outbound.
 
 ## The one thing to know before using it
 
-**It cannot see your real calendar yet.** The service knows only about bookings
-made inside it, so it will offer a time you are already busy and confirm a
-booking on top of it. Double-booking against your own calendar is the *expected*
-behaviour today. Calendar connection is
-[`service/spec/0003`](service/spec/0003/INTENT.md), promoted to next.
+**It can see your real calendar, once you connect one.** Google and Microsoft
+365 connections are read for busy times before any slot is offered, and read
+again at the moment of booking, so a commitment that appeared while someone was
+choosing still blocks the slot. It **fails closed**: while a connected calendar
+cannot be reached, the page refuses to offer times rather than risk booking over
+you. Cancellations and reschedules follow to the connected calendar. See
+[`service/spec/0003`](service/spec/0003/INTENT.md).
+
+**Without provider credentials configured, nothing is connected** — the service
+then knows only about bookings made inside it, and will offer a time you are
+already busy.
 
 **There is no settled lawful basis for the personal data it holds.** The service
 caps itself at five accounts and two hundred bookings and refuses to raise those
@@ -167,6 +173,7 @@ reschedule-over-HTTP are declared but not implemented.
 | [`core/spec/acceptance/cases.json`](core/spec/acceptance/cases.json) | 36 language-neutral cases — the executable arbiter |
 | [`service/spec/0002/SPEC.md`](service/spec/0002/SPEC.md) | What the service must do |
 | [`service/spec/0003/INTENT.md`](service/spec/0003/INTENT.md) | Calendar connection, in plain language |
+| [`roadmap/`](roadmap/) | Where this product goes next, and why in that order |
 
 **Where prose and code disagree, the prose governs and the code is a defect.**
 
