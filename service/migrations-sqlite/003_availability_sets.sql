@@ -61,7 +61,7 @@ INSERT INTO set_overrides (set_id, local_date, starts_local, ends_local)
 
 UPDATE owners SET link_slug = lower(replace(replace(substr(email, 1, instr(email, '@') - 1), '.', '-'), '+', '-'))
   WHERE link_slug IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS owners_link_slug ON owners (link_slug);
-
 -- Event slugs stay globally unique until P4's per-owner sharding makes them
--- per-owner structurally (each owner's Durable Object owns its own tables).
+-- per-owner structurally. NOTE: the Durable Object's sql.exec refuses a
+-- trailing comment-only chunk, so a migration file must END on a statement.
+CREATE UNIQUE INDEX IF NOT EXISTS owners_link_slug ON owners (link_slug);

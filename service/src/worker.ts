@@ -74,13 +74,18 @@ export class PumasiService extends DurableObject {
     const env = this.env as WorkerEnv;
     const config = loadConfig(env as never);
 
-    const applied = await migrate(client, {
-      files: [
-        { name: '001_schema.sql', sql: schema001 as string },
-        { name: '002_calendar.sql', sql: schema002 as string },
-        { name: '003_availability_sets.sql', sql: schema003 as string },
-      ],
-    });
+    // Atomic per run: a migration file that fails midway must leave nothing
+    // behind, or its retry meets its own half-applied DDL and the instance
+    // wedges — which happened once, in production, with 003.
+    const applied = await storage.transaction(() =>
+      migrate(client, {
+        files: [
+          { name: '001_schema.sql', sql: schema001 as string },
+          { name: '002_calendar.sql', sql: schema002 as string },
+          { name: '003_availability_sets.sql', sql: schema003 as string },
+        ],
+      }),
+    );
     if (applied.length > 0) console.log(`[db] migrations applied: ${applied.join(', ')}`);
 
     // Invite-only needs a first invite, or nobody can ever start. The code
@@ -132,8 +137,23 @@ export class PumasiService extends DurableObject {
   }
 
   override async fetch(request: Request): Promise<Response> {
-    const deps = await this.#init();
     const url = new URL(request.url);
+
+    // Development-phase escape hatch: wipe this instance's storage. Guarded by
+    // a dedicated secret; unset means the route does not exist. Remove before
+    // real customer data exists (tracked in the P4 checklist).
+    const wipeToken = (this.env as WorkerEnv)['WIPE_TOKEN'];
+    if (url.pathname === '/__wipe' && request.method === 'POST') {
+      if (!wipeToken || request.headers.get('authorization') !== `Bearer ${wipeToken}`) {
+        return new Response('not found', { status: 404 });
+      }
+      const storage = (this.ctx as unknown as { storage: { deleteAll(): Promise<void> } }).storage;
+      await storage.deleteAll();
+      this.#deps = undefined;
+      return new Response('wiped\n', { status: 200 });
+    }
+
+    const deps = await this.#init();
 
     let form: Record<string, string> | undefined;
     if (request.method === 'POST' || request.method === 'PUT') {
