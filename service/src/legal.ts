@@ -10,8 +10,12 @@
  * kind of lie in software. Where the honest answer is "nothing yet" or "we
  * cannot", it says so. Where a decision is the steward's or counsel's to make,
  * it was marked [TO BE COMPLETED] rather than invented. The operator (ATX APPLE
- * LLC, Texas) and governing law were supplied by the steward on 2026-08-29 and
- * those blanks are now filled. The registered address is deliberately NOT
+ * LLC, a Texas limited liability company) and the governing law were supplied by
+ * the steward on 2026-08-29, and re-confirmed by them on challenge before these
+ * pages went out: a second session held its deploy and asked for the provenance
+ * of a corporate identity about to be published to a live indexed site. The
+ * trace is in governance DEBT.md D-105 rather than only in a transcript, because
+ * these three pages assert it publicly. The registered address is deliberately NOT
  * published: the steward asked that nothing be disclosed beyond what is needed,
  * and an email contact discharges the duty to be reachable. What remains
  * genuinely unreviewed by counsel is the transfer position, which the documents
