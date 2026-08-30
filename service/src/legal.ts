@@ -74,8 +74,8 @@ reaches the people who run the service, and it is the fastest route.
 
 Nothing about *you* is collected that the meeting does not require. This is the
 complete list of what the service stores about a person. The software's own
-self-reporting is described at the end of this section, and today it sends
-nothing at all.
+self-reporting is described at the end of this section; this deployment sends
+none of it today.
 
 **If you book a meeting**, the booking page asks for and stores:
 - your **name** and **email address**, because the person you are meeting needs
@@ -119,22 +119,28 @@ which proposed times you accepted, until the poll is deleted.
 right booking page — your answer is **not stored at all**. It selects a
 destination and is gone.
 
-**The software does not currently report anything about itself.** We are saying
-so because the governing document (**REPORTING.md**) describes a self-reporting
-mechanism, and a reader who found it would reasonably assume this service uses
-it. It does not: no such data leaves this deployment today, and there is no code
-here that sends any.
+**What the software reports about itself.** The self-reporting mechanism the
+governing document (**REPORTING.md**) describes is now built into this
+software. Two facts, stated separately because they differ:
 
-When it is built, it will send how the software behaved — which features were
-used, what was slow, what crashed, and the shape of the operator's configuration
-— so that defects can be found and fixed. It will carry **no name, no email
-address, no meeting time, no note contents**, and nothing a booker typed; it will
-not be published; it will be kept to a stated retention period and be deletable
-on request; and the operator will be able to turn it off in one step. The basis
-for it is our legitimate interest in operating and improving software we give
-away.
+**This deployment — the one serving this page — still sends nothing.** The
+mechanism is not wired into it; no such data leaves it today. When that
+changes, this paragraph changes first.
 
-This paragraph changes when the mechanism ships, and not before.
+**Self-hosted deployments** send an operating report by default: what platform
+the software runs on, the shape of its configuration (which switches are on —
+never their values), uptime, and an error count. It carries **no name, no
+email address, no meeting time, no note contents**, nothing a booker or
+organiser typed, and no counts of bookings or accounts. It is not published.
+It is kept for **twelve months** and then deleted, and deleted earlier on
+request to admin@pumasi.ai — deletion reaches backups within 30 days. The
+operator turns it off in one step (**PUMASI_REPORTING=false**) and the software
+behaves identically afterwards. The receiving service is not yet live; until
+it is, these reports go nowhere and nothing is retained anywhere. There is
+also a conformance report — did the test suite pass on this platform — that an
+operator can *choose* to publish, signed with their own identity; it is never
+sent automatically. The basis for all of it is our legitimate interest in
+operating and improving software we give away.
 
 **If you hold an account**, we store your email address, display name, timezone,
 your public link name, an optional welcome message and accent colour, your

@@ -9,6 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "build:test": "tsc -p tsconfig.test.json",
     "test": "npm run build:test && node --test .build/test/*.test.js",
+    "conformance": "npm run build:test && node --test --test-reporter=./scripts/summary-reporter.mjs --test-reporter-destination=stdout .build/test/*.test.js",
     "dev": "SEED_DEMO=true npm run build && node dist/server.js",
     "start": "node dist/server.js"
   },

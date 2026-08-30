@@ -19,6 +19,7 @@ import { bootstrapInvite } from './bootstrap.ts';
 import { checkTransitions, checkTzdata } from '@pumasi/booking-core';
 import { processDueJobs } from './automation.ts';
 import { classifyWallTime } from '@pumasi/booking-core';
+import { asDbKind, recordError, reportingNotice, startReporting } from './reporting.ts';
 
 export async function start(): Promise<{ close: () => Promise<void>; port: number }> {
   const config = loadConfig();
@@ -144,6 +145,12 @@ export async function start(): Promise<{ close: () => Promise<void>; port: numbe
   }, 15_000);
   jobTimer.unref?.();
 
+  // SPEC-0004 R4 · the notice appears on every start, before serving, and
+  // names the one-step opt-out. R5b · the Node path sends one held report
+  // shortly after start and one per day; a failed send is logged and dropped.
+  for (const line of reportingNotice(config)) console.log(line);
+  const reporting = startReporting(config, asDbKind(db.kind));
+
   const trustProxy = process.env['TRUST_PROXY'] === 'true';
   if (!trustProxy) {
     console.log('[http] X-Forwarded-For ignored — set TRUST_PROXY=true only behind a proxy that overwrites it');
@@ -199,6 +206,7 @@ export async function start(): Promise<{ close: () => Promise<void>; port: numbe
         })
         .catch((err: Error) => {
           console.error('[error]', err.message);
+          recordError(); // SPEC-0004 · a count for health.errors_total, nothing else
           res.writeHead(500, { 'content-type': 'text/plain' });
           res.end('internal error');
         });
@@ -211,6 +219,7 @@ export async function start(): Promise<{ close: () => Promise<void>; port: numbe
   return {
     port: config.port,
     close: async () => {
+      reporting.stop();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await db.close();
     },

@@ -24,6 +24,12 @@ export interface Config {
   maxBookingsRetained: number;
   /** Part 5.1 — reporting is on by default and off in one step. */
   reportingEnabled: boolean;
+  /** SPEC-0004 R5a — the documented intake; the default is not yet live. */
+  reportUrl: string;
+  /** SPEC-0004 R6 — the published tier is signed or not sent. */
+  reportAgent: string;
+  reportModel: string;
+  reportSponsor: string | undefined;
   sessionTtlHours: number;
   commit: string;
   /** M1 · SMTP, not a provider SDK. Absent means mail is not sent. */
@@ -82,6 +88,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     maxOwnerAccounts: ceiling(env['MAX_OWNER_ACCOUNTS'], CEILING_DEFAULTS.owners),
     maxBookingsRetained: ceiling(env['MAX_BOOKINGS'], CEILING_DEFAULTS.bookings),
     reportingEnabled: bool(env['PUMASI_REPORTING'], true),
+    reportUrl: env['PUMASI_REPORT_URL'] ?? 'https://report.pumasi.ai/v1/reports',
+    reportAgent: env['PUMASI_REPORT_AGENT'] ?? 'operator',
+    reportModel: env['PUMASI_REPORT_MODEL'] ?? 'none',
+    reportSponsor: env['PUMASI_REPORT_SPONSOR'],
     sessionTtlHours: int(env['SESSION_TTL_HOURS'], 24 * 14),
     commit: env['RAILWAY_GIT_COMMIT_SHA'] ?? env['GIT_COMMIT'] ?? 'unknown',
     smtpUrl: env['SMTP_URL'],
