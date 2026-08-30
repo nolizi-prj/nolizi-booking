@@ -69,7 +69,28 @@ test('Live Browser Test: Home Page, Login Page, and SSO Redirects', async () => 
     assert.ok(sentBody.includes('Check your email') || sentBody.includes('sign-in link is on its way'), 'Renders sent state');
     console.log('Magic link form flow passed!');
 
-    // 6. Test Live Health and Ready Endpoints
+    // 6. Test Feedback Widget & Modal
+    console.log('Testing Feedback button and modal in real browser...');
+    await page.goto('https://booking.pumasi.ai/', { waitUntil: 'networkidle2' });
+    const feedbackBtn = await page.$('#pf-open-btn');
+    assert.ok(feedbackBtn, 'Feedback button is present in DOM');
+    await page.click('#pf-open-btn');
+
+    await page.waitForSelector('#pf-modal:not([hidden])', { visible: true });
+    const diagContent = await page.$eval('#pf-diag-view', el => el.textContent);
+    assert.ok(diagContent?.includes('timezone'), 'Diagnostics rendered in feedback modal');
+
+    // Fill and submit feedback
+    await page.type('#pf-desc', 'Automated E2E browser test feedback report.');
+    await page.type('#pf-email', 'e2e-tester@pumasi.ai');
+    await page.click('#pf-submit-btn');
+
+    await page.waitForSelector('#pf-status-box:not([hidden])', { visible: true });
+    const statusText = await page.$eval('#pf-status-box', el => el.textContent);
+    console.log('Feedback submission status:', statusText);
+    assert.ok(statusText?.includes('Feedback') || statusText?.includes('Thank you'), 'Feedback submission succeeded');
+
+    // 7. Test Live Health and Ready Endpoints
     const readyRes = await page.goto('https://booking.pumasi.ai/readyz');
     const readyJson = JSON.parse(await page.$eval('body', el => el.textContent || '{}'));
     console.log('Live readyz response:', readyJson);

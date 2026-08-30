@@ -38,6 +38,7 @@ import { Directory, dispatchDirectoryCall, type DirectoryCall } from './director
 import { googleSsoExchange, googleSsoUrl } from './sso-google.ts';
 import { microsoftSsoExchange, microsoftSsoUrl } from './sso-microsoft.ts';
 import { errorPage, FAVICON_SVG, homePage, legalPage, loginPage, signupPage } from './pages.ts';
+import { submitFeedback, type FeedbackPayload } from './feedback.ts';
 import { LEGAL_DOCS } from './legal.ts';
 // Bundled as text via the `rules` entry in wrangler.jsonc.
 // @ts-expect-error — .sql imports exist only under wrangler's bundler
@@ -475,6 +476,25 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
         headers: { 'content-type': 'application/javascript; charset=utf-8',
                    'cache-control': 'public, max-age=3600' },
       });
+    }
+
+    if (url.pathname === '/api/feedback' && request.method === 'POST') {
+      try {
+        const payload = JSON.parse(rawBody ?? '{}') as FeedbackPayload;
+        const result = await submitFeedback(payload, {
+          githubToken: config.githubFeedbackToken,
+          repo: config.githubFeedbackRepo,
+        });
+        return new Response(JSON.stringify(result), {
+          status: result.ok ? 200 : 400,
+          headers: { 'content-type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ ok: false, error: (err as Error).message }), {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
     }
 
     // ── sign-in and sign-up, orchestrated with the directory ───────────────

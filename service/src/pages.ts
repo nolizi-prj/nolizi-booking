@@ -212,7 +212,7 @@ const SHELL = (title: string, rawBody: string): string => {
  form{margin-top:1.25rem} .js form:not(.on){display:none}
 
  /* tables and states */
- table.rows{border-collapse:collapse;width:100%}
+table.rows{border-collapse:collapse;width:100%}
  table.rows td,table.rows th{padding:.5rem .6rem;border-bottom:1px solid var(--line);
    text-align:left;font-size:.9rem}
  table.rows th{color:var(--muted);font-weight:600;font-size:.78rem;text-transform:uppercase;
@@ -221,7 +221,316 @@ const SHELL = (title: string, rawBody: string): string => {
    padding:.6rem .8rem;margin:1rem 0;border-radius:0 8px 8px 0}
  .ok{border-left:3px solid var(--ok);background:var(--line-soft);
    padding:.6rem .8rem;margin:1rem 0;border-radius:0 8px 8px 0}
-</style></head><body>${inner}</body></html>`;
+
+ /* feedback widget */
+ .pf-widget{position:fixed;bottom:1.25rem;right:1.25rem;z-index:990}
+ .pf-trigger-btn{display:inline-flex;align-items:center;gap:.45rem;padding:.5rem .9rem;
+   border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg);
+   font:inherit;font-size:.85rem;font-weight:600;cursor:pointer;box-shadow:var(--shadow);
+   transition:transform .15s ease,box-shadow .15s ease}
+ .pf-trigger-btn:hover{transform:translateY(-1px);border-color:var(--accent);box-shadow:0 4px 12px rgba(16,24,40,.1)}
+ .pf-trigger-btn svg{color:var(--accent)}
+ 
+ .pf-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);
+   display:flex;align-items:center;justify-content:center;padding:1rem;z-index:999}
+ .pf-backdrop[hidden]{display:none}
+ .pf-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+   width:100%;max-width:32rem;max-height:92vh;overflow-y:auto;box-shadow:0 12px 32px rgba(0,0,0,.15);
+   padding:1.4rem}
+ .pf-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;
+   padding-bottom:.6rem;border-bottom:1px solid var(--line-soft)}
+ .pf-header h3{margin:0;font-size:1.15rem;font-weight:650;display:flex;align-items:center;gap:.5rem}
+ .pf-close{background:none;border:0;font-size:1.4rem;line-height:1;color:var(--muted);
+   cursor:pointer;padding:.2rem .4rem;border-radius:6px}
+ .pf-close:hover{background:var(--line-soft);color:var(--fg)}
+ 
+ .pf-type-row{display:flex;gap:.5rem;margin-bottom:.9rem}
+ .pf-type-chip{flex:1;display:flex;align-items:center;justify-content:center;gap:.35rem;
+   padding:.45rem .6rem;border:1px solid var(--line);border-radius:8px;cursor:pointer;
+   font-size:.84rem;font-weight:550;background:var(--surface);color:var(--fg);transition:all .15s ease}
+ .pf-type-chip input{display:none}
+ .pf-type-chip:has(input:checked){background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+ 
+ .pf-label{display:block;margin:.6rem 0 .25rem;font-size:.84rem;font-weight:550;color:var(--fg)}
+ .pf-input{width:100%;padding:.5rem .65rem;border:1px solid var(--line);border-radius:8px;
+   background:var(--bg);color:var(--fg);font:inherit;font-size:.88rem;resize:vertical}
+ 
+ .pf-attach-box{background:var(--line-soft);border:1px solid var(--line);border-radius:8px;
+   padding:.75rem;margin:.8rem 0}
+ .pf-attach-top{display:flex;align-items:center;justify-content:space-between;font-size:.82rem;font-weight:550}
+ .pf-toggle-label{display:inline-flex;align-items:center;gap:.35rem;font-size:.8rem;color:var(--muted);cursor:pointer}
+ .pf-shot-preview{width:100%;max-height:140px;object-fit:contain;background:#000;
+   border-radius:6px;margin:.5rem 0;border:1px solid var(--line)}
+ .pf-upload-btn{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;font-weight:600;
+   color:var(--accent);cursor:pointer;padding:.2rem .4rem;border-radius:4px}
+ .pf-upload-btn:hover{text-decoration:underline}
+ 
+ .pf-diag{margin:.7rem 0;font-size:.8rem;color:var(--muted)}
+ .pf-diag summary{cursor:pointer;font-weight:550;color:var(--fg)}
+ .pf-diag-table{margin-top:.4rem;background:var(--surface);border:1px solid var(--line);
+   border-radius:6px;padding:.5rem;font-size:.75rem;font-family:monospace;white-space:pre-wrap;
+   word-break:break-all;max-height:120px;overflow-y:auto}
+ 
+ .pf-actions{display:flex;align-items:center;justify-content:flex-end;gap:.6rem;margin-top:1.1rem}
+ .pf-btn-cancel{background:none;border:1px solid var(--line);padding:.5rem .9rem;
+   border-radius:8px;color:var(--fg);font:inherit;font-size:.86rem;font-weight:550;cursor:pointer}
+ .pf-btn-cancel:hover{background:var(--line-soft)}
+ .pf-btn-submit{background:var(--accent);color:#fff;border:0;padding:.5rem 1.1rem;
+   border-radius:8px;font:inherit;font-size:.86rem;font-weight:600;cursor:pointer}
+ .pf-btn-submit:hover{filter:brightness(1.08)}
+ .pf-btn-submit:disabled{opacity:.6;cursor:not-allowed}
+ .pf-toast{padding:.6rem .8rem;border-radius:8px;font-size:.85rem;margin:.6rem 0}
+ .pf-toast-ok{background:rgba(6,118,71,.1);border:1px solid var(--ok);color:var(--ok)}
+ .pf-toast-err{background:rgba(180,35,24,.1);border:1px solid var(--danger);color:var(--danger)}
+</style></head><body>${inner}
+<div class="pf-widget">
+  <button type="button" class="pf-trigger-btn" id="pf-open-btn" aria-label="Send Feedback">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    </svg>
+    <span>Feedback</span>
+  </button>
+</div>
+
+<div id="pf-modal" class="pf-backdrop" hidden>
+  <div class="pf-card" role="dialog" aria-modal="true" aria-labelledby="pf-heading">
+    <div class="pf-header">
+      <div class="pf-header-title">
+        <h3 id="pf-heading">💬 Send Feedback & Report Issues</h3>
+      </div>
+      <button type="button" class="pf-close" id="pf-close-btn" aria-label="Close modal">&times;</button>
+    </div>
+    
+    <form id="pf-form">
+      <div class="pf-type-row">
+        <label class="pf-type-chip"><input type="radio" name="pf_type" value="bug" checked><span>🐛 Bug</span></label>
+        <label class="pf-type-chip"><input type="radio" name="pf_type" value="feature"><span>✨ Idea</span></label>
+        <label class="pf-type-chip"><input type="radio" name="pf_type" value="general"><span>💬 Other</span></label>
+      </div>
+
+      <label for="pf-desc" class="pf-label">What happened or what would you like to see?</label>
+      <textarea id="pf-desc" class="pf-input" rows="3" required placeholder="Describe the issue or feature in detail..."></textarea>
+
+      <label for="pf-email" class="pf-label">Your email (optional, for notifications)</label>
+      <input type="email" id="pf-email" class="pf-input" placeholder="you@company.com">
+
+      <div class="pf-attach-box">
+        <div class="pf-attach-top">
+          <span>📷 Screenshot & Attachment</span>
+          <label class="pf-toggle-label">
+            <input type="checkbox" id="pf-include-shot" checked>
+            <span>Include Screenshot</span>
+          </label>
+        </div>
+        <div id="pf-preview-wrap" style="margin-top:.4rem">
+          <div id="pf-shot-loading" class="muted" style="font-size:.8rem;">Capturing preview...</div>
+          <img id="pf-shot-preview" class="pf-shot-preview" alt="Preview" style="display:none;" />
+          <div style="display:flex;align-items:center;gap:.5rem;margin-top:.3rem;">
+            <label class="pf-upload-btn">
+              <span>📎 Attach file/image</span>
+              <input type="file" id="pf-file-upload" accept="image/*,.pdf,.txt,.log" style="display:none;">
+            </label>
+            <span id="pf-file-label" class="muted" style="font-size:.78rem;"></span>
+          </div>
+        </div>
+      </div>
+
+      <details class="pf-diag">
+        <summary>🔍 Included Diagnostics (Full Transparency)</summary>
+        <div id="pf-diag-view" class="pf-diag-table"></div>
+      </details>
+
+      <div id="pf-status-box" hidden></div>
+
+      <div class="pf-actions">
+        <button type="button" class="pf-btn-cancel" id="pf-cancel-btn">Cancel</button>
+        <button type="submit" class="pf-btn-submit" id="pf-submit-btn">Submit Feedback &rarr;</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function() {
+  const errLog = [];
+  window.addEventListener('error', function(e) {
+    errLog.push({
+      message: e.message || String(e),
+      source: e.filename,
+      lineno: e.lineno,
+      colno: e.colno,
+      timestamp: new Date().toISOString()
+    });
+    if (errLog.length > 10) errLog.shift();
+  });
+  window.addEventListener('unhandledrejection', function(e) {
+    errLog.push({
+      message: 'Unhandled Promise Rejection: ' + (e.reason?.message || String(e.reason)),
+      timestamp: new Date().toISOString()
+    });
+    if (errLog.length > 10) errLog.shift();
+  });
+
+  const modal = document.getElementById('pf-modal');
+  const openBtn = document.getElementById('pf-open-btn');
+  const closeBtn = document.getElementById('pf-close-btn');
+  const cancelBtn = document.getElementById('pf-cancel-btn');
+  const form = document.getElementById('pf-form');
+  const shotPreview = document.getElementById('pf-shot-preview');
+  const shotLoading = document.getElementById('pf-shot-loading');
+  const fileUpload = document.getElementById('pf-file-upload');
+  const fileLabel = document.getElementById('pf-file-label');
+  const includeShot = document.getElementById('pf-include-shot');
+  const diagView = document.getElementById('pf-diag-view');
+  const statusBox = document.getElementById('pf-status-box');
+  const submitBtn = document.getElementById('pf-submit-btn');
+
+  let currentScreenshot = null;
+
+  function captureScreenshot() {
+    shotLoading.style.display = 'block';
+    shotPreview.style.display = 'none';
+    try {
+      const w = Math.min(window.innerWidth, 1280);
+      const h = Math.min(window.innerHeight, 800);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        shotLoading.innerText = 'Screenshot unavailable';
+        return;
+      }
+      ctx.fillStyle = getComputedStyle(document.body).backgroundColor || '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = getComputedStyle(document.body).color || '#101828';
+      ctx.font = '14px system-ui, sans-serif';
+      ctx.fillText('URL: ' + location.pathname, 20, 40);
+      ctx.fillText('Title: ' + document.title, 20, 70);
+      ctx.fillText('Captured at: ' + new Date().toLocaleString(), 20, 100);
+      ctx.fillText('Viewport: ' + window.innerWidth + ' x ' + window.innerHeight, 20, 130);
+      
+      currentScreenshot = canvas.toDataURL('image/png', 0.8);
+      shotPreview.src = currentScreenshot;
+      shotPreview.style.display = 'block';
+      shotLoading.style.display = 'none';
+    } catch(err) {
+      shotLoading.innerText = 'Screenshot unavailable';
+    }
+  }
+
+  function renderDiagnostics() {
+    const diag = {
+      url: location.href,
+      viewport: window.innerWidth + 'x' + window.innerHeight,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      userAgent: navigator.userAgent,
+      online: navigator.onLine,
+      errors: errLog
+    };
+    diagView.innerText = JSON.stringify(diag, null, 2);
+    return diag;
+  }
+
+  if (openBtn) {
+    openBtn.addEventListener('click', function() {
+      modal.hidden = false;
+      statusBox.hidden = true;
+      statusBox.innerHTML = '';
+      submitBtn.disabled = false;
+      submitBtn.innerText = 'Submit Feedback \u2192';
+      captureScreenshot();
+      renderDiagnostics();
+      document.getElementById('pf-desc')?.focus();
+    });
+  }
+
+  function closeModal() {
+    if (modal) modal.hidden = true;
+  }
+
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+  if (modal) {
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) closeModal();
+    });
+  }
+
+  if (fileUpload) {
+    fileUpload.addEventListener('change', function(e) {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      fileLabel.innerText = file.name;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        currentScreenshot = evt.target?.result;
+        shotPreview.src = currentScreenshot;
+        shotPreview.style.display = 'block';
+        shotLoading.style.display = 'none';
+        includeShot.checked = true;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  if (form) {
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Posting issue...';
+      statusBox.hidden = true;
+
+      const typeEl = form.querySelector('input[name="pf_type"]:checked');
+      const payload = {
+        type: typeEl ? typeEl.value : 'bug',
+        description: document.getElementById('pf-desc')?.value || '',
+        email: document.getElementById('pf-email')?.value || '',
+        url: location.href,
+        viewport: window.innerWidth + 'x' + window.innerHeight,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        userAgent: navigator.userAgent,
+        online: navigator.onLine,
+        errors: errLog,
+        screenshot: includeShot.checked ? currentScreenshot : undefined
+      };
+
+      try {
+        const res = await fetch('/api/feedback', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          statusBox.className = 'pf-toast pf-toast-ok';
+          statusBox.innerHTML = '\u2714 Feedback posted! ' + 
+            (data.issueUrl ? '<a href="' + data.issueUrl + '" target="_blank" rel="noopener" style="font-weight:600;text-decoration:underline;">View Issue on GitHub \u2197</a>' : 'Thank you for your feedback.');
+          statusBox.hidden = false;
+          submitBtn.innerText = '\u2714 Sent';
+          setTimeout(function() {
+            closeModal();
+            form.reset();
+          }, 3500);
+        } else {
+          statusBox.className = 'pf-toast pf-toast-err';
+          statusBox.innerText = data.error || 'Failed to submit feedback. Please try again.';
+          statusBox.hidden = false;
+          submitBtn.disabled = false;
+          submitBtn.innerText = 'Try Again';
+        }
+      } catch(err) {
+        statusBox.className = 'pf-toast pf-toast-err';
+        statusBox.innerText = 'Network error: ' + err.message;
+        statusBox.hidden = false;
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Try Again';
+      }
+    });
+  }
+})();
+</script>
+</body></html>`;
 };
 
 export function bookingPage(

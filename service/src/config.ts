@@ -40,6 +40,9 @@ export interface Config {
   msClientSecret: string | undefined;
   /** 32 random bytes, base64 — seals calendar credentials at rest (seal.ts). */
   tokenKey: string | undefined;
+  /** In-app feedback: GitHub personal access token for creating issues. */
+  githubFeedbackToken: string | undefined;
+  githubFeedbackRepo: string;
 }
 
 export const CEILING_DEFAULTS = { owners: 5, bookings: 200 } as const;
@@ -87,6 +90,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     msClientId: env['MS_OAUTH_CLIENT_ID'],
     msClientSecret: env['MS_OAUTH_CLIENT_SECRET'],
     tokenKey: env['TOKEN_KEY'],
+    githubFeedbackToken: env['GITHUB_FEEDBACK_TOKEN'] ?? env['GH_TOKEN'] ?? env['GITHUB_TOKEN'],
+    githubFeedbackRepo: env['GITHUB_FEEDBACK_REPO'] ?? 'pumasi-ai/pumasi-booking',
   };
 }
 

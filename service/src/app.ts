@@ -38,6 +38,7 @@ import { LEGAL_DOCS } from './legal.ts';
 import { validateLogo } from './branding.ts';
 import { describeRecurrence, expandRecurrence, isValidRecurrence } from './recurrence.ts';
 import { cancelPendingJobs, fireTrigger, type BookingCtx } from './automation.ts';
+import { submitFeedback, type FeedbackPayload } from './feedback.ts';
 import type { MailPort } from './mail.ts';
 import type { Interval, Slot } from '@pumasi/booking-core';
 
@@ -671,6 +672,28 @@ async function handleRoutes(
       return html(200, errorPage(200, 'Your booking is cancelled and your details are deleted.'));
     }
     return html(405, errorPage(405, 'Method not allowed.'));
+  }
+
+  // ── in-app feedback & bug reporting ───────────────────────────────────────
+  if (parts[0] === 'api' && parts[1] === 'feedback' && req.method === 'POST') {
+    try {
+      const payload = JSON.parse(req.rawBody ?? '{}') as FeedbackPayload;
+      const result = await submitFeedback(payload, {
+        githubToken: config.githubFeedbackToken,
+        repo: config.githubFeedbackRepo,
+      });
+      return {
+        status: result.ok ? 200 : 400,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(result),
+      };
+    } catch (err) {
+      return {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ok: false, error: (err as Error).message }),
+      };
+    }
   }
 
   // ── owner surfaces (I1–I4) ───────────────────────────────────────────────
