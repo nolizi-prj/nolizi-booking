@@ -58,14 +58,13 @@ user-facing items because no user can currently be hurt by it.
 
 ## Completed (2026-08-29)
 
+- **Microsoft sign-in at the front door** — [issue #5](https://github.com/pumasi-ai/pumasi-booking/issues/5) (closed via commit `66c93e9`).
+- **Video chat integration (Meet, Teams, Zoom)** — [issue #4](https://github.com/pumasi-ai/pumasi-booking/issues/4) (closed via commit `66c93e9`).
 - **Favicon not visible in the browser tab** — [issue #3](https://github.com/pumasi-ai/pumasi-booking/issues/3) (closed via commit `bb1825c`).
-- **The first page needs to look better** — [issue #6](https://github.com/pumasi-ai/pumasi-booking/issues/6) (closed via commit `bb1825c`).
+- **The first page needs to look better** — [issue #6](https://github.com/pumasi-ai/pumasi-booking/issues/6) (closed via commit `bb1825c` / `8fe4fce`).
 
 ## Held, not ordered
 
-- **Video chat integration** — [issue #4](https://github.com/pumasi-ai/pumasi-booking/issues/4),
-  `escalated`: a scope question for the steward via `DECISIONS.md`, not a
-  backlog entry until decided.
 - **Counsel review and the transfer position** —
   [`DEBT.md` D-105](https://github.com/pumasi-ai/governance/blob/main/governance/DEBT.md):
   a `HUMAN.md` item; agents have drafted everything around it. Gates
