@@ -255,33 +255,45 @@ table.rows{border-collapse:collapse;width:100%}
  .pf-input{width:100%;padding:.5rem .65rem;border:1px solid var(--line);border-radius:8px;
    background:var(--bg);color:var(--fg);font:inherit;font-size:.88rem;resize:vertical}
  
- .pf-attach-box{background:var(--line-soft);border:1px solid var(--line);border-radius:8px;
-   padding:.75rem;margin:.8rem 0}
- .pf-attach-top{display:flex;align-items:center;justify-content:space-between;font-size:.82rem;font-weight:550}
- .pf-toggle-label{display:inline-flex;align-items:center;gap:.35rem;font-size:.8rem;color:var(--muted);cursor:pointer}
- .pf-shot-preview{width:100%;max-height:140px;object-fit:contain;background:#000;
-   border-radius:6px;margin:.5rem 0;border:1px solid var(--line)}
- .pf-upload-btn{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;font-weight:600;
-   color:var(--accent);cursor:pointer;padding:.2rem .4rem;border-radius:4px}
- .pf-upload-btn:hover{text-decoration:underline}
+  .pf-attach-box{background:var(--line-soft);border:1px solid var(--line);border-radius:8px;
+    padding:.75rem;margin:.8rem 0}
+  .pf-attach-top{display:flex;align-items:center;justify-content:space-between;font-size:.82rem;font-weight:550}
+  .pf-toggle-label{display:inline-flex;align-items:center;gap:.35rem;font-size:.8rem;color:var(--muted);cursor:pointer}
+  .pf-tool-btn{display:inline-flex;align-items:center;gap:.25rem;padding:.2rem .45rem;
+    border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--fg);
+    font:inherit;font-size:.76rem;font-weight:550;text-decoration:none;cursor:pointer}
+  .pf-tool-btn:hover{background:var(--line-soft);text-decoration:none;border-color:var(--muted)}
+  .pf-tool-btn svg{width:12px;height:12px}
+  .pf-tool-danger{color:var(--danger)}
+  .pf-tool-danger:hover{background:rgba(180,35,24,.1);border-color:var(--danger)}
+  .pf-shot-wrap{position:relative;margin:.5rem 0}
+  .pf-shot-preview{width:100%;max-height:140px;object-fit:contain;background:#000;
+    border-radius:6px;border:1px solid var(--line);display:block}
+  .pf-shot-wrap:hover .pf-shot-zoom-hint{opacity:1}
+  .pf-shot-zoom-hint{position:absolute;bottom:.5rem;right:.5rem;background:rgba(0,0,0,.75);
+    color:#fff;font-size:.7rem;padding:.15rem .45rem;border-radius:4px;opacity:0;
+    transition:opacity .15s;pointer-events:none}
+  .pf-upload-btn{display:inline-flex;align-items:center;gap:.3rem;font-size:.78rem;font-weight:600;
+    color:var(--accent);cursor:pointer;padding:.2rem .4rem;border-radius:4px}
+  .pf-upload-btn:hover{text-decoration:underline}
  
- .pf-diag{margin:.7rem 0;font-size:.8rem;color:var(--muted)}
- .pf-diag summary{cursor:pointer;font-weight:550;color:var(--fg)}
- .pf-diag-table{margin-top:.4rem;background:var(--surface);border:1px solid var(--line);
-   border-radius:6px;padding:.5rem;font-size:.75rem;font-family:monospace;white-space:pre-wrap;
-   word-break:break-all;max-height:120px;overflow-y:auto}
+  .pf-diag{margin:.7rem 0;font-size:.8rem;color:var(--muted)}
+  .pf-diag summary{cursor:pointer;font-weight:550;color:var(--fg)}
+  .pf-diag-table{margin-top:.4rem;background:var(--surface);border:1px solid var(--line);
+    border-radius:6px;padding:.5rem;font-size:.75rem;font-family:monospace;white-space:pre-wrap;
+    word-break:break-all;max-height:120px;overflow-y:auto}
  
- .pf-actions{display:flex;align-items:center;justify-content:flex-end;gap:.6rem;margin-top:1.1rem}
- .pf-btn-cancel{background:none;border:1px solid var(--line);padding:.5rem .9rem;
-   border-radius:8px;color:var(--fg);font:inherit;font-size:.86rem;font-weight:550;cursor:pointer}
- .pf-btn-cancel:hover{background:var(--line-soft)}
- .pf-btn-submit{background:var(--accent);color:#fff;border:0;padding:.5rem 1.1rem;
-   border-radius:8px;font:inherit;font-size:.86rem;font-weight:600;cursor:pointer}
- .pf-btn-submit:hover{filter:brightness(1.08)}
- .pf-btn-submit:disabled{opacity:.6;cursor:not-allowed}
- .pf-toast{padding:.6rem .8rem;border-radius:8px;font-size:.85rem;margin:.6rem 0}
- .pf-toast-ok{background:rgba(6,118,71,.1);border:1px solid var(--ok);color:var(--ok)}
- .pf-toast-err{background:rgba(180,35,24,.1);border:1px solid var(--danger);color:var(--danger)}
+  .pf-actions{display:flex;align-items:center;justify-content:flex-end;gap:.6rem;margin-top:1.1rem}
+  .pf-btn-cancel{background:none;border:1px solid var(--line);padding:.5rem .9rem;
+    border-radius:8px;color:var(--fg);font:inherit;font-size:.86rem;font-weight:550;cursor:pointer}
+  .pf-btn-cancel:hover{background:var(--line-soft)}
+  .pf-btn-submit{background:var(--accent);color:#fff;border:0;padding:.5rem 1.1rem;
+    border-radius:8px;font:inherit;font-size:.86rem;font-weight:600;cursor:pointer}
+  .pf-btn-submit:hover{filter:brightness(1.08)}
+  .pf-btn-submit:disabled{opacity:.6;cursor:not-allowed}
+  .pf-toast{padding:.6rem .8rem;border-radius:8px;font-size:.85rem;margin:.6rem 0}
+  .pf-toast-ok{background:rgba(6,118,71,.1);border:1px solid var(--ok);color:var(--ok)}
+  .pf-toast-err{background:rgba(180,35,24,.1);border:1px solid var(--danger);color:var(--danger)}
 </style></head><body>${inner}
 <div class="pf-widget">
   <button type="button" class="pf-trigger-btn" id="pf-open-btn" aria-label="Send Feedback">
@@ -317,17 +329,34 @@ table.rows{border-collapse:collapse;width:100%}
       <div class="pf-attach-box">
         <div class="pf-attach-top">
           <span>📷 Screenshot & Attachment</span>
-          <label class="pf-toggle-label">
-            <input type="checkbox" id="pf-include-shot" checked>
-            <span>Include Screenshot</span>
-          </label>
+          <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;">
+            <a id="pf-download-btn" class="pf-tool-btn" download="pumasi-screenshot.png" href="#" style="display:none;" title="Download attached screenshot">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              <span>Download</span>
+            </a>
+            <button type="button" id="pf-recapture-btn" class="pf-tool-btn" title="Re-capture screenshot">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              <span>Re-capture</span>
+            </button>
+            <button type="button" id="pf-displace-btn" class="pf-tool-btn pf-tool-danger" title="Displace / Remove screenshot" style="display:none;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              <span>Displace</span>
+            </button>
+            <label class="pf-toggle-label" style="margin-left:.25rem;">
+              <input type="checkbox" id="pf-include-shot" checked>
+              <span>Attach</span>
+            </label>
+          </div>
         </div>
         <div id="pf-preview-wrap" style="margin-top:.4rem">
           <div id="pf-shot-loading" class="muted" style="font-size:.8rem;">Capturing preview...</div>
-          <img id="pf-shot-preview" class="pf-shot-preview" alt="Preview" style="display:none;" />
-          <div style="display:flex;align-items:center;gap:.5rem;margin-top:.3rem;">
+          <div id="pf-shot-wrap" class="pf-shot-wrap" style="display:none;">
+            <img id="pf-shot-preview" class="pf-shot-preview" alt="Preview" style="cursor:zoom-in;" title="Click to view full size" />
+            <span class="pf-shot-zoom-hint">Click to view full size</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-top:.3rem;">
             <label class="pf-upload-btn">
-              <span>📎 Attach file/image</span>
+              <span>📎 Replace with custom file/image</span>
               <input type="file" id="pf-file-upload" accept="image/*,.pdf,.txt,.log" style="display:none;">
             </label>
             <span id="pf-file-label" class="muted" style="font-size:.78rem;"></span>
@@ -377,19 +406,45 @@ table.rows{border-collapse:collapse;width:100%}
   const cancelBtn = document.getElementById('pf-cancel-btn');
   const form = document.getElementById('pf-form');
   const shotPreview = document.getElementById('pf-shot-preview');
+  const shotWrap = document.getElementById('pf-shot-wrap');
   const shotLoading = document.getElementById('pf-shot-loading');
   const fileUpload = document.getElementById('pf-file-upload');
   const fileLabel = document.getElementById('pf-file-label');
   const includeShot = document.getElementById('pf-include-shot');
+  const downloadBtn = document.getElementById('pf-download-btn');
+  const recaptureBtn = document.getElementById('pf-recapture-btn');
+  const displaceBtn = document.getElementById('pf-displace-btn');
   const diagView = document.getElementById('pf-diag-view');
   const statusBox = document.getElementById('pf-status-box');
   const submitBtn = document.getElementById('pf-submit-btn');
 
   let currentScreenshot = null;
 
+  function updateScreenshotUI(dataUrl) {
+    currentScreenshot = dataUrl;
+    if (dataUrl) {
+      shotPreview.src = dataUrl;
+      shotWrap.style.display = 'block';
+      shotLoading.style.display = 'none';
+      if (downloadBtn) {
+        downloadBtn.href = dataUrl;
+        downloadBtn.style.display = 'inline-flex';
+      }
+      if (displaceBtn) displaceBtn.style.display = 'inline-flex';
+      includeShot.checked = true;
+    } else {
+      shotWrap.style.display = 'none';
+      shotLoading.style.display = 'none';
+      if (downloadBtn) downloadBtn.style.display = 'none';
+      if (displaceBtn) displaceBtn.style.display = 'none';
+      includeShot.checked = false;
+    }
+  }
+
   function captureScreenshot() {
     shotLoading.style.display = 'block';
-    shotPreview.style.display = 'none';
+    shotLoading.innerText = 'Capturing preview...';
+    if (shotWrap) shotWrap.style.display = 'none';
     try {
       const w = Math.min(window.innerWidth, 1280);
       const h = Math.min(window.innerHeight, 800);
@@ -410,10 +465,8 @@ table.rows{border-collapse:collapse;width:100%}
       ctx.fillText('Captured at: ' + new Date().toLocaleString(), 20, 100);
       ctx.fillText('Viewport: ' + window.innerWidth + ' x ' + window.innerHeight, 20, 130);
       
-      currentScreenshot = canvas.toDataURL('image/png', 0.8);
-      shotPreview.src = currentScreenshot;
-      shotPreview.style.display = 'block';
-      shotLoading.style.display = 'none';
+      const url = canvas.toDataURL('image/png', 0.8);
+      updateScreenshotUI(url);
     } catch(err) {
       shotLoading.innerText = 'Screenshot unavailable';
     }
@@ -457,6 +510,31 @@ table.rows{border-collapse:collapse;width:100%}
     });
   }
 
+  if (displaceBtn) {
+    displaceBtn.addEventListener('click', function() {
+      updateScreenshotUI(null);
+      if (fileLabel) fileLabel.innerText = 'Screenshot displaced';
+    });
+  }
+
+  if (recaptureBtn) {
+    recaptureBtn.addEventListener('click', function() {
+      captureScreenshot();
+      if (fileLabel) fileLabel.innerText = '';
+    });
+  }
+
+  if (shotPreview) {
+    shotPreview.addEventListener('click', function() {
+      if (currentScreenshot) {
+        const w = window.open('');
+        if (w) {
+          w.document.write('<title>Screenshot Preview</title><body style="margin:0;background:#0b0c10;display:flex;align-items:center;justify-content:center;min-height:100vh;"><img src="' + currentScreenshot + '" style="max-width:98%;max-height:98vh;border-radius:6px;box-shadow:0 8px 30px rgba(0,0,0,.5);" /></body>');
+        }
+      }
+    });
+  }
+
   if (fileUpload) {
     fileUpload.addEventListener('change', function(e) {
       const file = e.target.files?.[0];
@@ -464,11 +542,7 @@ table.rows{border-collapse:collapse;width:100%}
       fileLabel.innerText = file.name;
       const reader = new FileReader();
       reader.onload = function(evt) {
-        currentScreenshot = evt.target?.result;
-        shotPreview.src = currentScreenshot;
-        shotPreview.style.display = 'block';
-        shotLoading.style.display = 'none';
-        includeShot.checked = true;
+        updateScreenshotUI(evt.target?.result);
       };
       reader.readAsDataURL(file);
     });
