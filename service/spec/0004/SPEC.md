@@ -1,6 +1,7 @@
 # SPEC-0004 · Reporting path and opt-out
 
-**Status:** for cross-family spec review · **Intent:** [`INTENT.md`](INTENT.md)
+**Status:** approved 2026-08-30 (gemini, `reviews/20260830-121915-spec-gemini.md`);
+acceptance cases frozen · **Intent:** [`INTENT.md`](INTENT.md)
 (window Q-008, `pumasi/DECISIONS.md`) · **Source:** CHARTER §5.1/§5.2,
 `DEBT.md` D-107/D-108, SPEC-0002 clause D5 and frozen case D-005.
 **Acceptance:** [`acceptance/cases.json`](acceptance/cases.json), frozen when
