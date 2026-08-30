@@ -949,8 +949,22 @@ ${FOOTER}
         document.getElementById('f').classList.add('on');
         document.getElementById('name').focus();
       };
-      times.appendChild(b);
     });
+    try {
+      var savedName = localStorage.getItem('pumasi_booker_name');
+      var savedEmail = localStorage.getItem('pumasi_booker_email');
+      if (savedName && !document.getElementById('name').value) document.getElementById('name').value = savedName;
+      if (savedEmail && !document.getElementById('email').value) document.getElementById('email').value = savedEmail;
+      var formEl = document.getElementById('f');
+      if (formEl) {
+        formEl.addEventListener('submit', function() {
+          var n = document.getElementById('name').value;
+          var e = document.getElementById('email').value;
+          if (n) localStorage.setItem('pumasi_booker_name', n);
+          if (e) localStorage.setItem('pumasi_booker_email', e);
+        });
+      }
+    } catch(err) {}
   }
   render();
 })();
@@ -1891,9 +1905,13 @@ export function availabilityEditor(set: {
 }): string {
   const weekly = DAYS_FULL.map((d) => {
     const r = set.rules.find((x) => x.weekday === d);
+    const isWeekend = d === 'SA' || d === 'SU';
+    const startVal = r ? r.start : (isWeekend ? '' : '09:00');
+    const endVal = r ? r.end : (isWeekend ? '' : '17:00');
     return `<tr><th>${d}</th>
-      <td><input name="${d}_start" value="${esc(r?.start ?? '')}" placeholder="09:00" size="5"></td>
-      <td><input name="${d}_end" value="${esc(r?.end ?? '')}" placeholder="17:00" size="5"></td></tr>`;
+      <td><input name="${d}_start" value="${esc(startVal)}" placeholder="09:00" size="5"></td>
+      <td><input name="${d}_end" value="${esc(endVal)}" placeholder="17:00" size="5"></td>
+      <td><button type="button" class="linkish" style="font-size:.78rem;color:var(--muted)" onclick="this.closest('tr').querySelectorAll('input').forEach(i=>i.value='')">Clear</button></td></tr>`;
   }).join('');
 
   const ov = set.overrides
@@ -1913,8 +1931,16 @@ export function availabilityEditor(set: {
 <p class="muted">Times are in your own timezone (${esc(set.timezone)}). Every event
   type using this schedule follows what you save here.</p>
 <div class="card">
-  <h2>Weekly hours</h2>
-  <form method="post" action="/app/availability/${esc(set.set_id)}/hours">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem">
+    <h2 style="margin:0">Weekly hours</h2>
+    <div style="display:flex;gap:.35rem;flex-wrap:wrap">
+      <button type="button" class="preset-pill" onclick="setPresetHours('standard')">🏢 9:00 AM – 5:00 PM (Mon–Fri)</button>
+      <button type="button" class="preset-pill" onclick="setPresetHours('extended')">⚡ 8:30 AM – 6:00 PM (Mon–Fri)</button>
+      <button type="button" class="preset-pill" onclick="setPresetHours('all')">🌐 24/7</button>
+      <button type="button" class="preset-pill" onclick="setPresetHours('clear')">🧹 Clear All</button>
+    </div>
+  </div>
+  <form method="post" action="/app/availability/${esc(set.set_id)}/hours" id="avail-form">
     <table class="avail">${weekly}</table>
     <p class="notice">Leave a day blank to be unavailable.</p>
     <button class="submit" type="submit">Save weekly hours</button>
@@ -1926,9 +1952,13 @@ export function availabilityEditor(set: {
     No times means the whole day is unavailable.</p>
   ${ov ? `<table class="avail">${ov}</table>` : ''}
   <form method="post" action="/app/availability/${esc(set.set_id)}/overrides">
-    <label>Date <input type="date" name="date" required></label>
-    <label>From <input name="start" placeholder="09:00" size="5"></label>
-    <label>To <input name="end" placeholder="12:00" size="5"></label>
+    <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin:.5rem 0">
+      <label>Date <input type="date" name="date" id="ov_date" required></label>
+      <label>From <input name="start" id="ov_start" value="09:00" placeholder="09:00" size="5"></label>
+      <label>To <input name="end" id="ov_end" value="17:00" placeholder="17:00" size="5"></label>
+      <label style="display:inline-flex;align-items:center;gap:.35rem;cursor:pointer">
+        <input type="checkbox" id="ov_off" style="width:auto" onchange="toggleFullDayOff(this.checked)"> Full Day Off</label>
+    </div>
     <button class="submit" type="submit">Add override</button>
   </form>
 </div>
@@ -1937,10 +1967,56 @@ export function availabilityEditor(set: {
   <p class="muted">Marks your country's public holidays (this year and next) as
     unavailable, as date overrides you can remove one by one.</p>
   <form method="post" action="/app/availability/${esc(set.set_id)}/holidays">
-    <label>Country code <input name="country" placeholder="US" size="3" maxlength="2" required></label>
+    <label>Country code <input name="country" list="country_list" value="US" placeholder="US" size="4" maxlength="2" required></label>
+    <datalist id="country_list">
+      <option value="US">United States</option>
+      <option value="KR">South Korea</option>
+      <option value="GB">United Kingdom</option>
+      <option value="CA">Canada</option>
+      <option value="DE">Germany</option>
+      <option value="FR">France</option>
+      <option value="JP">Japan</option>
+      <option value="AU">Australia</option>
+      <option value="IN">India</option>
+      <option value="SG">Singapore</option>
+    </datalist>
     <button class="submit" type="submit">Block holidays</button>
   </form>
 </div>
+<script>
+function setPresetHours(p) {
+  const days = ['MO','TU','WE','TH','FR','SA','SU'];
+  days.forEach(function(d) {
+    const s = document.querySelector('input[name="' + d + '_start"]');
+    const e = document.querySelector('input[name="' + d + '_end"]');
+    if (!s || !e) return;
+    if (p === 'standard') {
+      if (d === 'SA' || d === 'SU') { s.value = ''; e.value = ''; }
+      else { s.value = '09:00'; e.value = '17:00'; }
+    } else if (p === 'extended') {
+      if (d === 'SA' || d === 'SU') { s.value = ''; e.value = ''; }
+      else { s.value = '08:30'; e.value = '18:00'; }
+    } else if (p === 'all') {
+      s.value = '00:00'; e.value = '23:59';
+    } else if (p === 'clear') {
+      s.value = ''; e.value = '';
+    }
+  });
+}
+function toggleFullDayOff(isOff) {
+  const s = document.getElementById('ov_start');
+  const e = document.getElementById('ov_end');
+  if (s && e) {
+    if (isOff) { s.value = ''; e.value = ''; }
+    else { s.value = '09:00'; e.value = '17:00'; }
+  }
+}
+const ovDate = document.getElementById('ov_date');
+if (ovDate && !ovDate.value) {
+  const tmrw = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  ovDate.value = tmrw;
+}
+</script>
 <style>
  .card{border:1px solid var(--line);border-radius:.5rem;padding:1rem;margin:1rem 0}
  .card h2{font-size:1.1rem;margin:0 0 .25rem}
@@ -1949,6 +2025,8 @@ export function availabilityEditor(set: {
  .linkish{background:none;border:0;color:var(--accent);font:inherit;cursor:pointer;padding:0}
  label{display:inline-block;margin-right:.75rem}
  input[type=date]{width:auto}
+ .preset-pill{padding:.25rem .6rem;border-radius:6px;font-size:.78rem;font-weight:550;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
+ .preset-pill:hover{background:var(--line-soft)}
 </style>`,
   );
 }
@@ -1987,32 +2065,80 @@ export function workflowsPage(
 ${list || '<p class="muted">No workflows yet.</p>'}
 <div class="card">
   <h2>New workflow</h2>
+  <div style="display:flex;gap:.35rem;margin-bottom:1rem;flex-wrap:wrap">
+    <button type="button" class="preset-pill" onclick="setWfPreset('24h')">🔔 24h Reminder</button>
+    <button type="button" class="preset-pill" onclick="setWfPreset('1h')">⏱️ 1h Reminder</button>
+    <button type="button" class="preset-pill" onclick="setWfPreset('created')">📢 Instant Confirmation</button>
+    <button type="button" class="preset-pill" onclick="setWfPreset('followup')">🙏 Post-Meeting Follow-up</button>
+  </div>
   <form method="post" action="/app/workflows">
-    <label for="wt">Name</label><input id="wt" name="title" required placeholder="Reminder">
+    <label for="wt">Name</label><input id="wt" name="title" required value="24-Hour Meeting Reminder">
     <label for="wg">When</label>
     <select id="wg" name="trigger">
-      <option value="before_event">Before the meeting</option>
+      <option value="before_event" selected>Before the meeting</option>
       <option value="after_event">After the meeting</option>
       <option value="booking_created">When a booking is created</option>
       <option value="booking_cancelled">When a booking is cancelled</option>
       <option value="booking_rescheduled">When a booking is rescheduled</option>
     </select>
     <label for="wo">Offset (minutes, for before/after)</label>
-    <input id="wo" name="offset_minutes" type="number" min="0" value="60">
+    <input id="wo" name="offset_minutes" type="number" min="0" value="1440">
     <label for="wr">Send to</label>
     <select id="wr" name="recipient">
-      <option value="booker">The booker</option>
+      <option value="booker" selected>The booker</option>
       <option value="owner">Me</option>
     </select>
     <label for="ws">Subject</label>
-    <input id="ws" name="subject" value="Reminder: {{title}} at {{start}}">
+    <input id="ws" name="subject" value="Reminder: {{title}} tomorrow at {{start}}">
     <label for="wb">Body</label>
-    <input id="wb" name="body" value="Hi {{name}}, see you at {{start}}. {{location}}">
+    <input id="wb" name="body" value="Hi {{name}}, friendly reminder for our upcoming meeting: {{title}} at {{start}}. Location: {{location}}">
     <button class="submit" type="submit">Create workflow</button>
   </form>
 </div>
+<script>
+function setWfPreset(k) {
+  const t = document.getElementById('wt');
+  const g = document.getElementById('wg');
+  const o = document.getElementById('wo');
+  const r = document.getElementById('wr');
+  const s = document.getElementById('ws');
+  const b = document.getElementById('wb');
+  if (k === '24h') {
+    t.value = '24-Hour Meeting Reminder';
+    g.value = 'before_event';
+    o.value = '1440';
+    r.value = 'booker';
+    s.value = 'Reminder: {{title}} tomorrow at {{start}}';
+    b.value = 'Hi {{name}}, friendly reminder for our upcoming meeting: {{title}} at {{start}}. Location: {{location}}';
+  } else if (k === '1h') {
+    t.value = '1-Hour Meeting Reminder';
+    g.value = 'before_event';
+    o.value = '60';
+    r.value = 'booker';
+    s.value = 'Starting in 1 hour: {{title}}';
+    b.value = 'Hi {{name}}, our meeting {{title}} begins in 1 hour at {{start}}. Join here: {{location}}';
+  } else if (k === 'created') {
+    t.value = 'Instant Booking Notification';
+    g.value = 'booking_created';
+    o.value = '0';
+    r.value = 'booker';
+    s.value = 'Confirmed: {{title}} with {{name}}';
+    b.value = 'Hi {{name}}, your booking for {{title}} on {{start}} is confirmed! Location: {{location}}';
+  } else if (k === 'followup') {
+    t.value = 'Post-Meeting Follow-up & Feedback';
+    g.value = 'after_event';
+    o.value = '15';
+    r.value = 'booker';
+    s.value = 'Thank you for meeting today!';
+    b.value = 'Hi {{name}}, thank you for taking the time to meet today for {{title}}. Please let me know if you have any follow-up questions!';
+  }
+}
+</script>
 ${CARD_CSS}
-<style>select{width:100%;padding:.55rem;border:1px solid var(--line);border-radius:.4rem;background:transparent;color:var(--fg);font:inherit}</style>`,
+<style>select{width:100%;padding:.55rem;border:1px solid var(--line);border-radius:.4rem;background:transparent;color:var(--fg);font:inherit}
+.preset-pill{padding:.25rem .6rem;border-radius:6px;font-size:.78rem;font-weight:550;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
+.preset-pill:hover{background:var(--line-soft)}
+</style>`,
   );
 }
 
@@ -2468,18 +2594,29 @@ export function eventTypeEditor(
 <p class="muted"><a href="${esc(url)}">${esc(url)}</a></p>
 <form method="post" action="/app/event/${esc(s.schedule_id)}">
 <div class="card"><h2>What</h2>
-  <label for="t">Title</label><input id="t" name="title" value="${esc(s.title)}" required>
-  <label for="de">Description</label><input id="de" name="description" value="${esc(s.description ?? '')}" placeholder="What this meeting is for">
-  <label for="du">Duration (minutes)</label><input id="du" name="duration_minutes" type="number" min="1" value="${s.duration_minutes}">
-  <label for="co">Accent color</label><input id="co" name="color" value="${esc(s.color ?? '')}" placeholder="#1a56db" size="8">
+  <label for="t">Title</label><input id="t" name="title" value="${esc(s.title || '30 Minute Meeting')}" placeholder="30 Minute Meeting" required>
+  <label for="de">Description</label><input id="de" name="description" value="${esc(s.description ?? '')}" placeholder="Quick discussion, project review, or strategy sync.">
+  <label for="du">Duration (minutes)</label>
+  <div style="display:flex;gap:.35rem;margin:.35rem 0 .55rem;flex-wrap:wrap">
+    <button type="button" class="preset-pill" onclick="setDurationPreset(15)">15 min</button>
+    <button type="button" class="preset-pill" onclick="setDurationPreset(30)">30 min</button>
+    <button type="button" class="preset-pill" onclick="setDurationPreset(45)">45 min</button>
+    <button type="button" class="preset-pill" onclick="setDurationPreset(60)">60 min</button>
+    <button type="button" class="preset-pill" onclick="setDurationPreset(90)">90 min</button>
+  </div>
+  <input id="du" name="duration_minutes" type="number" min="1" value="${s.duration_minutes || 30}">
+  <label for="co">Accent color</label>
+  <div style="display:flex;gap:.5rem;align-items:center;margin:.25rem 0">
+    <input id="co" name="color" value="${esc(s.color ?? '#1a56db')}" placeholder="#1a56db" size="8">
+    <input type="color" value="${esc(s.color ?? '#1a56db')}" style="width:36px;height:32px;padding:0;border:1px solid var(--line);border-radius:4px;cursor:pointer" onchange="document.getElementById('co').value=this.value">
+  </div>
 </div>
 <div class="card"><h2>Where</h2>
   <label for="lk">Location</label>
   <select id="lk" name="location_kind">${kindOptions}</select>
   <label for="lv">Details (address, phone note, or link)</label>
-  <input id="lv" name="location_value" value="${esc(s.location_value ?? '')}" placeholder="Optional">
-  <p class="notice">Google Meet needs the calendar connection's "add bookings to
-    calendar" grant; the link is minted per booking.</p>
+  <input id="lv" name="location_value" value="${esc(s.location_value ?? '')}" placeholder="Optional link or room notes">
+  <p class="notice">Google Meet & Microsoft Teams links are automatically minted per booking when calendar integration is connected.</p>
 </div>
 <div class="card"><h2>Who</h2>
   <label for="sk">Scheduling</label>
@@ -2513,11 +2650,12 @@ export function eventTypeEditor(
     anyone fill your calendar with addresses they do not own.</p>
   <label for="av">Availability schedule</label>
   <select id="av" name="availability_set_id">${setOptions}</select>
-  <label for="gr">Start-time spacing (minutes)</label><input id="gr" name="granularity_minutes" type="number" min="1" value="${s.granularity_minutes}">
-  <label for="bb">Buffer before (minutes)</label><input id="bb" name="buffer_before_minutes" type="number" min="0" value="${s.buffer_before_minutes}">
-  <label for="ba">Buffer after (minutes)</label><input id="ba" name="buffer_after_minutes" type="number" min="0" value="${s.buffer_after_minutes}">
-  <label for="mn">Minimum notice (minutes)</label><input id="mn" name="minimum_notice_minutes" type="number" min="0" value="${s.minimum_notice_minutes}">
-  <label for="mh">How far ahead people can book (days)</label><input id="mh" name="maximum_horizon_days" type="number" min="1" value="${s.maximum_horizon_days}">
+  <label for="gr">Start-time spacing (minutes)</label><input id="gr" name="granularity_minutes" type="number" min="1" value="${s.granularity_minutes || 15}">
+  <label for="bb">Buffer before (minutes)</label><input id="bb" name="buffer_before_minutes" type="number" min="0" value="${s.buffer_before_minutes ?? 0}">
+  <label for="ba">Buffer after (minutes)</label><input id="ba" name="buffer_after_minutes" type="number" min="0" value="${s.buffer_after_minutes ?? 5}">
+  <label for="mn">Minimum notice (minutes)</label><input id="mn" name="minimum_notice_minutes" type="number" min="0" value="${s.minimum_notice_minutes ?? 240}">
+  <p class="notice" style="margin-top:-.25rem">240 min = 4 hours minimum advance notice before booking.</p>
+  <label for="mh">How far ahead people can book (days)</label><input id="mh" name="maximum_horizon_days" type="number" min="1" value="${s.maximum_horizon_days || 60}">
   <label for="mb">Max bookings per day (blank = no limit)</label><input id="mb" name="max_bookings_per_day" type="number" min="1" value="${s.max_bookings_per_day ?? ''}">
   <label for="mbw">Max bookings per week</label><input id="mbw" name="max_bookings_per_week" type="number" min="1" value="${s.max_bookings_per_week ?? ''}">
   <label for="mbm">Max bookings per month</label><input id="mbm" name="max_bookings_per_month" type="number" min="1" value="${s.max_bookings_per_month ?? ''}">
@@ -2528,6 +2666,14 @@ export function eventTypeEditor(
   <label for="af">Only bookable from (date, optional)</label><input id="af" name="available_from" type="date" value="${esc(s.available_from ?? '')}">
   <label for="au">…until (date, optional)</label><input id="au" name="available_until" type="date" value="${esc(s.available_until ?? '')}">
 </div>
+<script>
+function setDurationPreset(mins) {
+  const d = document.getElementById('du');
+  const g = document.getElementById('gr');
+  if (d) d.value = mins;
+  if (g) g.value = mins <= 30 ? 15 : 30;
+}
+</script>
 <button class="submit" type="submit">Save event type</button>
 </form>
 <!-- Its own form, not part of the settings form above: a half-typed question
