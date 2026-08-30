@@ -15,6 +15,7 @@
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
     "@pumasi/booking-core": "*",
+    "html2canvas": "^1.4.1",
     "nodemailer": "^9.0.3",
     "pg": "^8.22.0",
     "rrule": "^2.8.1"
