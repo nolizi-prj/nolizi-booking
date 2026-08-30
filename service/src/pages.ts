@@ -82,7 +82,7 @@ const NAV: { key: string; href: string; label: string; icon: string }[] = [
   { key: 'polls', href: '/app/polls', label: 'Polls', icon: 'M6 20V10M12 20V4M18 20v-6' },
   { key: 'workflows', href: '/app/workflows', label: 'Workflows', icon: 'M5 7a2 2 0 100-4 2 2 0 000 4zM5 21a2 2 0 100-4 2 2 0 000 4zM19 14a2 2 0 100-4 2 2 0 000 4zM7 5h6a4 4 0 014 4v1M7 19h6a4 4 0 004-4' },
   { key: 'webhooks', href: '/app/webhooks', label: 'Webhooks', icon: 'M10 8a4 4 0 116 3.5M8 13a4 4 0 105 5M12 12l3 6M12 12l-5 2' },
-  { key: 'api', href: '/app/api-keys', label: 'API keys', icon: 'M14 7a4 4 0 11-3.5 6H8v3H5v-3H3l3.5-3.5A4 4 0 0114 7z' },
+  { key: 'integrations', href: '/app/integrations', label: 'Apps & Video', icon: 'M15 10l5-3v10l-5-3v-4zM4 6h11a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2z' },
   { key: 'analytics', href: '/app/analytics', label: 'Analytics', icon: 'M4 20V10M10 20V4M16 20v-8M22 20H2' },
   { key: 'audit', href: '/app/audit', label: 'Audit log', icon: 'M9 5h9a1 1 0 011 1v13a1 1 0 01-1 1H6a1 1 0 01-1-1V8M9 5V3h6v2M8 12h8M8 16h5' },
   { key: 'settings', href: '/app/settings', label: 'Settings', icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19 12a7 7 0 00-.1-1l2-1.5-2-3.4-2.3 1a7 7 0 00-1.7-1L14.5 3h-4l-.4 2.6a7 7 0 00-1.7 1l-2.3-1-2 3.4L6 11a7 7 0 000 2l-2 1.5 2 3.4 2.3-1a7 7 0 001.7 1l.4 2.6h4l.4-2.6a7 7 0 001.7-1l2.3 1 2-3.4-2-1.5a7 7 0 00.2-1z' },
@@ -973,16 +973,56 @@ ${FOOTER}
 }
 
 export function confirmedPage(opts: { title: string; start: string; location?: string }): string {
+  const loc = opts.location;
+  const isUrl = Boolean(loc && (loc.startsWith('http://') || loc.startsWith('https://') || loc.includes('zoom.us') || loc.includes('meet.google.com') || loc.includes('teams.microsoft.com')));
+  const cleanUrl = isUrl && loc ? (loc.match(/https?:\/\/[^\s]+/)?.[0] || loc) : undefined;
+
+  let videoBtnText = 'Join Video Call ↗';
+  let videoClass = 'video-btn-generic';
+  if (cleanUrl?.includes('zoom.us')) {
+    videoBtnText = 'Join Zoom Meeting ↗';
+    videoClass = 'video-btn-zoom';
+  } else if (cleanUrl?.includes('meet.google.com')) {
+    videoBtnText = 'Join Google Meet ↗';
+    videoClass = 'video-btn-meet';
+  } else if (cleanUrl?.includes('teams.microsoft.com')) {
+    videoBtnText = 'Join Microsoft Teams ↗';
+    videoClass = 'video-btn-teams';
+  }
+
   return SHELL(
     'Booked',
-    `<h1>Booked</h1>
+    `<div class="confirmed-card">
+<div class="conf-badge">✔ BOOKING CONFIRMED</div>
+<h1 style="margin:0 0 .5rem;font-size:1.6rem">Booked</h1>
 <p class="ok">${esc(opts.title)} is confirmed for <time datetime="${esc(opts.start)}" id="t">${esc(opts.start)}</time>.</p>
-${opts.location ? `<p class="muted">Where: ${esc(opts.location)}</p>` : ''}
-<p class="muted">A confirmation is on its way. It contains the link for changing
-  or cancelling this booking — that link is deliberately not shown here, so that
-  only whoever holds the mailbox can act on it.</p>
+
+${cleanUrl ? `
+<div class="video-action-box">
+  <div class="video-action-lead">Your video conference is ready:</div>
+  <a href="${esc(cleanUrl)}" target="_blank" rel="noopener" class="video-join-btn ${videoClass}">${esc(videoBtnText)}</a>
+  <div class="video-raw-link">Link: <a href="${esc(cleanUrl)}" target="_blank" rel="noopener">${esc(cleanUrl)}</a></div>
+</div>
+` : (opts.location ? `<p class="muted">📍 <b>Location</b>: ${esc(opts.location)}</p>` : '')}
+
+<p class="muted" style="margin-top:1.5rem;font-size:.88rem">A confirmation email with calendar invites (.ics) has been sent to your inbox.</p>
+</div>
 <script>var t=document.getElementById('t');
- t.textContent=new Date(t.getAttribute('datetime')).toLocaleString();</script>`,
+ t.textContent=new Date(t.getAttribute('datetime')).toLocaleString(undefined, {weekday:'long',year:'numeric',month:'long',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'});
+</script>
+<style>
+ .confirmed-card{max-width:32rem;margin:2rem auto;padding:2rem;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);text-align:center}
+ .conf-badge{font-size:.78rem;font-weight:750;letter-spacing:.05em;color:var(--ok);margin-bottom:.75rem}
+ .conf-time{font-size:1.15rem;font-weight:600;margin:.5rem 0 1.5rem}
+ .video-action-box{margin:1.5rem 0;padding:1.25rem;background:var(--line-soft);border-radius:10px;border:1px solid var(--line)}
+ .video-action-lead{font-size:.85rem;color:var(--muted);margin-bottom:.75rem;font-weight:550}
+ .video-join-btn{display:inline-block;padding:.75rem 1.5rem;border-radius:8px;font-weight:650;font-size:1rem;color:#fff!important;text-decoration:none;box-shadow:0 2px 4px rgba(0,0,0,.15);cursor:pointer}
+ .video-btn-zoom{background:#2D8CFF}
+ .video-btn-meet{background:#1a73e8}
+ .video-btn-teams{background:#5c55be}
+ .video-btn-generic{background:var(--accent)}
+ .video-raw-link{margin-top:.6rem;font-size:.8rem;color:var(--muted);word-break:break-all}
+</style>`,
   );
 }
 
@@ -3000,5 +3040,103 @@ export function analyticsPage(a: {
  .barn{font-weight:600;color:var(--fg)}
 </style>
 ${CARD_CSS}`,
+  );
+}
+
+export function integrationsPage(opts: {
+  googleConnected: boolean;
+  googleEmail?: string;
+  msConnected: boolean;
+  msEmail?: string;
+  zoomConnected: boolean;
+  zoomLink?: string;
+  zoomAccountId?: string;
+  baseUrl: string;
+}): string {
+  return SHELL(
+    'Apps & Video Integrations',
+    `<!--nav:integrations-->
+<h1>Apps & Video Integrations</h1>
+<p class="muted">Connect your video conferencing and calendar accounts so Pumasi can auto-mint meeting links and prevent double bookings.</p>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem">
+    <div style="display:flex;gap:.85rem;align-items:center">
+      <div style="width:44px;height:44px;border-radius:10px;background:#2D8CFF;display:flex;align-items:center;justify-content:center;color:#fff">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 10l5-3v10l-5-3v-4z"/><rect x="3" y="6" width="12" height="12" rx="2"/></svg>
+      </div>
+      <div>
+        <h2 style="margin:0 0 .2rem;font-size:1.1rem">Zoom Video</h2>
+        <p class="muted" style="margin:0;font-size:.85rem">Auto-create Zoom meeting rooms for every booked session, or use your Personal Meeting Room.</p>
+      </div>
+    </div>
+    <div>
+      <span class="pill ${opts.zoomConnected ? 'pill-ok' : ''}">${opts.zoomConnected ? 'Connected ✓' : 'Ready to configure'}</span>
+    </div>
+  </div>
+
+  <div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--line)">
+    <form method="post" action="/app/integrations/zoom">
+      <label for="zm_link">Personal Meeting Room or Static Zoom Link</label>
+      <input id="zm_link" name="zoom_link" value="${esc(opts.zoomLink ?? '')}" placeholder="https://us02web.zoom.us/j/1234567890">
+      <p class="notice">When provided, this link is automatically attached to every event type using Zoom.</p>
+      
+      <details style="margin:1rem 0" ${opts.zoomAccountId ? 'open' : ''}>
+        <summary style="font-weight:600;font-size:.88rem;cursor:pointer">Enterprise / Automated Dynamic Meeting Creation (Server-to-Server OAuth)</summary>
+        <div style="margin-top:.75rem;display:grid;grid-template-columns:1fr;gap:.5rem">
+          <label>Zoom Account ID <input name="zoom_account_id" value="${esc(opts.zoomAccountId ?? '')}" placeholder="e.g. abcdEFGH1234"></label>
+          <label>Zoom Client ID <input name="zoom_client_id" placeholder="Optional (or set in environment)"></label>
+          <label>Zoom Client Secret <input name="zoom_client_secret" type="password" placeholder="Optional (or set in environment)"></label>
+        </div>
+      </details>
+      <button class="submit" type="submit">Save Zoom Settings</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem">
+    <div style="display:flex;gap:.85rem;align-items:center">
+      <div style="width:44px;height:44px;border-radius:10px;background:#e8f0fe;display:flex;align-items:center;justify-content:center;color:#1a73e8">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l5-3v10l-5-3v-4z"/><rect x="3" y="6" width="12" height="12" rx="2"/></svg>
+      </div>
+      <div>
+        <h2 style="margin:0 0 .2rem;font-size:1.1rem">Google Meet</h2>
+        <p class="muted" style="margin:0;font-size:.85rem">Automatically mints unique Google Meet links for every booking via Google Calendar integration.</p>
+      </div>
+    </div>
+    <div>
+      <span class="pill ${opts.googleConnected ? 'pill-ok' : ''}">${opts.googleConnected ? `Connected (${esc(opts.googleEmail || '')})` : 'Not Connected'}</span>
+    </div>
+  </div>
+  <div style="margin-top:1rem;display:flex;gap:.75rem;align-items:center">
+    <a href="/oauth/google/authorize" class="submit" style="display:inline-block;text-decoration:none">${opts.googleConnected ? 'Reconnect Google Account' : 'Connect Google Calendar & Meet'}</a>
+  </div>
+</div>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem">
+    <div style="display:flex;gap:.85rem;align-items:center">
+      <div style="width:44px;height:44px;border-radius:10px;background:#f3f2fd;display:flex;align-items:center;justify-content:center;color:#5c55be">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 10l4-2.5v9l-4-2.5v-4z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+      </div>
+      <div>
+        <h2 style="margin:0 0 .2rem;font-size:1.1rem">Microsoft Teams</h2>
+        <p class="muted" style="margin:0;font-size:.85rem">Automatically mints Microsoft Teams online meeting links via Microsoft 365 Graph API.</p>
+      </div>
+    </div>
+    <div>
+      <span class="pill ${opts.msConnected ? 'pill-ok' : ''}">${opts.msConnected ? `Connected (${esc(opts.msEmail || '')})` : 'Not Connected'}</span>
+    </div>
+  </div>
+  <div style="margin-top:1rem;display:flex;gap:.75rem;align-items:center">
+    <a href="/oauth/microsoft/authorize" class="submit" style="display:inline-block;text-decoration:none">${opts.msConnected ? 'Reconnect Microsoft Account' : 'Connect Microsoft 365 & Teams'}</a>
+  </div>
+</div>
+
+${CARD_CSS}
+<style>
+ .pill-ok{background:rgba(6,118,71,.12);color:var(--ok);border:1px solid rgba(6,118,71,.2)}
+</style>`,
   );
 }

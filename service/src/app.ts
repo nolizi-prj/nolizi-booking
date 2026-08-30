@@ -22,6 +22,7 @@ import {
   signupPage, webhooksPage, workflowsPage,
   teamPage,
   snippetPage,
+  integrationsPage,
   type ScheduleSummary,
 } from './pages.ts';
 import {
@@ -1867,6 +1868,46 @@ async function handleRoutes(
             [owner.owner_id, nextLogo, now]);
         }
         return { status: 303, headers: { location: '/app/settings' }, body: '' };
+      }
+    }
+
+    // ── apps & video integrations (Calendly workflow) ───────────────────
+    if (parts[1] === 'integrations') {
+      if (req.method === 'GET' && !parts[2]) {
+        const conns = deps.calendars ? await deps.calendars.listConnections(sql, owner.owner_id) : [];
+        const google = conns.find((c) => c.provider === 'google');
+        const ms = conns.find((c) => c.provider === 'microsoft');
+        const zoomRow = await sql.query(
+          `SELECT location_value FROM schedules WHERE owner_id = $1 AND location_kind = 'zoom' LIMIT 1`,
+          [owner.owner_id],
+        );
+        const zoomLink = zoomRow.rows[0]?.['location_value'] ? String(zoomRow.rows[0]['location_value']) : undefined;
+        const zoomConnected = Boolean(zoomLink || (config.zoomAccountId && config.zoomClientId));
+
+        return html(
+          200,
+          integrationsPage({
+            googleConnected: Boolean(google),
+            googleEmail: google?.account_email,
+            msConnected: Boolean(ms),
+            msEmail: ms?.account_email,
+            zoomConnected,
+            zoomLink,
+            zoomAccountId: config.zoomAccountId,
+            baseUrl: config.baseUrl,
+          }),
+        );
+      }
+      if (req.method === 'POST' && parts[2] === 'zoom') {
+        const form = req.form ?? {};
+        const zoomLink = (form['zoom_link'] ?? '').trim();
+        if (zoomLink) {
+          await sql.query(
+            `UPDATE schedules SET location_value = $2 WHERE owner_id = $1 AND location_kind = 'zoom'`,
+            [owner.owner_id, zoomLink],
+          );
+        }
+        return { status: 303, headers: { location: '/app/integrations' }, body: '' };
       }
     }
 
