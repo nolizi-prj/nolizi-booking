@@ -22,7 +22,7 @@ and polish, and the list reflects that.
 ## The order
 
 **1 · CHARTER §5.1 reporting path and opt-out** — source:
-[`DEBT.md` D-108](https://github.com/pumasi-ai/governance/blob/main/governance/DEBT.md),
+[`DEBT.md` D-108](https://github.com/pumasi-ai/pumasi/blob/main/governance/DEBT.md),
 with the retention schedule of D-107 published alongside.
 Why here: D-108's own trigger is "any release after this one," so nothing
 below this line can release before it exists; it is also the only way the test
@@ -66,7 +66,7 @@ user-facing items because no user can currently be hurt by it.
 ## Held, not ordered
 
 - **Counsel review and the transfer position** —
-  [`DEBT.md` D-105](https://github.com/pumasi-ai/governance/blob/main/governance/DEBT.md):
+  [`DEBT.md` D-105](https://github.com/pumasi-ai/pumasi/blob/main/governance/DEBT.md):
   a `HUMAN.md` item; agents have drafted everything around it. Gates
   `launched` in [`STAGE.md`](STAGE.md), not any build below.
 - **Payments; AI scheduling suggestions** — excluded by steward decision
