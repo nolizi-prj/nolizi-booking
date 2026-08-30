@@ -945,7 +945,7 @@ async function handleRoutes(
     const owner = await ownerForSession(sql, sessionId, now);
     if (!owner) return { status: 303, headers: { location: '/login' }, body: '' };
     if (!config.zoomClientId) {
-      return html(400, errorPage(400, 'Zoom OAuth is ready. Please configure ZOOM_CLIENT_ID & ZOOM_CLIENT_SECRET or set your Personal Zoom Link in Apps & Video.'));
+      return { status: 303, headers: { location: '/app/integrations?zoom_needed=1' }, body: '' };
     }
     const hub = deps.calendars;
     const state = hub ? await hub.sealState({
@@ -1937,6 +1937,10 @@ async function handleRoutes(
         const zoomLink = zoomRow.rows[0]?.['location_value'] ? String(zoomRow.rows[0]['location_value']) : undefined;
         const zoomConnected = Boolean(zoomLink || (config.zoomAccountId && config.zoomClientId));
 
+        const notice = req.query?.['zoom_needed'] === '1'
+          ? 'To enable 1-Click Zoom OAuth connect, provide your Zoom Client ID & Client Secret below, or set them as environment variables.'
+          : undefined;
+
         return html(
           200,
           integrationsPage({
@@ -1948,6 +1952,7 @@ async function handleRoutes(
             zoomLink,
             zoomAccountId: config.zoomAccountId,
             baseUrl: config.baseUrl,
+            notice,
           }),
         );
       }

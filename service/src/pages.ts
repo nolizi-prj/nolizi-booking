@@ -189,6 +189,10 @@ const SHELL = (title: string, rawBody: string): string => {
  label{display:block;margin:.8rem 0 .3rem;font-size:.88rem;font-weight:550;color:var(--fg)}
  input,select,textarea{width:100%;padding:.55rem .7rem;border:1px solid var(--line);
    border-radius:8px;background:var(--surface);color:var(--fg);font:inherit;font-size:.94rem}
+ select option,select optgroup{background:var(--surface);color:var(--fg)}
+ @media(prefers-color-scheme:dark){
+   select,select option,select optgroup{background-color:#161922!important;color:#e7eaf0!important}
+ }
  input:hover,select:hover{border-color:var(--muted)}
  input[type=checkbox],input[type=radio]{width:auto;accent-color:var(--accent)}
  .submit{margin-top:1rem;padding:.55rem 1.05rem;border:0;border-radius:8px;
@@ -223,7 +227,7 @@ table.rows{border-collapse:collapse;width:100%}
    padding:.6rem .8rem;margin:1rem 0;border-radius:0 8px 8px 0}
 
  /* feedback widget */
- .pf-widget{position:fixed;bottom:1.25rem;right:1.25rem;z-index:990}
+ .pf-widget{position:fixed;bottom:1.25rem;right:1.25rem;z-index:999990}
  .pf-trigger-btn{display:inline-flex;align-items:center;gap:.45rem;padding:.5rem .9rem;
    border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg);
    font:inherit;font-size:.85rem;font-weight:600;cursor:pointer;box-shadow:var(--shadow);
@@ -231,8 +235,8 @@ table.rows{border-collapse:collapse;width:100%}
  .pf-trigger-btn:hover{transform:translateY(-1px);border-color:var(--accent);box-shadow:0 4px 12px rgba(16,24,40,.1)}
  .pf-trigger-btn svg{color:var(--accent)}
  
- .pf-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);
-   display:flex;align-items:center;justify-content:center;padding:1rem;z-index:999}
+ .pf-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);
+   display:flex;align-items:center;justify-content:center;padding:1rem;z-index:999999}
  .pf-backdrop[hidden]{display:none}
  .pf-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;
    width:100%;max-width:32rem;max-height:92vh;overflow-y:auto;box-shadow:0 12px 32px rgba(0,0,0,.15);
@@ -2848,12 +2852,14 @@ function calendarSection(connections: ConnectionView[]): string {
     pages. While a connection is broken, no times are offered — the service
     refuses rather than double-books.</p>
   ${rows || '<p class="muted">No calendar connected. Times are offered from your weekly hours alone.</p>'}
-  <form method="post" action="/app/calendar/google/connect" style="display:inline">
-    <button class="submit" type="submit">Connect Google Calendar</button>
-  </form>
-  <form method="post" action="/app/calendar/microsoft/connect" style="display:inline">
-    <button class="submit" type="submit">Connect Microsoft 365 / Outlook</button>
-  </form>
+  <div style="margin-top:1.5rem;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">
+    <form method="post" action="/app/calendar/google/connect" style="display:inline;margin:0">
+      <button class="submit" type="submit" style="margin:0">Connect Google Calendar</button>
+    </form>
+    <form method="post" action="/app/calendar/microsoft/connect" style="display:inline;margin:0">
+      <button class="submit" type="submit" style="margin:0">Connect Microsoft 365 / Outlook</button>
+    </form>
+  </div>
 </div>`;
 }
 
@@ -3052,12 +3058,14 @@ export function integrationsPage(opts: {
   zoomLink?: string;
   zoomAccountId?: string;
   baseUrl: string;
+  notice?: string;
 }): string {
   return SHELL(
     'Apps & Video Integrations',
     `<!--nav:integrations-->
 <h1>Apps & Video Integrations</h1>
 <p class="muted">Connect your video conferencing and calendar accounts so Pumasi can auto-mint meeting links and prevent double bookings.</p>
+${opts.notice ? `<p class="ok" style="border-left-color:var(--accent);background:var(--accent-soft);color:var(--fg)">${esc(opts.notice)}</p>` : ''}
 
 <div class="card">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem">
