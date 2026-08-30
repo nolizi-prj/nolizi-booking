@@ -32,6 +32,8 @@ import type { SqlClient, Transactor } from './store.ts';
 import { Serialiser } from './driver.ts';
 import { bindable, normalizeDbError, splitSqlStatements, translateSql } from './sqlite-dialect.ts';
 import { CalendarHub } from './calendars.ts';
+import { GoogleCalendarProvider } from './calendar-google.ts';
+import { MicrosoftCalendarProvider } from './calendar-microsoft.ts';
 import { Directory, dispatchDirectoryCall, type DirectoryCall } from './directory.ts';
 import { googleSsoExchange, googleSsoUrl } from './sso-google.ts';
 import { microsoftSsoExchange, microsoftSsoUrl } from './sso-microsoft.ts';
