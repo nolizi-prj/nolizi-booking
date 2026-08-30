@@ -57,6 +57,19 @@ clause declared but not implemented.
 Why here: small, and it closes the spec's only admitted gap; below the
 user-facing items because no user can currently be hurt by it.
 
+**6 · Zoom connect polish** — source: steward's Zoom E2E test, 2026-08-30
+(routing bug fixed and verified in `632a1a1`; these are what the test also
+surfaced). (a) The integrations page never reflects a completed connect — no
+connection is stored, so "Not Connected" shows forever and a failed connect
+looks identical to a successful one. (b) The public booking page prints the
+owner's personal meeting link *before* anyone books — anyone who loads the
+page can join the PMI. (c) The integrations card promises "unique meeting
+rooms per session" while the implementation stamps one personal meeting URL.
+Say what it does, or build per-booking meetings (`meeting:write:meeting` scope
+is already granted).
+Why here: correctness of what's shipped beats new surface, but nothing above
+it depends on it.
+
 ## Completed (2026-08-29)
 
 - **Microsoft sign-in at the front door** — [issue #5](https://github.com/pumasi-ai/pumasi-booking/issues/5) (closed via commit `66c93e9`).
