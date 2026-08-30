@@ -3,7 +3,7 @@
  *
  * OpenID Connect authorization-code flow against Microsoft identity platform v2.0.
  * Scope is openid email profile offline_access.
- * The id_token arrives directly from Microsoft over TLS; email/preferred_username
+ * The id_token arrives directly from Microsoft over TLS; email/preferred_username/upn
  * claim identifies the verified address.
  */
 
@@ -26,6 +26,19 @@ export function microsoftSsoUrl(opts: {
   return `${AUTH_URL}?${p}`;
 }
 
+function decodeBase64Url(str: string): string {
+  let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4 !== 0) {
+    base64 += '=';
+  }
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 export async function microsoftSsoExchange(opts: {
   clientId: string;
   clientSecret: string;
@@ -43,15 +56,25 @@ export async function microsoftSsoExchange(opts: {
       grant_type: 'authorization_code',
     }),
   });
-  if (!res.ok) throw new Error(`microsoft sso exchange failed: ${res.status}`);
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`microsoft sso exchange failed (${res.status}): ${errText.slice(0, 300)}`);
+  }
   const t = (await res.json()) as { id_token?: string };
-  if (!t.id_token) throw new Error('microsoft sso: no id_token');
-  const payload = t.id_token.split('.')[1] ?? '';
-  const claims = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))) as {
+  if (!t.id_token) throw new Error('microsoft sso: no id_token in response');
+  const parts = t.id_token.split('.');
+  if (parts.length < 2 || !parts[1]) throw new Error('microsoft sso: invalid id_token structure');
+
+  const payloadJson = decodeBase64Url(parts[1]);
+  const claims = JSON.parse(payloadJson) as {
     email?: string;
     preferred_username?: string;
+    upn?: string;
+    unique_name?: string;
   };
-  const email = claims.email ?? claims.preferred_username;
-  if (!email || !email.includes('@')) throw new Error('microsoft sso: no email in id_token');
+  const email = (claims.email ?? claims.preferred_username ?? claims.upn ?? claims.unique_name)?.trim().toLowerCase();
+  if (!email || !email.includes('@')) {
+    throw new Error(`microsoft sso: no valid email in claims: ${JSON.stringify(claims)}`);
+  }
   return { email, emailVerified: true };
 }

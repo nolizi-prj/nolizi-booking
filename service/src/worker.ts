@@ -365,7 +365,8 @@ function tagFromBearer(auth: string | null): string | undefined {
 
 export default {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
-    const url = new URL(request.url);
+    try {
+      const url = new URL(request.url);
     const seg = url.pathname.split('/').filter(Boolean);
     const config = loadConfig(env as never);
     const dir = directoryClient(env);
@@ -384,7 +385,7 @@ export default {
 
     const forward = async (
       tag: string,
-      opts: { path?: string; trusted?: Record<string, string>; orgCookie?: boolean } = {},
+      opts: { path?: string; trusted?: Record<string, string>; orgCookie?: boolean; method?: string } = {},
     ): Promise<Response> => {
       const target = new URL(url);
       if (opts.path) target.pathname = opts.path;
@@ -397,20 +398,28 @@ export default {
       const auth = request.headers.get('authorization');
       if (auth) headers.set('authorization', auth);
       for (const [k, v] of Object.entries(opts.trusted ?? {})) headers.set(k, v);
+      const method = opts.method ?? request.method;
       const res = await orgStub(tag).fetch(new Request(target.toString(), {
-        method: request.method,
+        method,
         headers,
-        body: rawBody,
+        body: method === 'GET' || method === 'HEAD' ? undefined : rawBody,
         // fetch defaults to redirect:'follow', which would silently chase the
         // org DO's 303s (and drop their Set-Cookie) — pass them through raw.
         redirect: 'manual',
       }));
       if (!opts.orgCookie) return res;
       // The routing cookie rides beside the session cookie.
-      const out = new Response(res.body, res);
-      out.headers.append('set-cookie',
-        `pumasi_org=${tag}; Path=/; Secure; SameSite=Lax; Max-Age=${config.sessionTtlHours * 3600}`);
-      return out;
+      // Create a fresh Headers object so append is always mutable on all runtimes.
+      const resHeaders = new Headers(res.headers);
+      resHeaders.append(
+        'set-cookie',
+        `pumasi_org=${tag}; Path=/; Secure; SameSite=Lax; Max-Age=${config.sessionTtlHours * 3600}`,
+      );
+      return new Response(res.status === 204 || res.status === 304 ? null : res.body, {
+        status: res.status,
+        statusText: res.statusText,
+        headers: resHeaders,
+      });
     };
 
     const hub = config.tokenKey ? new CalendarHub({}, config.tokenKey) : undefined;
@@ -629,6 +638,7 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
           }
           return forward(claim.tag, {
             path: '/signup',
+            method: 'POST',
             orgCookie: true,
             trusted: {
               'x-trusted-signup-email': email,
@@ -661,6 +671,7 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
           }
           return forward(claim.tag, {
             path: '/signup',
+            method: 'POST',
             orgCookie: true,
             trusted: {
               'x-trusted-signup-email': email,
@@ -710,6 +721,7 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
           }
           return forward(claim.tag, {
             path: '/signup',
+            method: 'POST',
             orgCookie: true,
             trusted: {
               'x-trusted-signup-email': email,
@@ -733,6 +745,7 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
           }
           return forward(claim.tag, {
             path: '/signup',
+            method: 'POST',
             orgCookie: true,
             trusted: {
               'x-trusted-signup-email': email,
@@ -801,5 +814,9 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
     }
 
     return htmlResponse(404, errorPage(404, 'Nothing here.'));
+    } catch (err) {
+      console.error(`[worker] top-level error: ${(err as Error).stack ?? (err as Error).message}`);
+      return htmlResponse(500, errorPage(500, 'An unexpected error occurred. Please try again.'));
+    }
   },
 };

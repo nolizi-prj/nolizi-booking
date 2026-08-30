@@ -173,16 +173,93 @@ test('SSO with a valid invite creates the account and consumes the invite (Googl
   assert.ok(inv.rows[0]!['consumed_at'] !== null);
 });
 
-test('SSO for an unknown address without invite is refused while signup is closed', async () => {
-  const start = await call('POST', '/auth/google/start', { form: {} });
-  const state = new URL(start.headers['location']!).searchParams.get('state')!;
-  const restore = stubGoogle('stranger@example.com');
+test('SSO for an unknown address without invite is refused while signup is closed (Google & Microsoft)', async () => {
+  // Google stranger
+  const startG = await call('POST', '/auth/google/start', { form: {} });
+  const stateG = new URL(startG.headers['location']!).searchParams.get('state')!;
+  const restoreG = stubGoogle('stranger-g@example.com');
   try {
-    const cb = await call('GET', '/oauth/google/callback', { query: { code: 'c', state } });
+    const cb = await call('GET', '/oauth/google/callback', { query: { code: 'c', state: stateG } });
     assert.equal(cb.status, 403);
-  } finally { restore(); }
+  } finally { restoreG(); }
+
+  // Microsoft stranger
+  const startMs = await call('POST', '/auth/microsoft/start', { form: {} });
+  const stateMs = new URL(startMs.headers['location']!).searchParams.get('state')!;
+  const restoreMs = stubMicrosoft('stranger-ms@example.com');
+  try {
+    const cb = await call('GET', '/oauth/microsoft/callback', { query: { code: 'c', state: stateMs } });
+    assert.equal(cb.status, 403);
+  } finally { restoreMs(); }
+
   const c = await db.query(`SELECT count(*)::int AS c FROM owners`);
   assert.equal(Number(c.rows[0]!['c']), 0);
+});
+
+test('Microsoft SSO End-to-End: handles Office 365 UPN, preferred_username, and logs in to dashboard', async () => {
+  // 1. New account via Microsoft SSO with valid invite and UPN claim
+  await db.query(`INSERT INTO invites (code) VALUES ('inv-o365')`);
+  const start = await call('POST', '/auth/microsoft/start', {
+    form: { invite: 'inv-o365', timezone: 'America/Chicago' },
+  });
+  assert.equal(start.status, 303);
+  const locationUrl = new URL(start.headers['location']!);
+  assert.equal(locationUrl.hostname, 'login.microsoftonline.com');
+  assert.equal(locationUrl.searchParams.get('client_id'), 'ms-cid');
+  assert.equal(locationUrl.searchParams.get('response_type'), 'code');
+  assert.ok(locationUrl.searchParams.get('scope')!.includes('openid'));
+
+  const state = locationUrl.searchParams.get('state')!;
+
+  // Mock Microsoft token response with Office 365 UPN claim
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: unknown, init?: unknown) => {
+    if (String(url).includes('login.microsoftonline.com') && String(url).includes('token')) {
+      const payload = Buffer.from(JSON.stringify({
+        upn: 'ceo@mycompany.onmicrosoft.com',
+        name: 'Jane Doe',
+      })).toString('base64url');
+      return new Response(JSON.stringify({ id_token: `header.${payload}.signature` }), { status: 200 });
+    }
+    return realFetch(url as never, init as never);
+  }) as typeof fetch;
+
+  let sessionCookie: string;
+  try {
+    const cb = await call('GET', '/oauth/microsoft/callback', { query: { code: 'ms-auth-code', state } });
+    assert.equal(cb.status, 303);
+    assert.equal(cb.headers['location'], '/app');
+    sessionCookie = cookieOf(cb as never);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
+  // 2. Verified owner exists in database with proper timezone and slug
+  const owner = await db.query(`SELECT owner_id, email, timezone, link_slug FROM owners WHERE email = 'ceo@mycompany.onmicrosoft.com'`);
+  assert.equal(owner.rows.length, 1);
+  assert.equal(String(owner.rows[0]!['timezone']), 'America/Chicago');
+  assert.equal(String(owner.rows[0]!['link_slug']), 'ceo');
+
+  // 3. Access owner dashboard with session cookie
+  const dash = await call('GET', '/app', { cookie: sessionCookie });
+  assert.equal(dash.status, 200);
+  assert.ok(dash.body.includes('/ceo'));
+
+  // 4. Second sign-in with same Microsoft account (existing owner flow)
+  const start2 = await call('POST', '/auth/microsoft/start', { form: {} });
+  const state2 = new URL(start2.headers['location']!).searchParams.get('state')!;
+
+  const restore = stubMicrosoft('ceo@mycompany.onmicrosoft.com');
+  try {
+    const cb2 = await call('GET', '/oauth/microsoft/callback', { query: { code: 'ms-code-2', state: state2 } });
+    assert.equal(cb2.status, 303);
+    assert.equal(cb2.headers['location'], '/app');
+    const dash2 = await call('GET', '/app', { cookie: cookieOf(cb2 as never) });
+    assert.equal(dash2.status, 200);
+    assert.ok(dash2.body.includes('/ceo'));
+  } finally {
+    restore();
+  }
 });
 
 test('an unverified Google email is refused', async () => {
