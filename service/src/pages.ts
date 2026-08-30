@@ -907,30 +907,53 @@ export function errorPage(code: number, message: string): string {
 
 // ── owner surfaces ─────────────────────────────────────────────────────────
 
-/** P4 — the "Continue with Google" form, shared by sign-in and sign-up. */
-function googleButton(inviteCode = ''): string {
-  return `<form method="post" action="/auth/google/start" class="ssoform">
+export interface SsoOptions {
+  google?: boolean;
+  microsoft?: boolean;
+}
+
+/** P4 & Issue #5 — SSO buttons for Google and Microsoft. */
+function ssoButtons(inviteCode = '', sso: boolean | SsoOptions = true): string {
+  const google = typeof sso === 'boolean' ? sso : (sso.google ?? false);
+  const microsoft = typeof sso === 'boolean' ? false : (sso.microsoft ?? false);
+  if (!google && !microsoft) return '';
+
+  const buttons: string[] = [];
+  if (google) {
+    buttons.push(`<form method="post" action="/auth/google/start" class="ssoform">
   <input type="hidden" name="invite" value="${esc(inviteCode)}">
   <input type="hidden" name="timezone" class="tzauto">
   <button class="submit sso" type="submit">Continue with Google</button>
-</form>
+</form>`);
+  }
+  if (microsoft) {
+    buttons.push(`<form method="post" action="/auth/microsoft/start" class="ssoform">
+  <input type="hidden" name="invite" value="${esc(inviteCode)}">
+  <input type="hidden" name="timezone" class="tzauto">
+  <button class="submit sso sso-ms" type="submit">Continue with Microsoft</button>
+</form>`);
+  }
+
+  return `${buttons.join('\n')}
 <p class="muted" style="text-align:center">or</p>
 <script>document.querySelectorAll('.tzauto').forEach(function(i){
   try{i.value=Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'}catch(e){}});</script>
 <style>.sso{background:transparent;color:var(--accent);border:1px solid var(--accent)}
-.ssoform{margin:1rem 0 .25rem}</style>`;
+.sso-ms{color:var(--fg);border:1px solid var(--line)}
+.sso-ms:hover{background:var(--line-soft)}
+.ssoform{margin:.4rem 0}</style>`;
 }
 
 export function signupPage(
   inviteCode: string,
   error?: string,
-  opts: { sso?: boolean; publicSignup?: boolean } = {},
+  opts: { sso?: boolean | SsoOptions; publicSignup?: boolean } = {},
 ): string {
   return SHELL(
     'Create your account',
     `<h1>Create your account</h1>
 ${error ? `<p class="err">${esc(error)}</p>` : ''}
-${opts.sso ? googleButton(inviteCode) : ''}
+${opts.sso ? ssoButtons(inviteCode, opts.sso) : ''}
 <form method="post" action="/signup">
   <input type="hidden" name="invite" value="${esc(inviteCode)}">
   <label for="e">Email</label><input id="e" name="email" type="email" required autocomplete="email">
@@ -945,7 +968,7 @@ ${opts.sso ? googleButton(inviteCode) : ''}
   );
 }
 
-export function loginPage(sent?: boolean, error?: string, sso?: boolean): string {
+export function loginPage(sent?: boolean, error?: string, sso?: boolean | SsoOptions): string {
   return SHELL(
     'Sign in',
     `<h1>Sign in</h1>
@@ -954,7 +977,7 @@ ${
   sent
     ? `<p class="ok">If that address has an account, a sign-in link is on its way.
          It works once and expires in 20 minutes.</p>`
-    : `${sso ? googleButton() : ''}
+    : `${sso ? ssoButtons('', sso) : ''}
        <form method="post" action="/login">
          <label for="e">Email</label><input id="e" name="email" type="email" required autocomplete="email">
          <p class="notice">We send a link rather than asking for a password. There
@@ -1826,8 +1849,12 @@ export function eventTypeEditor(
     )
     .join('');
   const kinds: [string, string][] = [
-    ['custom', 'Custom note'], ['phone', 'Phone call'],
-    ['in_person', 'In person'], ['meet', 'Google Meet'],
+    ['custom', 'Custom note / Link'],
+    ['phone', 'Phone call'],
+    ['in_person', 'In person'],
+    ['meet', 'Google Meet (auto-generated)'],
+    ['teams', 'Microsoft Teams (auto-generated)'],
+    ['zoom', 'Zoom (meeting / link)'],
   ];
   const kindOptions = kinds
     .map(([v, l]) => `<option value="${v}" ${v === s.location_kind ? 'selected' : ''}>${l}</option>`)

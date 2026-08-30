@@ -22,7 +22,7 @@ import type {
 } from '@pumasi/booking-core';
 import type { SqlClient } from './store.ts';
 
-export type LocationKind = 'custom' | 'phone' | 'in_person' | 'meet';
+export type LocationKind = 'custom' | 'phone' | 'in_person' | 'meet' | 'teams' | 'zoom';
 
 export interface Schedule {
   schedule_id: string;
@@ -341,6 +341,10 @@ export function locationText(schedule: Schedule, meetUrl?: string): string | und
       return schedule.location_value ?? undefined;
     case 'meet':
       return meetUrl ?? 'Google Meet — link arrives with the confirmation';
+    case 'teams':
+      return meetUrl ?? 'Microsoft Teams — link arrives with the confirmation';
+    case 'zoom':
+      return schedule.location_value ? `Zoom — ${schedule.location_value}` : (meetUrl ?? 'Zoom — link arrives with the confirmation');
     default:
       return schedule.location_value ?? undefined;
   }

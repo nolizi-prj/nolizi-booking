@@ -46,7 +46,9 @@ beforeEach(async () => {
     sql: db, tx: db,
     config: loadConfig({
       BASE_URL: 'https://booking.test',
-      GOOGLE_OAUTH_CLIENT_ID: 'cid', GOOGLE_OAUTH_CLIENT_SECRET: 'csec', TOKEN_KEY: KEY,
+      GOOGLE_OAUTH_CLIENT_ID: 'cid', GOOGLE_OAUTH_CLIENT_SECRET: 'csec',
+      MS_OAUTH_CLIENT_ID: 'ms-cid', MS_OAUTH_CLIENT_SECRET: 'ms-csec',
+      TOKEN_KEY: KEY,
     } as NodeJS.ProcessEnv),
     mail: new RetryingMail(new RecordingMail()),
     now: () => NOW,
@@ -75,6 +77,20 @@ function stubGoogle(email: string, verified = true): () => void {
   return () => { globalThis.fetch = realFetch; };
 }
 
+/** Microsoft token endpoint stub. */
+function stubMicrosoft(email: string): () => void {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: unknown, init?: unknown) => {
+    if (String(url).includes('login.microsoftonline.com') && String(url).includes('token')) {
+      const payload = Buffer.from(JSON.stringify({ email, preferred_username: email }))
+        .toString('base64url');
+      return new Response(JSON.stringify({ id_token: `h.${payload}.s` }), { status: 200 });
+    }
+    return realFetch(url as never, init as never);
+  }) as typeof fetch;
+  return () => { globalThis.fetch = realFetch; };
+}
+
 async function makeOwner(email: string): Promise<string> {
   await db.query(`INSERT INTO invites (code) VALUES ($1)`, [`inv-${email}`]);
   const r = await call('POST', '/signup', {
@@ -83,28 +99,61 @@ async function makeOwner(email: string): Promise<string> {
   return cookieOf(r as never);
 }
 
-test('login page offers Google when configured', async () => {
+test('login page offers Google and Microsoft when configured', async () => {
   const page = await call('GET', '/login');
   assert.ok(page.body.includes('/auth/google/start'));
+  assert.ok(page.body.includes('/auth/microsoft/start'));
 });
 
-test('SSO signs an existing owner in', async () => {
-  await makeOwner('sso@example.com');
-  const start = await call('POST', '/auth/google/start', { form: {} });
-  assert.equal(start.status, 303);
-  const state = new URL(start.headers['location']!).searchParams.get('state')!;
+test('SSO signs an existing owner in (Google & Microsoft)', async () => {
+  // Google SSO
+  await makeOwner('sso-google@example.com');
+  const startG = await call('POST', '/auth/google/start', { form: {} });
+  assert.equal(startG.status, 303);
+  const stateG = new URL(startG.headers['location']!).searchParams.get('state')!;
 
-  const restore = stubGoogle('sso@example.com');
+  const restoreG = stubGoogle('sso-google@example.com');
   try {
-    const cb = await call('GET', '/oauth/google/callback', { query: { code: 'c', state } });
+    const cb = await call('GET', '/oauth/google/callback', { query: { code: 'c', state: stateG } });
     assert.equal(cb.status, 303);
     assert.equal(cb.headers['location'], '/app');
-    const dash = await call('GET', '/app', { cookie: cookieOf(cb as never) });
-    assert.equal(dash.status, 200);
-  } finally { restore(); }
+  } finally { restoreG(); }
+
+  // Microsoft SSO (Issue #5)
+  await makeOwner('sso-ms@example.com');
+  const startMs = await call('POST', '/auth/microsoft/start', { form: {} });
+  assert.equal(startMs.status, 303);
+  const stateMs = new URL(startMs.headers['location']!).searchParams.get('state')!;
+
+  const restoreMs = stubMicrosoft('sso-ms@example.com');
+  try {
+    const cb = await call('GET', '/oauth/microsoft/callback', { query: { code: 'c', state: stateMs } });
+    assert.equal(cb.status, 303);
+    assert.equal(cb.headers['location'], '/app');
+  } finally { restoreMs(); }
 });
 
-test('SSO with a valid invite creates the account and consumes the invite', async () => {
+test('SSO with a valid invite creates the account and consumes the invite (Microsoft)', async () => {
+  await db.query(`INSERT INTO invites (code) VALUES ('inv-ms-new')`);
+  const start = await call('POST', '/auth/microsoft/start', {
+    form: { invite: 'inv-ms-new', timezone: 'Asia/Seoul' },
+  });
+  const state = new URL(start.headers['location']!).searchParams.get('state')!;
+
+  const restore = stubMicrosoft('msnew@example.com');
+  try {
+    const cb = await call('GET', '/oauth/microsoft/callback', { query: { code: 'c', state } });
+    assert.equal(cb.status, 303);
+  } finally { restore(); }
+
+  const o = await db.query(`SELECT timezone, link_slug FROM owners WHERE email = 'msnew@example.com'`);
+  assert.equal(String(o.rows[0]!['timezone']), 'Asia/Seoul');
+  assert.equal(String(o.rows[0]!['link_slug']), 'msnew');
+  const inv = await db.query(`SELECT consumed_at FROM invites WHERE code = 'inv-ms-new'`);
+  assert.ok(inv.rows[0]!['consumed_at'] !== null);
+});
+
+test('SSO with a valid invite creates the account and consumes the invite (Google)', async () => {
   await db.query(`INSERT INTO invites (code) VALUES ('inv-sso-new')`);
   const start = await call('POST', '/auth/google/start', {
     form: { invite: 'inv-sso-new', timezone: 'Europe/Berlin' },
@@ -274,5 +323,43 @@ test('Issue #6 · home page renders hero, feature cards, how it works, and CTA',
   assert.ok(openHome.body.includes('/signup'));
   assert.ok(openHome.body.includes('/privacy'));
   assert.ok(openHome.body.includes('/terms'));
+});
+
+test('Issue #4 · video chat options (Meet, Teams, Zoom) in editor and location text', async () => {
+  const cookie = await makeOwner('video@example.com');
+  const create = await call('POST', '/app/schedules', {
+    cookie, form: { title: 'Teams Sync', slug: 'teams-sync', duration_minutes: '30' },
+  });
+  const schedRes = await db.query(`SELECT schedule_id FROM schedules WHERE slug = 'teams-sync'`);
+  const scheduleId = String(schedRes.rows[0]!['schedule_id']);
+
+  // Edit event with location_kind = teams
+  await call('POST', `/app/event/${scheduleId}`, {
+    cookie,
+    form: {
+      title: 'Teams Sync',
+      duration_minutes: '30',
+      location_kind: 'teams',
+    },
+  });
+
+  const editor = await call('GET', `/app/event/${scheduleId}`, { cookie });
+  assert.ok(editor.body.includes('Microsoft Teams (auto-generated)'));
+  assert.ok(editor.body.includes('Zoom (meeting / link)'));
+  assert.ok(editor.body.includes('Google Meet (auto-generated)'));
+
+  // Edit event with location_kind = zoom
+  await call('POST', `/app/event/${scheduleId}`, {
+    cookie,
+    form: {
+      title: 'Zoom Catchup',
+      duration_minutes: '30',
+      location_kind: 'zoom',
+      location_value: 'https://zoom.us/j/123456789',
+    },
+  });
+
+  const editor2 = await call('GET', `/app/event/${scheduleId}`, { cookie });
+  assert.ok(editor2.body.includes('https://zoom.us/j/123456789'));
 });
 

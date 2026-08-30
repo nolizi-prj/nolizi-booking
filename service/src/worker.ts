@@ -32,11 +32,9 @@ import type { SqlClient, Transactor } from './store.ts';
 import { Serialiser } from './driver.ts';
 import { bindable, normalizeDbError, translateSql } from './sqlite-dialect.ts';
 import { CalendarHub } from './calendars.ts';
-import { GoogleCalendarProvider } from './calendar-google.ts';
-import { MicrosoftCalendarProvider } from './calendar-microsoft.ts';
-import { processDueJobs } from './automation.ts';
 import { Directory, dispatchDirectoryCall, type DirectoryCall } from './directory.ts';
 import { googleSsoExchange, googleSsoUrl } from './sso-google.ts';
+import { microsoftSsoExchange, microsoftSsoUrl } from './sso-microsoft.ts';
 import { errorPage, FAVICON_SVG, homePage, legalPage, loginPage, signupPage } from './pages.ts';
 import { LEGAL_DOCS } from './legal.ts';
 // Bundled as text via the `rules` entry in wrangler.jsonc.
@@ -416,7 +414,7 @@ export default {
     };
 
     const hub = config.tokenKey ? new CalendarHub({}, config.tokenKey) : undefined;
-    const ssoEnabled = Boolean(config.googleClientId);
+    const ssoEnabled = { google: Boolean(config.googleClientId), microsoft: Boolean(config.msClientId) };
 
     // ── global, data-free surfaces ─────────────────────────────────────────
     if (url.pathname === '/healthz') {
@@ -569,6 +567,24 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
       }), 303);
     }
 
+    // "Continue with Microsoft": the router seals the state and runs the
+    // exchange; the directory decides which world the identity belongs to.
+    if (url.pathname === '/auth/microsoft/start' && request.method === 'POST') {
+      if (!hub || !config.msClientId) {
+        return htmlResponse(404, errorPage(404, 'Microsoft sign-in is not configured.'));
+      }
+      const state = await hub.sealState({
+        purpose: 'sso_ms',
+        invite: (form['invite'] ?? '').trim(),
+        timezone: (form['timezone'] ?? '').trim(),
+      });
+      return Response.redirect(microsoftSsoUrl({
+        clientId: config.msClientId,
+        redirectUri: `${config.baseUrl}/oauth/microsoft/callback`,
+        state,
+      }), 303);
+    }
+
     if (seg[0] === 'oauth' && seg[2] === 'callback' && request.method === 'GET') {
       if (!hub) return htmlResponse(404, errorPage(404, 'Not configured.'));
       const state = await hub.openState(url.searchParams.get('state') ?? '');
@@ -640,6 +656,78 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
           if (!claim.ok) {
             // The ceiling is the one distinguishable refusal (I8): a fact
             // about the deployment, not about any person.
+            return htmlResponse(400, errorPage(400,
+              'This service has reached its account limit and is not taking more.'));
+          }
+          return forward(claim.tag, {
+            path: '/signup',
+            orgCookie: true,
+            trusted: {
+              'x-trusted-signup-email': email,
+              'x-trusted-name': email.split('@')[0] ?? 'user',
+              'x-trusted-tz': state['timezone'] || 'UTC',
+              'x-trusted-new-org': claim.newOrg ? '1' : '0',
+            },
+          });
+        }
+        return htmlResponse(403, errorPage(403,
+          'No account for that address. Accounts are invite-only while this service is small.'));
+      }
+      if (state['purpose'] === 'sso_ms' || (seg[1] === 'microsoft' && state['purpose'] === 'sso')) {
+        if (!config.msClientId || !config.msClientSecret) {
+          return htmlResponse(404, errorPage(404, 'Microsoft sign-in is not configured.'));
+        }
+        let email: string;
+        try {
+          const who = await microsoftSsoExchange({
+            clientId: config.msClientId,
+            clientSecret: config.msClientSecret,
+            code,
+            redirectUri: `${config.baseUrl}/oauth/microsoft/callback`,
+          });
+          if (!who.emailVerified) {
+            return htmlResponse(403, errorPage(403, 'That Microsoft account has no verified email.'));
+          }
+          email = who.email;
+        } catch {
+          return htmlResponse(502, errorPage(502, 'Microsoft did not complete the sign-in. Try again.'));
+        }
+        const existing = await dir('lookup', 'email', email);
+        if (existing) {
+          return forward(String(existing), {
+            path: '/internal/sso-login',
+            orgCookie: true,
+            trusted: { 'x-trusted-sso-email': email },
+          });
+        }
+        if (state['invite']) {
+          const claim = (await dir('claimSignup', state['invite'], email)) as
+            | { ok: true; tag: string; newOrg: boolean }
+            | { ok: false; reason: string };
+          if (!claim.ok) {
+            return htmlResponse(400, errorPage(400,
+              'That invite is not valid, already used, or every seat is taken.'));
+          }
+          return forward(claim.tag, {
+            path: '/signup',
+            orgCookie: true,
+            trusted: {
+              'x-trusted-signup-email': email,
+              'x-trusted-name': email.split('@')[0] ?? 'user',
+              'x-trusted-tz': state['timezone'] || 'UTC',
+              'x-trusted-new-org': claim.newOrg ? '1' : '0',
+            },
+          });
+        }
+        if (config.publicSignup) {
+          const ssoIp = request.headers.get('cf-connecting-ip') ?? 'unknown';
+          if (await dir('overSignupLimit', ssoIp, RATE_LIMITS.signups_per_ip_per_hour, 3600)) {
+            return htmlResponse(429, errorPage(429, 'Too many sign-up attempts. Try again later.'));
+          }
+          const claim = (await dir('claimSignupPublic', email)) as
+            | { ok: true; tag: string; newOrg: boolean }
+            | { ok: false; reason: string };
+          if (!claim.ok) {
             return htmlResponse(400, errorPage(400,
               'This service has reached its account limit and is not taking more.'));
           }

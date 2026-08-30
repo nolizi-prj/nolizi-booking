@@ -29,6 +29,7 @@ import {
   issueSignInToken, ownerForSession, readCookie, redeemInvite, RESERVED_SLUGS, sessionCookie,
 } from './identity.ts';
 import { googleSsoExchange, googleSsoUrl } from './sso-google.ts';
+import { microsoftSsoExchange, microsoftSsoUrl } from './sso-microsoft.ts';
 import { discoverOidc, oidcAuthUrl, oidcExchange } from './sso-oidc.ts';
 import { RATE_LIMITS, type Config } from './config.ts';
 import type { CalendarHub } from './calendars.ts';
@@ -745,7 +746,7 @@ async function handleRoutes(
     // invite is the only way in. With the flag on, the same page works without one.
     if (req.method === 'GET') {
       return html(200, signupPage(req.query?.['invite'] ?? '', undefined,
-        { sso: Boolean(config.googleClientId), publicSignup: config.publicSignup }));
+        { sso: { google: Boolean(config.googleClientId), microsoft: Boolean(config.msClientId) }, publicSignup: config.publicSignup }));
     }
     const f = req.form ?? {};
     const inviteCode = (f['invite'] ?? '').trim();
@@ -842,7 +843,7 @@ async function handleRoutes(
   }
 
   if (parts[0] === 'login') {
-    if (req.method === 'GET') return html(200, loginPage(undefined, undefined, Boolean(config.googleClientId)));
+    if (req.method === 'GET') return html(200, loginPage(undefined, undefined, { google: Boolean(config.googleClientId), microsoft: Boolean(config.msClientId) }));
     const email = (req.form?.['email'] ?? '').trim();
     // P8 · a domain claimed by an organization's SSO is steered to its IdP.
     const domain = email.slice(email.indexOf('@') + 1).toLowerCase();
@@ -883,6 +884,30 @@ async function handleRoutes(
         location: googleSsoUrl({
           clientId: config.googleClientId,
           redirectUri: `${config.baseUrl}/oauth/google/callback`,
+          state,
+        }),
+      },
+      body: '',
+    };
+  }
+
+  // ── "Sign in with Microsoft" (Issue #5) — openid+email+profile only ────────
+  if (parts[0] === 'auth' && parts[1] === 'microsoft' && parts[2] === 'start' && req.method === 'POST') {
+    const hub = deps.calendars;
+    if (!hub || !config.msClientId) {
+      return html(404, errorPage(404, 'Microsoft sign-in is not configured.'));
+    }
+    const state = await hub.sealState({
+      purpose: 'sso_ms',
+      invite: (req.form?.['invite'] ?? '').trim(),
+      timezone: (req.form?.['timezone'] ?? '').trim(),
+    });
+    return {
+      status: 303,
+      headers: {
+        location: microsoftSsoUrl({
+          clientId: config.msClientId,
+          redirectUri: `${config.baseUrl}/oauth/microsoft/callback`,
           state,
         }),
       },
@@ -936,6 +961,63 @@ async function handleRoutes(
       } catch (err) {
         console.warn(`[sso] google exchange failed: ${(err as Error).message}`);
         return html(502, errorPage(502, 'Google did not complete the sign-in. Try again.'));
+      }
+      const found = await sql.query(
+        `SELECT owner_id FROM owners WHERE lower(email) = lower($1)`, [email]);
+      let ownerId = found.rows[0] ? String(found.rows[0]['owner_id']) : undefined;
+      if (!ownerId) {
+        const input = {
+          email,
+          displayName: email.split('@')[0]!,
+          timezone: state['timezone'] || 'UTC',
+        };
+        const made = state['invite']
+          ? await redeemInvite(sql, deps.tx, { code: state['invite'], ...input }, config.maxOwnerAccounts)
+          : config.publicSignup
+            ? await createOwnerDirect(sql, deps.tx, input, config.maxOwnerAccounts)
+            : undefined;
+        if (!made) {
+          return html(403, errorPage(403,
+            'No account for that address. Accounts are invite-only while this service is small.'));
+        }
+        if (!made.ok) {
+          const message = made.reason === 'ceiling'
+            ? 'This service has reached its account limit and is not taking more.'
+            : made.reason === 'already_registered'
+              ? 'That address already has an account. Sign in instead.'
+              : 'That invite is not valid or has already been used.';
+          return html(400, errorPage(400, message));
+        }
+        ownerId = made.owner.owner_id;
+      }
+      const sid = await createSession(sql, ownerId, now, config.sessionTtlHours);
+      return {
+        status: 303,
+        headers: { location: '/app', 'set-cookie': sessionCookie(sid, secure, config.sessionTtlHours) },
+        body: '',
+      };
+    }
+
+    // Issue #5 · "Sign in with Microsoft"
+    if (state['purpose'] === 'sso_ms' || (parts[1] === 'microsoft' && state['purpose'] === 'sso')) {
+      if (!config.msClientId || !config.msClientSecret) {
+        return html(404, errorPage(404, 'Microsoft sign-in is not configured.'));
+      }
+      let email: string;
+      try {
+        const who = await microsoftSsoExchange({
+          clientId: config.msClientId,
+          clientSecret: config.msClientSecret,
+          code,
+          redirectUri: `${config.baseUrl}/oauth/microsoft/callback`,
+        });
+        if (!who.emailVerified) {
+          return html(403, errorPage(403, 'That Microsoft account has no verified email address.'));
+        }
+        email = who.email;
+      } catch (err) {
+        console.warn(`[sso] microsoft exchange failed: ${(err as Error).message}`);
+        return html(502, errorPage(502, 'Microsoft did not complete the sign-in. Try again.'));
       }
       const found = await sql.query(
         `SELECT owner_id FROM owners WHERE lower(email) = lower($1)`, [email]);
@@ -3133,7 +3215,7 @@ async function bookHandler(
       description: `Booked via ${config.baseUrl}/${schedule.slug}\nWith: ${name} <${email}>`,
       start: o.start,
       end: o.end,
-      conference: i === 0 && schedule.location_kind === 'meet',
+      conference: i === 0 && (schedule.location_kind === 'meet' || schedule.location_kind === 'teams' || schedule.location_kind === 'zoom'),
     });
     if (i === 0) meetUrl = written?.meetUrl;
   }
