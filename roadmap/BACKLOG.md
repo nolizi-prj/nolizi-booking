@@ -28,48 +28,38 @@ Why here: D-108's own trigger is "any release after this one," so nothing
 below this line can release before it exists; it is also the only way the test
 matrix ever gets wider than one machine.
 
-**2 · Submit the Google OAuth app for verification** — source:
+**2 · Microsoft sign-in at the front door** — source:
+[issue #5](https://github.com/pumasi-ai/pumasi-booking/issues/5)
+(`enhancement, accepted`, priority: normal).
+Why here: the Microsoft 365 *calendar* adapter shipped (`8f9174c`); sign-in is
+the missing half of that pair, and the front door currently favours Google
+accounts. Needs its own Microsoft OAuth registration.
+
+**3 · Submit the Google OAuth app for verification** — source:
 [`0002-calendar-integration.md` §4](0002-calendar-integration.md);
 [`service/spec/0003/GOOGLE-SETUP.md`](../service/spec/0003/GOOGLE-SETUP.md)
 ("Not yet — deliberately").
 Why here: calendar truth is the product's central promise and today only
 nominated test accounts can connect; the blockers the setup doc waited on — a
 deployed homepage and a live privacy URL — now exist. *Mostly operator/steward
-action, not code; queue it in parallel with item 1, since it is calendar time,
-not work.*
+action, not code; queue it in parallel, since it is calendar time, not work.*
 
-**3 · Favicon not visible in the browser tab** — source:
-[issue #3](https://github.com/pumasi-ai/pumasi-booking/issues/3)
-(`bug, accepted`, priority: normal).
-Why here: the cheapest open trust fix — every visitor sees the tab before they
-see the product.
-
-**4 · Microsoft sign-in at the front door** — source:
-[issue #5](https://github.com/pumasi-ai/pumasi-booking/issues/5)
-(`enhancement, accepted`, priority: normal).
-Why here: the Microsoft 365 *calendar* adapter shipped (`8f9174c`); sign-in is
-the missing half of that pair, and the front door currently favours Google
-accounts. Needs its own Microsoft OAuth registration (operator action, same
-shape as item 2 — the Google click list was kept as the recipe).
-
-**5 · The first page needs to look better** — source:
-[issue #6](https://github.com/pumasi-ai/pumasi-booking/issues/6)
-(`enhancement, accepted`, priority: normal).
-Why here: the landing page is the first impression for every stranger public
-sign-up now admits; behind #3/#4 because it is taste where they are function.
-Whatever it says must not contradict [`STAGE.md`](STAGE.md).
-
-**6 · A runtime subprocessor guard for the deployed mail path, or a recorded
+**4 · A runtime subprocessor guard for the deployed mail path, or a recorded
 why-not** — source: [`SUBPROCESSORS.md`](../SUBPROCESSORS.md), which names the
 Workers path's control as weaker than the Node path's.
 Why here: [`VALUE.md`](VALUE.md) C4 claims enforcement, and the deployed path
 is the one real bookers' mail actually crosses.
 
-**7 · O2 — secrets posture, completed** — source:
+**5 · O2 — secrets posture, completed** — source:
 [`service/spec/0002/SPEC.md` §8.1](../service/spec/0002/SPEC.md), the last
 clause declared but not implemented.
 Why here: small, and it closes the spec's only admitted gap; below the
 user-facing items because no user can currently be hurt by it.
+
+## Completed (2026-08-29)
+
+- **Favicon not visible in the browser tab** — [issue #3](https://github.com/pumasi-ai/pumasi-booking/issues/3) (closed via commit `bb1825c`).
+- **The first page needs to look better** — [issue #6](https://github.com/pumasi-ai/pumasi-booking/issues/6) (closed via commit `bb1825c`).
 
 ## Held, not ordered
 
