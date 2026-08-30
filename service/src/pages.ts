@@ -481,29 +481,33 @@ table.rows{border-collapse:collapse;width:100%}
   }
 
   function autoCaptureDOM() {
-    shotLoading.style.display = 'block';
-    shotLoading.innerText = 'Capturing page preview... (or press Ctrl+V to paste)';
+    if (shotLoading) {
+      shotLoading.style.display = 'block';
+      shotLoading.innerText = 'Capturing page preview... (or press Ctrl+V to paste)';
+    }
     if (shotWrap) shotWrap.style.display = 'none';
+
+    // Draw instant fallback immediately so preview is available with zero lag
+    drawFallbackCanvas();
 
     loadHtml2Canvas(function(h2c) {
       try {
         h2c(document.body, {
           ignoreElements: function(el) {
-            return el.id === 'pf-modal' || (el.classList && el.classList.contains('pf-widget'));
+            return el && (el.id === 'pf-modal' || (el.classList && el.classList.contains('pf-widget')));
           },
           logging: false,
           useCORS: true,
           scale: Math.min(window.devicePixelRatio || 1, 2)
         }).then(function(canvas) {
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-          updateScreenshotUI(dataUrl);
+          if (canvas) {
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            updateScreenshotUI(dataUrl);
+          }
         }).catch(function(err) {
           console.warn('html2canvas capture error:', err);
-          drawFallbackCanvas();
         });
-      } catch (err) {
-        drawFallbackCanvas();
-      }
+      } catch (err) {}
     });
   }
 
@@ -537,6 +541,7 @@ table.rows{border-collapse:collapse;width:100%}
     }
     try {
       modal.hidden = true;
+      modal.style.display = 'none';
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: { cursor: 'never' },
         preferCurrentTab: true
@@ -552,9 +557,11 @@ table.rows{border-collapse:collapse;width:100%}
       canvas.getContext('2d').drawImage(video, 0, 0);
       track.stop();
       modal.hidden = false;
+      modal.style.display = 'flex';
       updateScreenshotUI(canvas.toDataURL('image/png', 0.85), 'Screen capture (' + new Date().toLocaleTimeString() + ')');
     } catch(err) {
       modal.hidden = false;
+      modal.style.display = 'flex';
     }
   }
 
@@ -562,15 +569,8 @@ table.rows{border-collapse:collapse;width:100%}
     if (!file) return;
     const reader = new FileReader();
     reader.onload = function(evt) {
-      if (modal && modal.hidden) {
-        modal.hidden = false;
-        if (statusBox) statusBox.hidden = true;
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.innerText = 'Submit Feedback \u2192';
-        }
-        renderDiagnostics();
-        document.getElementById('pf-desc')?.focus();
+      if (modal && (modal.hidden || modal.style.display === 'none')) {
+        openModal();
       }
       updateScreenshotUI(evt.target?.result, label || ('Pasted image (' + new Date().toLocaleTimeString() + ')'));
     };
@@ -626,25 +626,42 @@ table.rows{border-collapse:collapse;width:100%}
       online: navigator.onLine,
       errors: errLog
     };
-    diagView.innerText = JSON.stringify(diag, null, 2);
+    if (diagView) diagView.innerText = JSON.stringify(diag, null, 2);
     return diag;
   }
 
-  if (openBtn) {
-    openBtn.addEventListener('click', function() {
-      modal.hidden = false;
+  function openModal(e) {
+    if (e) e.preventDefault();
+    if (!modal) return;
+    modal.hidden = false;
+    modal.removeAttribute('hidden');
+    modal.style.display = 'flex';
+    if (statusBox) {
       statusBox.hidden = true;
       statusBox.innerHTML = '';
+    }
+    if (submitBtn) {
       submitBtn.disabled = false;
       submitBtn.innerText = 'Submit Feedback \u2192';
-      autoCaptureDOM();
-      renderDiagnostics();
+    }
+    try { autoCaptureDOM(); } catch(err) { drawFallbackCanvas(); }
+    try { renderDiagnostics(); } catch(err) {}
+    setTimeout(function() {
       document.getElementById('pf-desc')?.focus();
-    });
+    }, 60);
   }
 
   function closeModal() {
-    if (modal) modal.hidden = true;
+    if (modal) {
+      modal.hidden = true;
+      modal.setAttribute('hidden', '');
+      modal.style.display = 'none';
+    }
+  }
+
+  if (openBtn) {
+    openBtn.onclick = openModal;
+    openBtn.addEventListener('click', openModal);
   }
 
   if (closeBtn) closeBtn.addEventListener('click', closeModal);
@@ -3067,7 +3084,7 @@ export function integrationsPage(opts: {
 <p class="muted">Connect your video conferencing and calendar accounts so Pumasi can auto-mint meeting links and prevent double bookings.</p>
 ${opts.notice ? `<p class="ok" style="border-left-color:var(--accent);background:var(--accent-soft);color:var(--fg)">${esc(opts.notice)}</p>` : ''}
 
-<div class="card">
+<div class="card" id="zoom-card">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem">
     <div style="display:flex;gap:.85rem;align-items:center">
       <div style="width:44px;height:44px;border-radius:10px;background:#2D8CFF;display:flex;align-items:center;justify-content:center;color:#fff">
@@ -3075,7 +3092,7 @@ ${opts.notice ? `<p class="ok" style="border-left-color:var(--accent);background
       </div>
       <div>
         <h2 style="margin:0 0 .2rem;font-size:1.1rem">Zoom Video</h2>
-        <p class="muted" style="margin:0;font-size:.85rem">Auto-create unique Zoom meeting rooms for every booked session via Zoom OAuth, or attach your Personal Meeting Room.</p>
+        <p class="muted" style="margin:0;font-size:.85rem">Auto-create unique Zoom meeting rooms for every booked session via Zoom OAuth (Calendly workflow).</p>
       </div>
     </div>
     <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
@@ -3086,19 +3103,17 @@ ${opts.notice ? `<p class="ok" style="border-left-color:var(--accent);background
 
   <div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--line)">
     <form method="post" action="/app/integrations/zoom">
-      <label for="zm_link">Personal Meeting Room or Static Zoom Link</label>
-      <input id="zm_link" name="zoom_link" value="${esc(opts.zoomLink ?? '')}" placeholder="https://us02web.zoom.us/j/1234567890">
-      <p class="notice">When provided, this link is automatically attached to every event type using Zoom.</p>
-      
-      <details style="margin:1rem 0" ${opts.zoomAccountId ? 'open' : ''}>
-        <summary style="font-weight:600;font-size:.88rem;cursor:pointer">Enterprise / Automated Dynamic Meeting Creation (Server-to-Server OAuth)</summary>
-        <div style="margin-top:.75rem;display:grid;grid-template-columns:1fr;gap:.5rem">
-          <label>Zoom Account ID <input name="zoom_account_id" value="${esc(opts.zoomAccountId ?? '')}" placeholder="e.g. abcdEFGH1234"></label>
-          <label>Zoom Client ID <input name="zoom_client_id" placeholder="Optional (or set in environment)"></label>
-          <label>Zoom Client Secret <input name="zoom_client_secret" type="password" placeholder="Optional (or set in environment)"></label>
+      <details style="margin:.5rem 0" ${opts.notice || opts.zoomAccountId ? 'open' : ''}>
+        <summary style="font-weight:600;font-size:.88rem;cursor:pointer">⚙ Zoom OAuth App & API Credentials</summary>
+        <div style="margin-top:.75rem;display:grid;grid-template-columns:1fr;gap:.6rem;background:var(--line-soft);padding:1rem;border-radius:8px">
+          <p class="muted" style="margin:0;font-size:.84rem">To enable direct 1-click Zoom user login, provide your Zoom Marketplace OAuth credentials. Redirect URI: <code>${esc(opts.baseUrl)}/oauth/zoom/callback</code></p>
+          <label>Zoom Client ID <input name="zoom_client_id" placeholder="e.g. 74X_xxxxxx"></label>
+          <label>Zoom Client Secret <input name="zoom_client_secret" type="password" placeholder="e.g. abc123xxxxxx"></label>
+          <label>Zoom Account ID (for Server-to-Server, optional) <input name="zoom_account_id" value="${esc(opts.zoomAccountId ?? '')}" placeholder="e.g. abcdEFGH1234"></label>
+          <label>Personal Meeting Room / Static Fallback Link <input id="zm_link" name="zoom_link" value="${esc(opts.zoomLink ?? '')}" placeholder="https://us02web.zoom.us/j/1234567890"></label>
+          <button class="submit" type="submit" style="margin-top:.5rem">Save Zoom Credentials & Connect</button>
         </div>
       </details>
-      <button class="submit" type="submit">Save Zoom Settings</button>
     </form>
   </div>
 </div>
