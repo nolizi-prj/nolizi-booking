@@ -53,25 +53,33 @@ function sanitizeUrl(rawUrl?: string): string {
   }
 }
 
-export function formatFeedbackMarkdown(payload: FeedbackPayload): { title: string; body: string; labels: string[] } {
+export function formatFeedbackMarkdown(
+  payload: FeedbackPayload,
+  screenshotUrl?: string | null,
+): { title: string; body: string; labels: string[] } {
   const typeIcons: Record<string, string> = {
     bug: '🐛 Bug',
     feature: '✨ Feature Request',
     general: '💬 Feedback',
   };
 
-  const typeName = typeIcons[payload.type] ?? '💬 Feedback';
-  const summary = (payload.description || 'User feedback').slice(0, 70).replace(/\n/g, ' ');
-  const issueTitle = payload.title?.trim() || `[Feedback] ${typeName}: ${summary}${payload.description.length > 70 ? '...' : ''}`;
+  const typeLabel = (payload.type || 'general').toLowerCase();
+  const typeName = typeIcons[typeLabel] || '💬 Feedback';
+  const issueLabels = ['feedback'];
+  if (typeLabel === 'bug') issueLabels.push('bug');
+  if (typeLabel === 'feature') issueLabels.push('enhancement');
 
-  const labels = ['feedback'];
-  if (payload.type === 'bug') labels.push('bug');
-  else if (payload.type === 'feature') labels.push('enhancement');
-  else labels.push('triage');
+  const firstLine = payload.description.trim().split('\n')[0] ?? 'New Feedback';
+  const truncatedSummary = firstLine.length > 70 ? firstLine.slice(0, 67) + '...' : firstLine;
+  const issueTitle = `[Feedback] ${typeName}: ${truncatedSummary}`;
 
-  const errorLines = (payload.errors ?? [])
-    .map((e) => `- \`${e.timestamp || ''}\` **${e.message}** (${e.source || 'inline'}:${e.lineno || 0}:${e.colno || 0})`)
-    .join('\n');
+  let errorLines = '';
+  if (payload.errors && payload.errors.length > 0) {
+    errorLines = payload.errors
+      .slice(-5)
+      .map((e) => `- \`${e.timestamp}\`: **${e.message}** (${e.source ?? 'unknown'}:${e.lineno ?? '?'}:${e.colno ?? '?'})`)
+      .join('\n');
+  }
 
   let body = `### Feedback Description
 ${payload.description}
@@ -100,18 +108,65 @@ ${payload.description}
     body += `\n<details>\n<summary><b>Recent Client-Side Console Errors (${payload.errors.length})</b></summary>\n\n${errorLines}\n</details>\n`;
   }
 
-  if (payload.screenshot && payload.screenshot.startsWith('data:image/')) {
+  if (screenshotUrl) {
     body += `\n---
 ### Attached Screenshot
 <details open>
-<summary><b>View Screenshot</b></summary>
+<summary><b>View Screenshot</b> (<a href="${screenshotUrl}" target="_blank" rel="noopener">Open full-resolution image ↗</a>)</summary>
 
-<img src="${payload.screenshot}" alt="User Screenshot" style="max-width:100%;border-radius:8px;border:1px solid #e4e7ec;margin-top:8px;" />
+![User Feedback Screenshot](${screenshotUrl})
 </details>
 `;
   }
 
-  return { title: issueTitle, body, labels };
+  return { title: issueTitle, body, labels: issueLabels };
+}
+
+/** Upload base64 image directly to GitHub repository so GitHub natively renders it */
+async function uploadScreenshotToGithub(
+  base64DataUrl: string,
+  repo: string,
+  token: string,
+): Promise<string | null> {
+  try {
+    const match = base64DataUrl.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
+    if (!match || !match[1] || !match[2]) return null;
+
+    let ext = match[1].toLowerCase();
+    if (ext === 'jpeg') ext = 'jpg';
+    const content = match[2];
+
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const rand = Math.random().toString(36).slice(2, 8);
+    const filePath = `.github/feedback-attachments/${dateStr}-shot-${rand}.${ext}`;
+
+    const res = await fetch(`https://api.github.com/repos/${repo}/contents/${filePath}`, {
+      method: 'PUT',
+      headers: {
+        'authorization': `Bearer ${token}`,
+        'accept': 'application/vnd.github.v3+json',
+        'user-agent': 'pumasi-feedback-bot/1.0',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: `feedback: attach screenshot ${filePath}`,
+        content,
+        branch: 'main',
+      }),
+    });
+
+    if (!res.ok) {
+      console.warn(`[feedback] Failed to upload screenshot to GitHub (${res.status}):`, await res.text());
+      return null;
+    }
+
+    const data = (await res.json()) as { content?: { download_url?: string } };
+    return data.content?.download_url || `https://raw.githubusercontent.com/${repo}/main/${filePath}`;
+  } catch (err) {
+    console.warn('[feedback] Exception uploading screenshot to GitHub:', err);
+    return null;
+  }
 }
 
 export async function submitFeedback(
@@ -128,7 +183,13 @@ export async function submitFeedback(
 
   const repo = opts.repo || 'pumasi-ai/pumasi-booking';
   const token = opts.githubToken;
-  const { title, body, labels } = formatFeedbackMarkdown(payload);
+
+  let screenshotUrl: string | null = null;
+  if (token && payload.screenshot && payload.screenshot.startsWith('data:image/')) {
+    screenshotUrl = await uploadScreenshotToGithub(payload.screenshot, repo, token);
+  }
+
+  const { title, body, labels } = formatFeedbackMarkdown(payload, screenshotUrl);
 
   if (!token) {
     console.log(`[feedback] (No GitHub token configured) Recorded feedback: "${title}" from ${payload.email || 'anonymous'}`);

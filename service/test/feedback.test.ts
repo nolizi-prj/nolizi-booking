@@ -21,7 +21,7 @@ test('formatFeedbackMarkdown formats markdown with diagnostics, errors, and sani
       },
     ],
     screenshot: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-  });
+  }, 'https://raw.githubusercontent.com/pumasi-ai/pumasi-booking/main/.github/feedback-attachments/20260830-shot-123.png');
 
   assert.ok(formatted.title.includes('[Feedback] 🐛 Bug: When clicking on 2:00 PM slot'));
   assert.ok(formatted.labels.includes('bug'));
@@ -30,7 +30,7 @@ test('formatFeedbackMarkdown formats markdown with diagnostics, errors, and sani
   assert.ok(formatted.body.includes('REDACTED'), 'Secret token should be redacted from URL');
   assert.ok(!formatted.body.includes('SECRET_TOKEN_123'), 'Secret value must not appear in output');
   assert.ok(formatted.body.includes('Uncaught TypeError: cannot read properties of null'));
-  assert.ok(formatted.body.includes('<img src="data:image/png;base64,'), 'Screenshot is embedded in markdown');
+  assert.ok(formatted.body.includes('![User Feedback Screenshot](https://raw.githubusercontent.com/'), 'Screenshot URL is embedded as Markdown image');
 });
 
 test('submitFeedback refuses empty description', async () => {
