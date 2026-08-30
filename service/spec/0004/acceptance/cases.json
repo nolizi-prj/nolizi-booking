@@ -1,0 +1,109 @@
+{
+  "suite": "SPEC-0004 reporting-path acceptance",
+  "version": "1.0.0",
+  "frozen_at_approval": true,
+  "note": "Runner: service/test/reporting.test.ts. Runners are ordinary risk; this file is the truth. SPEC-0002's frozen case D-005 also binds the emitted report and is not restated here.",
+  "cases": [
+    {
+      "id": "R-001",
+      "clause": "R1, schema",
+      "description": "A held report matches the documented pumasi-report/1 schema exactly: no undocumented key at any level, and every documented key present.",
+      "steps": [
+        { "call": "build_held_report", "capture": "r" },
+        { "assert": "$r.schema == 'pumasi-report/1' and $r.tier == 'held'" },
+        { "assert": "the key set of $r, $r.platform, $r.config_shape and $r.health equals the schema's key set exactly" }
+      ]
+    },
+    {
+      "id": "R-002",
+      "clause": "R1a",
+      "description": "No configuration value, secret, or person-derived datum survives into either tier. Built against a config populated with distinctive sentinel values in every string field.",
+      "steps": [
+        { "call": "build_both_reports_with_sentinel_config", "capture": "r" },
+        { "assert": "no sentinel string (smtp url, oauth ids/secrets, token key, github token, zoom credentials, base url host, mail-from address) appears anywhere in the serialised payloads" },
+        { "assert": "config_shape contains only booleans and the documented enums" }
+      ]
+    },
+    {
+      "id": "R-003",
+      "clause": "R2a",
+      "description": "Opt-out stops egress, observed at the transport. With PUMASI_REPORTING=false, the reporting tick performs zero network calls.",
+      "steps": [
+        { "call": "run_reporting_tick", "args": { "reporting": false }, "capture": "net" },
+        { "assert": "$net records zero calls" },
+        { "call": "run_reporting_tick", "args": { "reporting": true }, "capture": "net2" },
+        { "assert": "$net2 records exactly one POST to the configured report URL" }
+      ]
+    },
+    {
+      "id": "R-004",
+      "clause": "R2b",
+      "description": "Behaviour parity: representative surfaces (home page, booking page, booking creation) return identical results with reporting on and off.",
+      "steps": [
+        { "call": "run_surfaces", "args": { "reporting": true }, "capture": "a" },
+        { "call": "run_surfaces", "args": { "reporting": false }, "capture": "b" },
+        { "assert": "$a equals $b after removing nondeterministic fields (ids, tokens, timestamps)" }
+      ]
+    },
+    {
+      "id": "R-005",
+      "clause": "R3",
+      "description": "The printed payload is byte-identical to the sent body.",
+      "steps": [
+        { "call": "print_report", "args": { "tier": "held" }, "capture": "printed" },
+        { "call": "send_report", "args": { "tier": "held" }, "capture": "sent_body" },
+        { "assert": "$printed == $sent_body, byte for byte" }
+      ]
+    },
+    {
+      "id": "R-006",
+      "clause": "R4",
+      "description": "The start-up notice exists in both states and names the opt-out verbatim.",
+      "steps": [
+        { "call": "reporting_notice", "args": { "reporting": true }, "capture": "on" },
+        { "assert": "$on states reporting is on and contains the literal 'PUMASI_REPORTING=false'" },
+        { "call": "reporting_notice", "args": { "reporting": false }, "capture": "off" },
+        { "assert": "$off states reporting is off and that nothing is sent" }
+      ]
+    },
+    {
+      "id": "R-007",
+      "clause": "R5a",
+      "description": "A failed send is logged and dropped: the tick resolves without throwing, nothing is queued, and the next tick sends a fresh report rather than a backlog.",
+      "steps": [
+        { "call": "run_reporting_tick", "args": { "reporting": true, "transport": "failing" }, "capture": "t" },
+        { "assert": "$t resolved without throwing and recorded one failed attempt" },
+        { "call": "run_reporting_tick", "args": { "reporting": true, "transport": "recording" }, "capture": "t2" },
+        { "assert": "$t2 sent exactly one report" }
+      ]
+    },
+    {
+      "id": "R-008",
+      "clause": "R6",
+      "description": "A published report is signed or not sent; unsigned sending refuses without transmitting.",
+      "steps": [
+        { "call": "send_published", "args": { "sponsor": null }, "capture": "u" },
+        { "assert": "$u refused, and the transport recorded zero calls" },
+        { "call": "send_published", "args": { "sponsor": "example-sponsor" }, "capture": "s" },
+        { "assert": "$s sent one report whose signature.sponsor == 'example-sponsor' and whose conformance counts match .build/conformance.json" }
+      ]
+    },
+    {
+      "id": "R-009",
+      "clause": "R7, R7a",
+      "description": "The retention schedule is published: the privacy page states the twelve-month held retention, the deletion route, and — truthfully per path — that the live Cloudflare deployment still sends nothing.",
+      "steps": [
+        { "assert": "the privacy document states a twelve-month retention for operating reports and a deletion-on-request route" },
+        { "assert": "the privacy document no longer claims the mechanism is unbuilt, and still states that this deployment sends nothing" }
+      ]
+    },
+    {
+      "id": "R-010",
+      "clause": "R5b, R8",
+      "description": "The Workers path has no reporting egress: the worker module neither imports the sender nor wires the tick.",
+      "steps": [
+        { "assert": "the built worker entry contains no reference to the reporting sender" }
+      ]
+    }
+  ]
+}
