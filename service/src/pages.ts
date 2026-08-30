@@ -571,23 +571,61 @@ table.rows{border-collapse:collapse;width:100%}
     }
   }
 
+  function handleImageFile(file, label) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      if (modal && modal.hidden) {
+        modal.hidden = false;
+        if (statusBox) statusBox.hidden = true;
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerText = 'Submit Feedback \u2192';
+        }
+        renderDiagnostics();
+        document.getElementById('pf-desc')?.focus();
+      }
+      updateScreenshotUI(evt.target?.result, label || ('Pasted image (' + new Date().toLocaleTimeString() + ')'));
+    };
+    reader.readAsDataURL(file);
+  }
+
   // Global Clipboard Paste Listener (Ctrl+V / Cmd+V)
   window.addEventListener('paste', function(e) {
-    if (modal && !modal.hidden && e.clipboardData) {
-      const items = e.clipboardData.items;
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type.indexOf('image') !== -1) {
-          const file = items[i].getAsFile();
-          if (file) {
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-              updateScreenshotUI(evt.target?.result, 'Pasted screenshot (' + new Date().toLocaleTimeString() + ')');
-            };
-            reader.readAsDataURL(file);
-            e.preventDefault();
-            break;
-          }
+    if (!e.clipboardData) return;
+    const items = e.clipboardData.items || [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          handleImageFile(file, 'Pasted screenshot (' + new Date().toLocaleTimeString() + ')');
+          e.preventDefault();
+          return;
         }
+      }
+    }
+    const files = e.clipboardData.files || [];
+    for (let i = 0; i < files.length; i++) {
+      if (files[i].type.indexOf('image') !== -1) {
+        handleImageFile(files[i], 'Pasted screenshot (' + new Date().toLocaleTimeString() + ')');
+        e.preventDefault();
+        return;
+      }
+    }
+  });
+
+  // Drag & drop screenshot or attachment
+  window.addEventListener('dragover', function(e) {
+    if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) {
+      e.preventDefault();
+    }
+  });
+  window.addEventListener('drop', function(e) {
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.indexOf('image') !== -1 || file.name.match(/\.(png|jpg|jpeg|gif|webp|svg|pdf|txt|log)$/i)) {
+        handleImageFile(file, file.name);
+        e.preventDefault();
       }
     }
   });
