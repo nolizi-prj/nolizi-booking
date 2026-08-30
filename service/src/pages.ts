@@ -338,9 +338,9 @@ table.rows{border-collapse:collapse;width:100%}
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
               <span>Re-capture</span>
             </button>
-            <button type="button" id="pf-displace-btn" class="pf-tool-btn pf-tool-danger" title="Displace / Remove screenshot" style="display:none;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-              <span>Displace</span>
+            <button type="button" id="pf-remove-btn" class="pf-tool-btn pf-tool-danger" title="Remove attached file or screenshot" style="display:none;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              <span>Remove</span>
             </button>
             <label class="pf-toggle-label" style="margin-left:.25rem;">
               <input type="checkbox" id="pf-include-shot" checked>
@@ -354,12 +354,15 @@ table.rows{border-collapse:collapse;width:100%}
             <img id="pf-shot-preview" class="pf-shot-preview" alt="Preview" style="cursor:zoom-in;" title="Click to view full size" />
             <span class="pf-shot-zoom-hint">Click to view full size</span>
           </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-top:.3rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-top:.3rem;flex-wrap:wrap;">
             <label class="pf-upload-btn">
-              <span>📎 Replace with custom file/image</span>
+              <span>📎 Attach / Replace with custom file</span>
               <input type="file" id="pf-file-upload" accept="image/*,.pdf,.txt,.log" style="display:none;">
             </label>
-            <span id="pf-file-label" class="muted" style="font-size:.78rem;"></span>
+            <div style="display:flex;align-items:center;gap:.3rem;">
+              <span id="pf-file-label" class="muted" style="font-size:.78rem;"></span>
+              <button type="button" id="pf-clear-file-btn" class="linkish" style="display:none;color:var(--danger);font-size:.76rem;" title="Clear attached file">&times; Clear</button>
+            </div>
           </div>
         </div>
       </div>
@@ -410,17 +413,18 @@ table.rows{border-collapse:collapse;width:100%}
   const shotLoading = document.getElementById('pf-shot-loading');
   const fileUpload = document.getElementById('pf-file-upload');
   const fileLabel = document.getElementById('pf-file-label');
+  const clearFileBtn = document.getElementById('pf-clear-file-btn');
   const includeShot = document.getElementById('pf-include-shot');
   const downloadBtn = document.getElementById('pf-download-btn');
   const recaptureBtn = document.getElementById('pf-recapture-btn');
-  const displaceBtn = document.getElementById('pf-displace-btn');
+  const removeBtn = document.getElementById('pf-remove-btn');
   const diagView = document.getElementById('pf-diag-view');
   const statusBox = document.getElementById('pf-status-box');
   const submitBtn = document.getElementById('pf-submit-btn');
 
   let currentScreenshot = null;
 
-  function updateScreenshotUI(dataUrl) {
+  function updateScreenshotUI(dataUrl, fileName) {
     currentScreenshot = dataUrl;
     if (dataUrl) {
       shotPreview.src = dataUrl;
@@ -430,15 +434,28 @@ table.rows{border-collapse:collapse;width:100%}
         downloadBtn.href = dataUrl;
         downloadBtn.style.display = 'inline-flex';
       }
-      if (displaceBtn) displaceBtn.style.display = 'inline-flex';
+      if (removeBtn) removeBtn.style.display = 'inline-flex';
+      if (fileName) {
+        if (fileLabel) fileLabel.innerText = fileName;
+        if (clearFileBtn) clearFileBtn.style.display = 'inline';
+      }
       includeShot.checked = true;
     } else {
       shotWrap.style.display = 'none';
-      shotLoading.style.display = 'none';
+      shotLoading.innerText = 'No screenshot or file attached.';
+      shotLoading.style.display = 'block';
       if (downloadBtn) downloadBtn.style.display = 'none';
-      if (displaceBtn) displaceBtn.style.display = 'none';
+      if (removeBtn) removeBtn.style.display = 'none';
+      if (fileUpload) fileUpload.value = '';
+      if (fileLabel) fileLabel.innerText = '';
+      if (clearFileBtn) clearFileBtn.style.display = 'none';
       includeShot.checked = false;
     }
+  }
+
+  function removeAttachment() {
+    updateScreenshotUI(null);
+    if (fileLabel) fileLabel.innerText = 'Attachment removed';
   }
 
   function captureScreenshot() {
@@ -510,17 +527,14 @@ table.rows{border-collapse:collapse;width:100%}
     });
   }
 
-  if (displaceBtn) {
-    displaceBtn.addEventListener('click', function() {
-      updateScreenshotUI(null);
-      if (fileLabel) fileLabel.innerText = 'Screenshot displaced';
-    });
-  }
+  if (removeBtn) removeBtn.addEventListener('click', removeAttachment);
+  if (clearFileBtn) clearFileBtn.addEventListener('click', removeAttachment);
 
   if (recaptureBtn) {
     recaptureBtn.addEventListener('click', function() {
       captureScreenshot();
       if (fileLabel) fileLabel.innerText = '';
+      if (clearFileBtn) clearFileBtn.style.display = 'none';
     });
   }
 
@@ -539,10 +553,9 @@ table.rows{border-collapse:collapse;width:100%}
     fileUpload.addEventListener('change', function(e) {
       const file = e.target.files?.[0];
       if (!file) return;
-      fileLabel.innerText = file.name;
       const reader = new FileReader();
       reader.onload = function(evt) {
-        updateScreenshotUI(evt.target?.result);
+        updateScreenshotUI(evt.target?.result, file.name);
       };
       reader.readAsDataURL(file);
     });
