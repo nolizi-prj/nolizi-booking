@@ -3069,8 +3069,10 @@ ${CARD_CSS}`,
 export function integrationsPage(opts: {
   googleConnected: boolean;
   googleEmail?: string;
+  googleConnectionId?: string;
   msConnected: boolean;
   msEmail?: string;
+  msConnectionId?: string;
   zoomConnected: boolean;
   zoomLink?: string;
   zoomAccountId?: string;
@@ -3098,6 +3100,7 @@ ${opts.notice ? `<p class="ok" style="border-left-color:var(--accent);background
     <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
       <span class="pill ${opts.zoomConnected ? 'pill-ok' : ''}">${opts.zoomConnected ? 'Connected ✓' : 'Not Connected'}</span>
       <a href="/app/integrations/zoom/connect" class="submit" style="display:inline-block;padding:.35rem .75rem;font-size:.85rem;text-decoration:none">${opts.zoomConnected ? 'Reconnect Zoom' : 'Connect with Zoom ↗'}</a>
+      ${opts.zoomConnected ? `<form method="post" action="/app/integrations/zoom/disconnect" style="margin:0;display:inline"><button class="submit btn-disconnect" type="submit">Disconnect</button></form>` : ''}
     </div>
   </div>
 
@@ -3137,6 +3140,7 @@ ${opts.notice ? `<p class="ok" style="border-left-color:var(--accent);background
     <form method="post" action="/app/calendar/google/connect" style="margin:0;display:inline">
       <button class="submit" type="submit">${opts.googleConnected ? 'Reconnect Google Account' : 'Connect Google Calendar & Meet'}</button>
     </form>
+    ${opts.googleConnected && opts.googleConnectionId ? `<form method="post" action="/app/calendar/${esc(opts.googleConnectionId)}/delete" style="margin:0;display:inline"><input type="hidden" name="return_to" value="integrations"><button class="submit btn-disconnect" type="submit">Disconnect</button></form>` : ''}
   </div>
 </div>
 
@@ -3159,12 +3163,15 @@ ${opts.notice ? `<p class="ok" style="border-left-color:var(--accent);background
     <form method="post" action="/app/calendar/microsoft/connect" style="margin:0;display:inline">
       <button class="submit" type="submit">${opts.msConnected ? 'Reconnect Microsoft Account' : 'Connect Microsoft 365 & Teams'}</button>
     </form>
+    ${opts.msConnected && opts.msConnectionId ? `<form method="post" action="/app/calendar/${esc(opts.msConnectionId)}/delete" style="margin:0;display:inline"><input type="hidden" name="return_to" value="integrations"><button class="submit btn-disconnect" type="submit">Disconnect</button></form>` : ''}
   </div>
 </div>
 
 ${CARD_CSS}
 <style>
  .pill-ok{background:rgba(6,118,71,.12);color:var(--ok);border:1px solid rgba(6,118,71,.2)}
+ #zoom-card .btn-disconnect{padding:.35rem .75rem;font-size:.85rem}
+ .btn-disconnect{background:transparent;color:var(--danger,#b3261e);border:1px solid var(--danger,#b3261e)}
 </style>`,
   );
 }

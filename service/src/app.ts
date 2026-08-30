@@ -1942,15 +1942,21 @@ async function handleRoutes(
 
         const notice = req.query?.['zoom_needed'] === '1'
           ? 'To enable 1-Click Zoom OAuth connect, provide your Zoom Client ID & Client Secret below, or set them as environment variables.'
-          : undefined;
+          : req.query?.['zoom_disconnected'] === '1'
+            ? 'Zoom disconnected. Your Zoom events no longer carry a meeting link until you reconnect.'
+            : req.query?.['cal_disconnected'] === '1'
+              ? 'Account disconnected. Bookings no longer sync to that calendar.'
+              : undefined;
 
         return html(
           200,
           integrationsPage({
             googleConnected: Boolean(google),
             googleEmail: google?.account_email,
+            googleConnectionId: google?.connection_id,
             msConnected: Boolean(ms),
             msEmail: ms?.account_email,
+            msConnectionId: ms?.connection_id,
             zoomConnected,
             zoomLink,
             zoomAccountId: config.zoomAccountId,
@@ -1960,6 +1966,13 @@ async function handleRoutes(
         );
       }
       if (parts[2] === 'zoom') {
+        if (parts[3] === 'disconnect' && req.method === 'POST') {
+          await sql.query(
+            `UPDATE schedules SET location_value = NULL WHERE owner_id = $1 AND location_kind = 'zoom'`,
+            [owner.owner_id],
+          );
+          return { status: 303, headers: { location: '/app/integrations?zoom_disconnected=1' }, body: '' };
+        }
         if (parts[3] === 'connect' || req.query?.['connect'] === '1') {
           if (!config.zoomClientId) {
             return { status: 303, headers: { location: '/app/integrations?zoom_needed=1' }, body: '' };
@@ -2596,7 +2609,9 @@ async function handleRoutes(
       if (parts[2] && parts[3] === 'delete') {
         const gone = await hub.deleteConnection(sql, owner.owner_id, parts[2]);
         if (!gone) return html(404, errorPage(404, 'No such calendar connection.'));
-        return { status: 303, headers: { location: '/app' }, body: '' };
+        const back = req.form?.['return_to'] === 'integrations'
+          ? '/app/integrations?cal_disconnected=1' : '/app';
+        return { status: 303, headers: { location: back }, body: '' };
       }
       // /app/calendar/<connectionId>/calendars — which are checked, which receives
       if (parts[2] && parts[3] === 'calendars') {
