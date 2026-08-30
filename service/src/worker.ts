@@ -68,8 +68,8 @@ import schema013 from '../migrations-sqlite/013_email_verification.sql';
 import schema014 from '../migrations-sqlite/014_custom_questions.sql';
 import schema015 from '../migrations-sqlite/015_branding.sql';
 
-/** Mirrors server.ts: a form here is a name, an address and two timestamps. */
-const MAX_BODY_BYTES = 64 * 1024;
+/** 5MB ceiling to support in-app feedback screenshots and diagnostic bundles. */
+const MAX_BODY_BYTES = 5 * 1024 * 1024;
 
 interface DoStub { fetch(r: Request): Promise<Response> }
 interface DoNamespace { idFromName(name: string): unknown; get(id: unknown): DoStub }

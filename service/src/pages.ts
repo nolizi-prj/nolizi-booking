@@ -458,69 +458,49 @@ table.rows{border-collapse:collapse;width:100%}
     if (fileLabel) fileLabel.innerText = 'Attachment removed';
   }
 
+  function loadHtml2Canvas(callback) {
+    if (window.html2canvas) {
+      callback(window.html2canvas);
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.crossOrigin = 'anonymous';
+    s.onload = function() {
+      if (window.html2canvas) callback(window.html2canvas);
+      else drawFallbackCanvas();
+    };
+    s.onerror = function() {
+      drawFallbackCanvas();
+    };
+    document.head.appendChild(s);
+  }
+
   function autoCaptureDOM() {
     shotLoading.style.display = 'block';
     shotLoading.innerText = 'Capturing page preview... (or press Ctrl+V to paste)';
     if (shotWrap) shotWrap.style.display = 'none';
-    try {
-      let css = '';
-      for (let i = 0; i < document.styleSheets.length; i++) {
-        try {
-          const rules = document.styleSheets[i].cssRules;
-          for (let j = 0; j < rules.length; j++) {
-            css += rules[j].cssText + String.fromCharCode(10);
-          }
-        } catch(e) {}
-      }
 
-      const clone = document.documentElement.cloneNode(true);
-      const m = clone.querySelector('#pf-modal');
-      if (m) m.remove();
-      const b = clone.querySelector('.pf-widget');
-      if (b) b.remove();
-
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-
-      const html = new XMLSerializer().serializeToString(clone);
-      const cleanCss = css.split('<' + '/style>').join('');
-      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '">' +
-        '<style>' + cleanCss + '<' + '/style>' +
-        '<foreignObject width="100%" height="100%">' +
-        '<div xmlns="http://www.w3.org/1999/xhtml">' + html + '<' + '/div>' +
-        '<' + '/foreignObject><' + '/svg>';
-
-      const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const img = new Image();
-      img.onload = function() {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.fillStyle = getComputedStyle(document.body).backgroundColor || '#ffffff';
-            ctx.fillRect(0, 0, w, h);
-            ctx.drawImage(img, 0, 0);
-            const dataUrl = canvas.toDataURL('image/png', 0.8);
-            URL.revokeObjectURL(url);
-            updateScreenshotUI(dataUrl);
-            return;
-          }
-        } catch(e) {
+    loadHtml2Canvas(function(h2c) {
+      try {
+        h2c(document.body, {
+          ignoreElements: function(el) {
+            return el.id === 'pf-modal' || (el.classList && el.classList.contains('pf-widget'));
+          },
+          logging: false,
+          useCORS: true,
+          scale: Math.min(window.devicePixelRatio || 1, 2)
+        }).then(function(canvas) {
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          updateScreenshotUI(dataUrl);
+        }).catch(function(err) {
+          console.warn('html2canvas capture error:', err);
           drawFallbackCanvas();
-        }
-        URL.revokeObjectURL(url);
-      };
-      img.onerror = function() {
-        URL.revokeObjectURL(url);
+        });
+      } catch (err) {
         drawFallbackCanvas();
-      };
-      img.src = url;
-    } catch(err) {
-      drawFallbackCanvas();
-    }
+      }
+    });
   }
 
   function drawFallbackCanvas() {
