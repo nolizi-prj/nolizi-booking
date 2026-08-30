@@ -3080,7 +3080,7 @@ ${opts.notice ? `<p class="ok" style="border-left-color:var(--accent);background
     </div>
     <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
       <span class="pill ${opts.zoomConnected ? 'pill-ok' : ''}">${opts.zoomConnected ? 'Connected ✓' : 'Not Connected'}</span>
-      <a href="/oauth/zoom/authorize" class="submit" style="display:inline-block;padding:.35rem .75rem;font-size:.85rem;text-decoration:none">${opts.zoomConnected ? 'Reconnect Zoom' : 'Connect with Zoom ↗'}</a>
+      <a href="/app/integrations/zoom/connect" class="submit" style="display:inline-block;padding:.35rem .75rem;font-size:.85rem;text-decoration:none">${opts.zoomConnected ? 'Reconnect Zoom' : 'Connect with Zoom ↗'}</a>
     </div>
   </div>
 
@@ -3119,7 +3119,9 @@ ${opts.notice ? `<p class="ok" style="border-left-color:var(--accent);background
     </div>
   </div>
   <div style="margin-top:1rem;display:flex;gap:.75rem;align-items:center">
-    <a href="/oauth/google/authorize" class="submit" style="display:inline-block;text-decoration:none">${opts.googleConnected ? 'Reconnect Google Account' : 'Connect Google Calendar & Meet'}</a>
+    <form method="post" action="/app/calendar/google/connect" style="margin:0;display:inline">
+      <button class="submit" type="submit">${opts.googleConnected ? 'Reconnect Google Account' : 'Connect Google Calendar & Meet'}</button>
+    </form>
   </div>
 </div>
 
@@ -3139,7 +3141,9 @@ ${opts.notice ? `<p class="ok" style="border-left-color:var(--accent);background
     </div>
   </div>
   <div style="margin-top:1rem;display:flex;gap:.75rem;align-items:center">
-    <a href="/oauth/microsoft/authorize" class="submit" style="display:inline-block;text-decoration:none">${opts.msConnected ? 'Reconnect Microsoft Account' : 'Connect Microsoft 365 & Teams'}</a>
+    <form method="post" action="/app/calendar/microsoft/connect" style="margin:0;display:inline">
+      <button class="submit" type="submit">${opts.msConnected ? 'Reconnect Microsoft Account' : 'Connect Microsoft 365 & Teams'}</button>
+    </form>
   </div>
 </div>
 

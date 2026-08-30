@@ -1956,16 +1956,41 @@ async function handleRoutes(
           }),
         );
       }
-      if (req.method === 'POST' && parts[2] === 'zoom') {
-        const form = req.form ?? {};
-        const zoomLink = (form['zoom_link'] ?? '').trim();
-        if (zoomLink) {
-          await sql.query(
-            `UPDATE schedules SET location_value = $2 WHERE owner_id = $1 AND location_kind = 'zoom'`,
-            [owner.owner_id, zoomLink],
-          );
+      if (parts[2] === 'zoom') {
+        if (parts[3] === 'connect' || req.query?.['connect'] === '1') {
+          if (!config.zoomClientId) {
+            return { status: 303, headers: { location: '/app/integrations?zoom_needed=1' }, body: '' };
+          }
+          const hub = deps.calendars;
+          const state = hub ? await hub.sealState({
+            purpose: 'zoom_connect',
+            owner_id: owner.owner_id,
+            tag: owner.owner_id,
+          }) : Buffer.from(JSON.stringify({ purpose: 'zoom_connect', owner_id: owner.owner_id, tag: owner.owner_id })).toString('base64url');
+
+          return {
+            status: 303,
+            headers: {
+              location: zoomAuthUrl({
+                clientId: config.zoomClientId,
+                redirectUri: `${config.baseUrl}/oauth/zoom/callback`,
+                state,
+              }),
+            },
+            body: '',
+          };
         }
-        return { status: 303, headers: { location: '/app/integrations' }, body: '' };
+        if (req.method === 'POST') {
+          const form = req.form ?? {};
+          const zoomLink = (form['zoom_link'] ?? '').trim();
+          if (zoomLink) {
+            await sql.query(
+              `UPDATE schedules SET location_value = $2 WHERE owner_id = $1 AND location_kind = 'zoom'`,
+              [owner.owner_id, zoomLink],
+            );
+          }
+          return { status: 303, headers: { location: '/app/integrations' }, body: '' };
+        }
       }
     }
 

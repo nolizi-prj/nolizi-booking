@@ -817,7 +817,7 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
     }
 
     // ── the signed-in app: routed by the org cookie ────────────────────────
-    if (seg[0] === 'app' || seg[0] === 'logout') {
+    if (seg[0] === 'app' || seg[0] === 'logout' || (seg[0] === 'oauth' && seg[2] === 'authorize')) {
       const cookie = request.headers.get('cookie') ?? '';
       const m = cookie.match(/(?:^|;\s*)pumasi_org=([a-z0-9]+)/);
       if (!m) return Response.redirect(`${config.baseUrl}/login`, 303);
