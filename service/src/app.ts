@@ -39,6 +39,7 @@ import { validateLogo } from './branding.ts';
 import { describeRecurrence, expandRecurrence, isValidRecurrence } from './recurrence.ts';
 import { cancelPendingJobs, fireTrigger, type BookingCtx } from './automation.ts';
 import { submitFeedback, type FeedbackPayload } from './feedback.ts';
+import { createZoomMeeting } from './video-zoom.ts';
 import type { MailPort } from './mail.ts';
 import type { Interval, Slot } from '@pumasi/booking-core';
 
@@ -2351,7 +2352,7 @@ async function handleRoutes(
           const x = Number(t);
           return Number.isInteger(x) && x > 0 ? x : null;
         };
-        const kind = ['custom', 'phone', 'in_person', 'meet'].includes(f['location_kind'] ?? '')
+        const kind = ['custom', 'phone', 'in_person', 'meet', 'teams', 'zoom', 'google_chat'].includes(f['location_kind'] ?? '')
           ? f['location_kind']! : 'custom';
         const chosenSet = sets.rows.some((r) => String(r['set_id']) === f['availability_set_id'])
           ? f['availability_set_id']! : sched.availability_set_id;
@@ -3242,6 +3243,25 @@ async function bookHandler(
     });
     if (i === 0) meetUrl = written?.meetUrl;
   }
+
+  // Dynamic Zoom meeting generation if Zoom API credentials are configured and no calendar meetUrl was minted
+  if (schedule.location_kind === 'zoom' && !meetUrl && !schedule.location_value) {
+    const zoomRes = await createZoomMeeting({
+      topic: `${schedule.title} — ${name}`,
+      startTime: start,
+      durationMinutes: schedule.duration_minutes,
+      timezone: schedule.owner_timezone,
+      agenda: `Booked by ${name} <${email}> via Pumasi Booking`,
+    }, {
+      accountId: config.zoomAccountId,
+      clientId: config.zoomClientId,
+      clientSecret: config.zoomClientSecret,
+    });
+    if (zoomRes?.joinUrl) {
+      meetUrl = zoomRes.joinUrl;
+    }
+  }
+
   const location = locationText(schedule, meetUrl);
 
   // M2 · after commit, never inside the transaction. M3 · a failure here must

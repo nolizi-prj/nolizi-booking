@@ -43,6 +43,9 @@ export interface Config {
   /** In-app feedback: GitHub personal access token for creating issues. */
   githubFeedbackToken: string | undefined;
   githubFeedbackRepo: string;
+  zoomAccountId: string | undefined;
+  zoomClientId: string | undefined;
+  zoomClientSecret: string | undefined;
 }
 
 export const CEILING_DEFAULTS = { owners: 5, bookings: 200 } as const;
@@ -92,6 +95,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     tokenKey: env['TOKEN_KEY'],
     githubFeedbackToken: env['GITHUB_FEEDBACK_TOKEN'] ?? env['GH_TOKEN'] ?? env['GITHUB_TOKEN'],
     githubFeedbackRepo: env['GITHUB_FEEDBACK_REPO'] ?? 'pumasi-ai/pumasi-booking',
+    zoomAccountId: env['ZOOM_ACCOUNT_ID'],
+    zoomClientId: env['ZOOM_CLIENT_ID'],
+    zoomClientSecret: env['ZOOM_CLIENT_SECRET'],
   };
 }
 
