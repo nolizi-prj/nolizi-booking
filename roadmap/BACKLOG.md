@@ -24,9 +24,10 @@ and polish, and the list reflects that.
 **1 · CHARTER §5.1 reporting path and opt-out** — source:
 [`DEBT.md` D-108](https://github.com/pumasi-ai/pumasi/blob/main/governance/DEBT.md),
 with the retention schedule of D-107 published alongside.
-Why here: D-108's own trigger is "any release after this one," so nothing
-below this line can release before it exists; it is also the only way the test
-matrix ever gets wider than one machine.
+Why here: §5.1 (amended 2026-08-30) gates the `launched` promotion on it —
+the stage stays `beta` until this exists — and it is the only way the test
+matrix ever gets wider than one machine. No longer blocks other releases;
+the product manager may reorder on that basis.
 
 **2 · Microsoft sign-in at the front door** — source:
 [issue #5](https://github.com/pumasi-ai/pumasi-booking/issues/5)
