@@ -123,9 +123,13 @@ deprecation candidate, and this file must say so rather than compete with it.
 - **A reviewed legal posture.** The lawful basis is written and in force; no
   lawyer has reviewed it, and no standard contractual clauses cover the
   US transfer ([`DEBT.md` D-105](https://github.com/pumasi-ai/governance/blob/main/governance/DEBT.md)).
-- **Evidence beyond one machine.** There is no conformance reporting yet
-  (D-108); the test matrix is one machine wide, and this file says so rather
-  than implying a fleet.
+- **Evidence beyond one machine.** The conformance-reporting *mechanism* now
+  exists (spec/0004, released 2026-08-30: signed opt-in conformance reports,
+  one-step `PUMASI_REPORTING=false` opt-out) — but nothing receives reports
+  yet, and the deployed Workers path deliberately sends nothing. The test
+  matrix is still one machine wide, and this file says so rather than
+  implying a fleet. (D-108 closed 2026-08-30 by the §5.1 amendment; the
+  works-for-strangers claim still cannot be made on one machine.)
 
 ## 5 · Keeping this honest
 
