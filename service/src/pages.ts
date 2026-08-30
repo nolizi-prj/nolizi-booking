@@ -330,14 +330,14 @@ table.rows{border-collapse:collapse;width:100%}
         <div class="pf-attach-top">
           <span>📷 Screenshot & Attachment</span>
           <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;">
+            <button type="button" id="pf-snip-btn" class="pf-tool-btn" title="Capture exact screen or browser window">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              <span>Capture Screen</span>
+            </button>
             <a id="pf-download-btn" class="pf-tool-btn" download="pumasi-screenshot.png" href="#" style="display:none;" title="Download attached screenshot">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
               <span>Download</span>
             </a>
-            <button type="button" id="pf-recapture-btn" class="pf-tool-btn" title="Re-capture screenshot">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-              <span>Re-capture</span>
-            </button>
             <button type="button" id="pf-remove-btn" class="pf-tool-btn pf-tool-danger" title="Remove attached file or screenshot" style="display:none;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
               <span>Remove</span>
@@ -349,14 +349,14 @@ table.rows{border-collapse:collapse;width:100%}
           </div>
         </div>
         <div id="pf-preview-wrap" style="margin-top:.4rem">
-          <div id="pf-shot-loading" class="muted" style="font-size:.8rem;">Capturing preview...</div>
+          <div id="pf-shot-loading" class="muted" style="font-size:.8rem;">Capturing preview... (or press Ctrl+V to paste)</div>
           <div id="pf-shot-wrap" class="pf-shot-wrap" style="display:none;">
             <img id="pf-shot-preview" class="pf-shot-preview" alt="Preview" style="cursor:zoom-in;" title="Click to view full size" />
-            <span class="pf-shot-zoom-hint">Click to view full size</span>
+            <span class="pf-shot-zoom-hint">Click to view full size &middot; Ctrl+V to paste new</span>
           </div>
           <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-top:.3rem;flex-wrap:wrap;">
             <label class="pf-upload-btn">
-              <span>📎 Attach / Replace with custom file</span>
+              <span>📎 Attach / Replace file (or paste Ctrl+V)</span>
               <input type="file" id="pf-file-upload" accept="image/*,.pdf,.txt,.log" style="display:none;">
             </label>
             <div style="display:flex;align-items:center;gap:.3rem;">
@@ -416,7 +416,7 @@ table.rows{border-collapse:collapse;width:100%}
   const clearFileBtn = document.getElementById('pf-clear-file-btn');
   const includeShot = document.getElementById('pf-include-shot');
   const downloadBtn = document.getElementById('pf-download-btn');
-  const recaptureBtn = document.getElementById('pf-recapture-btn');
+  const snipBtn = document.getElementById('pf-snip-btn');
   const removeBtn = document.getElementById('pf-remove-btn');
   const diagView = document.getElementById('pf-diag-view');
   const statusBox = document.getElementById('pf-status-box');
@@ -442,7 +442,7 @@ table.rows{border-collapse:collapse;width:100%}
       includeShot.checked = true;
     } else {
       shotWrap.style.display = 'none';
-      shotLoading.innerText = 'No screenshot or file attached.';
+      shotLoading.innerText = 'No screenshot or file attached. (Press Ctrl+V to paste)';
       shotLoading.style.display = 'block';
       if (downloadBtn) downloadBtn.style.display = 'none';
       if (removeBtn) removeBtn.style.display = 'none';
@@ -458,10 +458,69 @@ table.rows{border-collapse:collapse;width:100%}
     if (fileLabel) fileLabel.innerText = 'Attachment removed';
   }
 
-  function captureScreenshot() {
+  function autoCaptureDOM() {
     shotLoading.style.display = 'block';
-    shotLoading.innerText = 'Capturing preview...';
+    shotLoading.innerText = 'Capturing page preview... (or press Ctrl+V to paste)';
     if (shotWrap) shotWrap.style.display = 'none';
+    try {
+      let css = '';
+      for (const s of Array.from(document.styleSheets)) {
+        try {
+          for (const r of Array.from(s.cssRules)) {
+            css += r.cssText + '\n';
+          }
+        } catch(e) {}
+      }
+
+      const clone = document.documentElement.cloneNode(true);
+      const m = clone.querySelector('#pf-modal');
+      if (m) m.remove();
+      const b = clone.querySelector('.pf-widget');
+      if (b) b.remove();
+
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+
+      const html = new XMLSerializer().serializeToString(clone);
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '">' +
+        '<style>' + css.replace(/<\/style>/g, '') + '</style>' +
+        '<foreignObject width="100%" height="100%">' +
+        '<div xmlns="http://www.w3.org/1999/xhtml">' + html + '</div>' +
+        '</foreignObject></svg>';
+
+      const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = function() {
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = getComputedStyle(document.body).backgroundColor || '#ffffff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0);
+          try {
+            const dataUrl = canvas.toDataURL('image/png', 0.8);
+            URL.revokeObjectURL(url);
+            updateScreenshotUI(dataUrl);
+            return;
+          } catch(e) {}
+        }
+        URL.revokeObjectURL(url);
+      };
+      img.onerror = function() {
+        URL.revokeObjectURL(url);
+        // Fallback: draw metadata card if SVG foreignObject is restricted
+        drawFallbackCanvas();
+      };
+      img.src = url;
+    } catch(err) {
+      drawFallbackCanvas();
+    }
+  }
+
+  function drawFallbackCanvas() {
     try {
       const w = Math.min(window.innerWidth, 1280);
       const h = Math.min(window.innerHeight, 800);
@@ -469,25 +528,69 @@ table.rows{border-collapse:collapse;width:100%}
       canvas.width = w;
       canvas.height = h;
       const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        shotLoading.innerText = 'Screenshot unavailable';
-        return;
-      }
+      if (!ctx) return;
       ctx.fillStyle = getComputedStyle(document.body).backgroundColor || '#ffffff';
       ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = getComputedStyle(document.body).color || '#101828';
+      ctx.font = 'bold 16px system-ui, sans-serif';
+      ctx.fillText('Pumasi Booking Session Snapshot', 24, 45);
       ctx.font = '14px system-ui, sans-serif';
-      ctx.fillText('URL: ' + location.pathname, 20, 40);
-      ctx.fillText('Title: ' + document.title, 20, 70);
-      ctx.fillText('Captured at: ' + new Date().toLocaleString(), 20, 100);
-      ctx.fillText('Viewport: ' + window.innerWidth + ' x ' + window.innerHeight, 20, 130);
-      
-      const url = canvas.toDataURL('image/png', 0.8);
-      updateScreenshotUI(url);
+      ctx.fillText('URL: ' + location.href, 24, 80);
+      ctx.fillText('Title: ' + document.title, 24, 110);
+      ctx.fillText('Time: ' + new Date().toLocaleString(), 24, 140);
+      ctx.fillText('Tip: Press Ctrl+V anytime to paste your screenshot!', 24, 180);
+      updateScreenshotUI(canvas.toDataURL('image/png', 0.8));
+    } catch(e) {}
+  }
+
+  async function captureDisplayMedia() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+      alert('Screen capture API is not available in this browser. You can press Ctrl+V to paste your screenshot directly.');
+      return;
+    }
+    try {
+      modal.hidden = true;
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { cursor: 'never' },
+        preferCurrentTab: true
+      });
+      const track = stream.getVideoTracks()[0];
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.play();
+      await new Promise(function(resolve) { video.onloadedmetadata = resolve; });
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      track.stop();
+      modal.hidden = false;
+      updateScreenshotUI(canvas.toDataURL('image/png', 0.85), 'Screen capture (' + new Date().toLocaleTimeString() + ')');
     } catch(err) {
-      shotLoading.innerText = 'Screenshot unavailable';
+      modal.hidden = false;
     }
   }
+
+  // Global Clipboard Paste Listener (Ctrl+V / Cmd+V)
+  window.addEventListener('paste', function(e) {
+    if (modal && !modal.hidden && e.clipboardData) {
+      const items = e.clipboardData.items;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          const file = items[i].getAsFile();
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+              updateScreenshotUI(evt.target?.result, 'Pasted screenshot (' + new Date().toLocaleTimeString() + ')');
+            };
+            reader.readAsDataURL(file);
+            e.preventDefault();
+            break;
+          }
+        }
+      }
+    }
+  });
 
   function renderDiagnostics() {
     const diag = {
@@ -509,7 +612,7 @@ table.rows{border-collapse:collapse;width:100%}
       statusBox.innerHTML = '';
       submitBtn.disabled = false;
       submitBtn.innerText = 'Submit Feedback \u2192';
-      captureScreenshot();
+      autoCaptureDOM();
       renderDiagnostics();
       document.getElementById('pf-desc')?.focus();
     });
@@ -529,14 +632,7 @@ table.rows{border-collapse:collapse;width:100%}
 
   if (removeBtn) removeBtn.addEventListener('click', removeAttachment);
   if (clearFileBtn) clearFileBtn.addEventListener('click', removeAttachment);
-
-  if (recaptureBtn) {
-    recaptureBtn.addEventListener('click', function() {
-      captureScreenshot();
-      if (fileLabel) fileLabel.innerText = '';
-      if (clearFileBtn) clearFileBtn.style.display = 'none';
-    });
-  }
+  if (snipBtn) snipBtn.addEventListener('click', captureDisplayMedia);
 
   if (shotPreview) {
     shotPreview.addEventListener('click', function() {
