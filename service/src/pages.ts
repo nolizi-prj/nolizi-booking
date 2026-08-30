@@ -464,10 +464,11 @@ table.rows{border-collapse:collapse;width:100%}
     if (shotWrap) shotWrap.style.display = 'none';
     try {
       let css = '';
-      for (const s of Array.from(document.styleSheets)) {
+      for (let i = 0; i < document.styleSheets.length; i++) {
         try {
-          for (const r of Array.from(s.cssRules)) {
-            css += r.cssText + '\n';
+          const rules = document.styleSheets[i].cssRules;
+          for (let j = 0; j < rules.length; j++) {
+            css += rules[j].cssText + String.fromCharCode(10);
           }
         } catch(e) {}
       }
@@ -482,36 +483,38 @@ table.rows{border-collapse:collapse;width:100%}
       const h = window.innerHeight;
 
       const html = new XMLSerializer().serializeToString(clone);
+      const cleanCss = css.split('<' + '/style>').join('');
       const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '">' +
-        '<style>' + css.replace(/<\/style>/g, '') + '</style>' +
+        '<style>' + cleanCss + '<' + '/style>' +
         '<foreignObject width="100%" height="100%">' +
-        '<div xmlns="http://www.w3.org/1999/xhtml">' + html + '</div>' +
-        '</foreignObject></svg>';
+        '<div xmlns="http://www.w3.org/1999/xhtml">' + html + '<' + '/div>' +
+        '<' + '/foreignObject><' + '/svg>';
 
       const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const img = new Image();
       img.onload = function() {
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = getComputedStyle(document.body).backgroundColor || '#ffffff';
-          ctx.fillRect(0, 0, w, h);
-          ctx.drawImage(img, 0, 0);
-          try {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = getComputedStyle(document.body).backgroundColor || '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0);
             const dataUrl = canvas.toDataURL('image/png', 0.8);
             URL.revokeObjectURL(url);
             updateScreenshotUI(dataUrl);
             return;
-          } catch(e) {}
+          }
+        } catch(e) {
+          drawFallbackCanvas();
         }
         URL.revokeObjectURL(url);
       };
       img.onerror = function() {
         URL.revokeObjectURL(url);
-        // Fallback: draw metadata card if SVG foreignObject is restricted
         drawFallbackCanvas();
       };
       img.src = url;
