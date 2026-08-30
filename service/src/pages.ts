@@ -3067,11 +3067,12 @@ export function integrationsPage(opts: {
       </div>
       <div>
         <h2 style="margin:0 0 .2rem;font-size:1.1rem">Zoom Video</h2>
-        <p class="muted" style="margin:0;font-size:.85rem">Auto-create Zoom meeting rooms for every booked session, or use your Personal Meeting Room.</p>
+        <p class="muted" style="margin:0;font-size:.85rem">Auto-create unique Zoom meeting rooms for every booked session via Zoom OAuth, or attach your Personal Meeting Room.</p>
       </div>
     </div>
-    <div>
-      <span class="pill ${opts.zoomConnected ? 'pill-ok' : ''}">${opts.zoomConnected ? 'Connected ✓' : 'Ready to configure'}</span>
+    <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+      <span class="pill ${opts.zoomConnected ? 'pill-ok' : ''}">${opts.zoomConnected ? 'Connected ✓' : 'Not Connected'}</span>
+      <a href="/oauth/zoom/authorize" class="submit" style="display:inline-block;padding:.35rem .75rem;font-size:.85rem;text-decoration:none">${opts.zoomConnected ? 'Reconnect Zoom' : 'Connect with Zoom ↗'}</a>
     </div>
   </div>
 

@@ -84,3 +84,18 @@ test('createZoomMeeting handles missing credentials gracefully without throwing'
 
   assert.equal(res, null);
 });
+
+test('zoomAuthUrl produces valid Zoom OAuth URL with state and redirectUri', async () => {
+  const { zoomAuthUrl } = await import('../src/video-zoom.ts');
+  const url = zoomAuthUrl({
+    clientId: 'zoom-client-123',
+    redirectUri: 'https://booking.pumasi.ai/oauth/zoom/callback',
+    state: 'test-state-abc',
+  });
+
+  assert.ok(url.startsWith('https://zoom.us/oauth/authorize?'));
+  assert.ok(url.includes('client_id=zoom-client-123'));
+  assert.ok(url.includes('redirect_uri=https%3A%2F%2Fbooking.pumasi.ai%2Foauth%2Fzoom%2Fcallback'));
+  assert.ok(url.includes('state=test-state-abc'));
+});
+

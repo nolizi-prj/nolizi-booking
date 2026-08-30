@@ -40,7 +40,7 @@ import { validateLogo } from './branding.ts';
 import { describeRecurrence, expandRecurrence, isValidRecurrence } from './recurrence.ts';
 import { cancelPendingJobs, fireTrigger, type BookingCtx } from './automation.ts';
 import { submitFeedback, type FeedbackPayload } from './feedback.ts';
-import { createZoomMeeting } from './video-zoom.ts';
+import { createZoomMeeting, zoomAuthUrl, zoomExchangeCode } from './video-zoom.ts';
 import type { MailPort } from './mail.ts';
 import type { Interval, Slot } from '@pumasi/booking-core';
 
@@ -940,6 +940,32 @@ async function handleRoutes(
     };
   }
 
+  // ── "Connect with Zoom" OAuth Start ───────────────────────────────
+  if (parts[0] === 'oauth' && parts[1] === 'zoom' && parts[2] === 'authorize') {
+    const owner = await ownerForSession(sql, sessionId, now);
+    if (!owner) return { status: 303, headers: { location: '/login' }, body: '' };
+    if (!config.zoomClientId) {
+      return html(400, errorPage(400, 'Zoom OAuth is ready. Please configure ZOOM_CLIENT_ID & ZOOM_CLIENT_SECRET or set your Personal Zoom Link in Apps & Video.'));
+    }
+    const hub = deps.calendars;
+    const state = hub ? await hub.sealState({
+      purpose: 'zoom_connect',
+      owner_id: owner.owner_id,
+    }) : Buffer.from(JSON.stringify({ purpose: 'zoom_connect', owner_id: owner.owner_id })).toString('base64url');
+
+    return {
+      status: 303,
+      headers: {
+        location: zoomAuthUrl({
+          clientId: config.zoomClientId,
+          redirectUri: `${config.baseUrl}/oauth/zoom/callback`,
+          state,
+        }),
+      },
+      body: '',
+    };
+  }
+
   if (parts[0] === 'auth' && parts[1]) {
     const ownerId = await consumeSignInToken(sql, parts[1], now);
     if (!ownerId) return html(400, errorPage(400, 'That sign-in link has expired or was already used.'));
@@ -1147,6 +1173,33 @@ async function handleRoutes(
         headers: { location: '/app', 'set-cookie': sessionCookie(sid, secure, config.sessionTtlHours) },
         body: '',
       };
+    }
+
+    // Zoom Video OAuth Connection
+    if (parts[1] === 'zoom' || state['purpose'] === 'zoom_connect') {
+      if (!config.zoomClientId || !config.zoomClientSecret) {
+        return html(400, errorPage(400, 'Zoom credentials are not configured.'));
+      }
+      try {
+        const zoomTokens = await zoomExchangeCode({
+          clientId: config.zoomClientId,
+          clientSecret: config.zoomClientSecret,
+          code,
+          redirectUri: `${config.baseUrl}/oauth/zoom/callback`,
+        });
+        const ownerId = state['owner_id'] || (await ownerForSession(sql, sessionId, now))?.owner_id;
+        if (ownerId && (zoomTokens.personalMeetingUrl || zoomTokens.pmi)) {
+          const pmiUrl = zoomTokens.personalMeetingUrl || `https://zoom.us/j/${zoomTokens.pmi}`;
+          await sql.query(
+            `UPDATE schedules SET location_value = $2 WHERE owner_id = $1 AND location_kind = 'zoom'`,
+            [ownerId, pmiUrl],
+          );
+        }
+      } catch (err) {
+        console.warn(`[zoom] OAuth connect failed: ${(err as Error).message}`);
+        return html(502, errorPage(502, 'Zoom did not complete the connection. Try again.'));
+      }
+      return { status: 303, headers: { location: '/app/integrations' }, body: '' };
     }
 
     const provider = hub.provider(parts[1] ?? '');
