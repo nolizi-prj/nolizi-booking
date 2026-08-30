@@ -15,6 +15,7 @@ import {
 import {
   analyticsPage, availabilityEditor, bookingPage, confirmedPage, contactsPage, errorPage,
   eventTypeEditor,
+  FAVICON_SVG,
   legalPage,
   apiKeysPage, auditPage, homePage, loginPage, managePage, meetingsPage, messagePage, ownerHome,
   ownerLanding, pollDetailPage, pollsPage, pollVotePage, routeFormPage, routingPage, settingsPage,
@@ -267,6 +268,18 @@ async function handleRoutes(
       commit: config.commit,
       tzdata: (process.versions as { tz?: string }).tz ?? 'unknown',
     });
+  }
+
+  // Issue #3 · favicon
+  if (req.method === 'GET' && (req.path === '/favicon.ico' || req.path === '/favicon.svg')) {
+    return {
+      status: 200,
+      headers: {
+        'content-type': 'image/svg+xml',
+        'cache-control': 'public, max-age=86400',
+      },
+      body: FAVICON_SVG,
+    };
   }
 
   // ── the public API, v1 (P7) ──────────────────────────────────────────────

@@ -37,7 +37,7 @@ import { MicrosoftCalendarProvider } from './calendar-microsoft.ts';
 import { processDueJobs } from './automation.ts';
 import { Directory, dispatchDirectoryCall, type DirectoryCall } from './directory.ts';
 import { googleSsoExchange, googleSsoUrl } from './sso-google.ts';
-import { errorPage, homePage, legalPage, loginPage, signupPage } from './pages.ts';
+import { errorPage, FAVICON_SVG, homePage, legalPage, loginPage, signupPage } from './pages.ts';
 import { LEGAL_DOCS } from './legal.ts';
 // Bundled as text via the `rules` entry in wrangler.jsonc.
 // @ts-expect-error — .sql imports exist only under wrangler's bundler
@@ -425,6 +425,16 @@ export default {
     if (url.pathname === '/readyz') {
       const owners = await dir('ownerCount');
       return Response.json({ status: 'ready', owners });
+    }
+    // Issue #3 · favicon
+    if ((url.pathname === '/favicon.ico' || url.pathname === '/favicon.svg') && request.method === 'GET') {
+      return new Response(FAVICON_SVG, {
+        status: 200,
+        headers: {
+          'content-type': 'image/svg+xml',
+          'cache-control': 'public, max-age=86400',
+        },
+      });
     }
     if (url.pathname === '/' && request.method === 'GET') {
       return htmlResponse(200, homePage(config.publicSignup));
