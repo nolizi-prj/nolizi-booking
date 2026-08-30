@@ -238,3 +238,41 @@ test('the dashboard shows the getting-started checklist until complete', async (
   assert.ok(dash2.body.includes('Getting started'));
   assert.ok(dash2.body.includes('✓ Set your weekly hours'));
 });
+
+test('Issue #3 · favicon is served with svg content-type and linked in page shell', async () => {
+  const ico = await call('GET', '/favicon.ico');
+  assert.equal(ico.status, 200);
+  assert.equal(ico.headers['content-type'], 'image/svg+xml');
+  assert.ok(ico.body.includes('<svg'));
+
+  const svg = await call('GET', '/favicon.svg');
+  assert.equal(svg.status, 200);
+  assert.equal(svg.headers['content-type'], 'image/svg+xml');
+
+  const home = await call('GET', '/');
+  assert.ok(home.body.includes('rel="icon"'));
+  assert.ok(home.body.includes('/favicon.ico'));
+});
+
+test('Issue #6 · home page renders hero, feature cards, how it works, and CTA', async () => {
+  // Test with publicSignup = false (invite-only)
+  deps.config = { ...deps.config, publicSignup: false };
+  const closedHome = await call('GET', '/');
+  assert.equal(closedHome.status, 200);
+  assert.ok(closedHome.body.includes('Pumasi Booking'));
+  assert.ok(closedHome.body.includes('Live Calendar Truth'));
+  assert.ok(closedHome.body.includes('Zero Double-Booking'));
+  assert.ok(closedHome.body.includes('Pure Engine &amp; Privacy') || closedHome.body.includes('Pure Engine & Privacy'));
+  assert.ok(closedHome.body.includes('How it works'));
+  assert.ok(closedHome.body.includes('/login'));
+
+  // Test with publicSignup = true
+  deps.config = { ...deps.config, publicSignup: true };
+  const openHome = await call('GET', '/');
+  assert.equal(openHome.status, 200);
+  assert.ok(openHome.body.includes('Create your booking page'));
+  assert.ok(openHome.body.includes('/signup'));
+  assert.ok(openHome.body.includes('/privacy'));
+  assert.ok(openHome.body.includes('/terms'));
+});
+

@@ -19,6 +19,15 @@ const esc = (s: string): string =>
 // OWNER'S page, and their schedule title stays the largest thing on it.
 const PRODUCT = 'Pumasi Booking';
 
+/** Favicon SVG asset served at /favicon.ico and inlined in data URLs. */
+export const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="7" fill="#1a56db"/>
+  <path d="M8 10h16M8 16h16M8 22h9" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="23" cy="22" r="2.5" fill="#ffffff"/>
+</svg>`;
+
+export const FAVICON_DATA_URL = `data:image/svg+xml,${encodeURIComponent(FAVICON_SVG)}`;
+
 /** D-105 · every public page carries the way to the privacy answers. */
 export const FOOTER = `<footer class="foot">
   <a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a> &middot;
@@ -104,6 +113,8 @@ const SHELL = (title: string, rawBody: string): string => {
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${title === PRODUCT ? PRODUCT : `${esc(title)} &middot; ${PRODUCT}`}</title>
+<link rel="icon" type="image/svg+xml" href="${FAVICON_DATA_URL}">
+<link rel="alternate icon" href="/favicon.ico">
 <style>
  :root{color-scheme:light dark;
    --bg:#fff;--surface:#fff;--rail:#f7f8fa;--fg:#101828;--muted:#667085;
@@ -515,23 +526,95 @@ document.querySelectorAll('#mv .slot').forEach(function(b){
 }
 
 /**
- * The front door. Until this existed, `/` answered 404 and the service read as
- * broken to anyone who typed the bare domain. It explains what lives here and
- * where the doors are; the real surfaces are the owners' booking pages.
+ * The front door (Issue #6). Renders the landing page with hero CTA,
+ * feature pillars, how-it-works, and legal/commons status.
  */
 export function homePage(publicSignup = false): string {
   return SHELL(
     PRODUCT,
-    `<h1>${PRODUCT}</h1>
-<p class="muted">Share a link; people pick a time.</p>
-<p>Booking pages live at their own links. If someone sent you one,
-use that link to pick a time — this page cannot list them.</p>
-<p>${publicSignup
-      ? `<a href="/signup">Create your booking page</a> — free, sign-up takes a
-minute — or <a href="/login">sign in</a> to manage the pages you have.`
-      : `<a href="/login">Sign in</a> to manage your booking pages.
-Accounts are invite-only while the service stays small.`}</p>
-${FOOTER}`,
+    `<div class="hero-block">
+  <span class="pill">Apache-2.0 &middot; Self-Hostable</span>
+  <h1 class="hero-head">${PRODUCT}</h1>
+  <p class="hero-lead">Share a link, let clients or teammates pick a time. Verified against Google Calendar and Microsoft 365 in real time with zero double-booking.</p>
+  <div class="hero-actions">
+    ${publicSignup
+      ? `<a href="/signup" class="btn btn-prime">Create your booking page &rarr;</a>
+         <a href="/login" class="btn btn-sub">Sign in</a>`
+      : `<a href="/login" class="btn btn-prime">Sign in to your account &rarr;</a>`}
+  </div>
+  <p class="notice">${publicSignup ? 'Free, sign-up takes 1 minute &middot; No credit card needed' : 'Public sign-up is invite-only in seed stage'}</p>
+</div>
+
+<div class="grid-cards">
+  <div class="card-feat">
+    <div class="icon-wrap">${icon('M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z')}</div>
+    <h3>Live Calendar Truth</h3>
+    <p class="muted">Reads your Google Calendar and Microsoft 365 busy times in real time before offering slots. Fails closed if calendar is unreachable.</p>
+  </div>
+  <div class="card-feat">
+    <div class="icon-wrap">${icon('M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z')}</div>
+    <h3>Zero Double-Booking</h3>
+    <p class="muted">Guaranteed at the database level via SQL temporal exclusion constraints (Postgres btree_gist & SQLite triggers), not fragile app code.</p>
+  </div>
+  <div class="card-feat">
+    <div class="icon-wrap">${icon('M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4')}</div>
+    <h3>Pure Engine & Privacy</h3>
+    <p class="muted">100% Apache-2.0 open source, zero third-party telemetry, self-hostable with Docker or single binary in 60 seconds.</p>
+  </div>
+</div>
+
+<div class="how-block">
+  <h2>How it works</h2>
+  <div class="how-steps">
+    <div class="step-card">
+      <div class="step-badge">1</div>
+      <strong>Set your hours</strong>
+      <p class="muted">Define your weekly availability rules, duration, and buffer periods.</p>
+    </div>
+    <div class="step-card">
+      <div class="step-badge">2</div>
+      <strong>Share your link</strong>
+      <p class="muted">Send your custom booking URL (e.g. <code>/name/30min</code>) to anyone.</p>
+    </div>
+    <div class="step-card">
+      <div class="step-badge">3</div>
+      <strong>Automatic sync</strong>
+      <p class="muted">Real-time availability prevents conflicts; confirmation emails and .ics invites sent automatically.</p>
+    </div>
+  </div>
+</div>
+
+<div class="seed-box">
+  <p class="muted"><strong>Seed Preview:</strong> Built by autonomous multi-model agents. View our <a href="https://github.com/pumasi-ai/pumasi">Charter</a> &middot; <a href="https://github.com/pumasi-ai/pumasi/blob/main/governance/DEBT.md">Debt Register</a> &middot; <a href="https://github.com/pumasi-ai/pumasi/blob/main/lessons/README.md">Lessons Learned</a></p>
+</div>
+
+${FOOTER}
+<style>
+ .hero-block{text-align:center;padding:1.5rem 0 2rem;max-width:36rem;margin:0 auto}
+ .hero-head{font-size:2rem;letter-spacing:-.02em;margin:.75rem 0 .5rem;font-weight:700}
+ .hero-lead{font-size:1.05rem;color:var(--muted);margin:0 0 1.5rem;line-height:1.5}
+ .hero-actions{display:flex;gap:.75rem;justify-content:center;align-items:center;flex-wrap:wrap}
+ .btn{display:inline-block;padding:.6rem 1.25rem;border-radius:8px;font-weight:600;font-size:.95rem;text-decoration:none;cursor:pointer}
+ .btn-prime{background:var(--accent);color:#fff;border:1px solid var(--accent)}
+ .btn-prime:hover{filter:brightness(1.08);text-decoration:none;color:#fff}
+ .btn-sub{background:var(--surface);color:var(--fg);border:1px solid var(--line)}
+ .btn-sub:hover{background:var(--line-soft);text-decoration:none}
+ .grid-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));gap:1rem;margin:2rem 0}
+ .card-feat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:1.2rem;box-shadow:var(--shadow)}
+ .card-feat h3{font-size:.98rem;margin:.5rem 0 .25rem;font-weight:650}
+ .card-feat p{font-size:.86rem;margin:0;line-height:1.45}
+ .icon-wrap{display:inline-flex;padding:.4rem;background:var(--accent-soft);color:var(--accent);border-radius:8px}
+ .icon-wrap svg{width:20px;height:20px;stroke-width:2;stroke:currentColor;fill:none}
+ .how-block{margin:2.5rem 0 1.5rem}
+ .how-block h2{font-size:1.15rem;margin-bottom:1rem;font-weight:650}
+ .how-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));gap:1rem}
+ .step-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:1rem;position:relative}
+ .step-card strong{display:block;font-size:.92rem;margin:.4rem 0 .2rem}
+ .step-card p{font-size:.84rem;margin:0}
+ .step-badge{display:inline-block;width:1.5rem;height:1.5rem;line-height:1.5rem;text-align:center;background:var(--accent);color:#fff;font-size:.78rem;font-weight:700;border-radius:999px}
+ .seed-box{margin-top:2.5rem;padding:.9rem 1.1rem;background:var(--line-soft);border:1px solid var(--line);border-radius:var(--radius);font-size:.85rem}
+ .seed-box p{margin:0}
+</style>`,
   );
 }
 
