@@ -427,7 +427,8 @@ export default {
       return Response.json({ status: 'ready', owners });
     }
     // Issue #3 · favicon
-    if ((url.pathname === '/favicon.ico' || url.pathname === '/favicon.svg') && request.method === 'GET') {
+    const isGetOrHead = request.method === 'GET' || request.method === 'HEAD';
+    if ((url.pathname === '/favicon.ico' || url.pathname === '/favicon.svg') && isGetOrHead) {
       return new Response(FAVICON_SVG, {
         status: 200,
         headers: {
@@ -436,19 +437,19 @@ export default {
         },
       });
     }
-    if (url.pathname === '/' && request.method === 'GET') {
+    if (url.pathname === '/' && isGetOrHead) {
       return htmlResponse(200, homePage(config.publicSignup));
     }
-    if (url.pathname === '/login' && request.method === 'GET') {
+    if (url.pathname === '/login' && isGetOrHead) {
       return htmlResponse(200, loginPage(undefined, undefined, ssoEnabled));
     }
-    if (url.pathname === '/signup' && request.method === 'GET') {
+    if (url.pathname === '/signup' && isGetOrHead) {
       return htmlResponse(200, signupPage(url.searchParams.get('invite') ?? '', undefined,
         { sso: ssoEnabled, publicSignup: config.publicSignup }));
     }
     // D-105 · the privacy pack is global and data-free: the router serves it
     // without touching any tenant.
-    if (request.method === 'GET') {
+    if (isGetOrHead) {
       const doc = LEGAL_DOCS.find((d) => url.pathname === `/${d.slug}`);
       if (doc) return htmlResponse(200, legalPage(doc));
     }
