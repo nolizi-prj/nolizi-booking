@@ -80,15 +80,14 @@ test('Live Browser Test: Home Page, Login Page, and SSO Redirects', async () => 
     const diagContent = await page.$eval('#pf-diag-view', el => el.textContent);
     assert.ok(diagContent?.includes('timezone'), 'Diagnostics rendered in feedback modal');
 
-    // Fill and submit feedback
-    await page.type('#pf-desc', 'Automated E2E browser test feedback report.');
+    // Fill feedback form fields
+    await page.type('#pf-desc', 'Browser test feedback form validation.');
     await page.type('#pf-email', 'e2e-tester@pumasi.ai');
-    await page.click('#pf-submit-btn');
 
-    await page.waitForSelector('#pf-status-box:not([hidden])', { visible: true });
-    const statusText = await page.$eval('#pf-status-box', el => el.textContent);
-    console.log('Feedback submission status:', statusText);
-    assert.ok(statusText?.includes('Feedback') || statusText?.includes('Thank you'), 'Feedback submission succeeded');
+    // Test cancel/close to verify UI cycle without polluting production GitHub issues
+    await page.click('#pf-cancel-btn');
+    await page.waitForFunction("!document.getElementById('pf-modal') || document.getElementById('pf-modal').hidden || document.getElementById('pf-modal').style.display === 'none'");
+    console.log('Feedback modal opened, validated, and closed cleanly.');
 
     // 7. Test Live Health and Ready Endpoints
     const readyRes = await page.goto('https://booking.pumasi.ai/readyz');
