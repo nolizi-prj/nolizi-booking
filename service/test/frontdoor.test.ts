@@ -261,8 +261,8 @@ test('Issue #6 · home page renders hero, feature cards, how it works, and CTA',
   assert.equal(closedHome.status, 200);
   assert.ok(closedHome.body.includes('Pumasi Booking'));
   assert.ok(closedHome.body.includes('Live Calendar Truth'));
-  assert.ok(closedHome.body.includes('Zero Double-Booking'));
-  assert.ok(closedHome.body.includes('Pure Engine &amp; Privacy') || closedHome.body.includes('Pure Engine & Privacy'));
+  assert.ok(closedHome.body.toLowerCase().includes('zero double-booking'));
+  assert.ok(closedHome.body.includes('Pure Engine Separability') || closedHome.body.includes('Pure Engine'));
   assert.ok(closedHome.body.includes('How it works'));
   assert.ok(closedHome.body.includes('/login'));
 

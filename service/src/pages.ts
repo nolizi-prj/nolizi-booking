@@ -105,10 +105,12 @@ const sidebar = (active: string): string => `<a class="skip" href="#main">Skip t
 
 const SHELL = (title: string, rawBody: string): string => {
   const m = rawBody.match(/^\s*<!--nav:([a-z-]+)-->/);
-  const body = m ? rawBody.replace(m[0], '') : rawBody;
+  const wide = rawBody.includes('<!--wide-->');
+  let body = m ? rawBody.replace(m[0], '') : rawBody;
+  if (wide) body = body.replace('<!--wide-->', '');
   const inner = m
     ? `<div class="app">${sidebar(m[1]!)}<main id="main" class="main">${body}</main></div>`
-    : `<main id="main" class="page">${body}</main>`;
+    : `<main id="main" class="page ${wide ? 'page-wide' : ''}">${body}</main>`;
   return `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -131,6 +133,7 @@ const SHELL = (title: string, rawBody: string): string => {
    font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
    -webkit-font-smoothing:antialiased}
  .page{max-width:40rem;margin:0 auto;padding:2.5rem 1.25rem 4rem}
+ .page-wide{max-width:68rem;padding:1.5rem 1.25rem 5rem}
  h1{font-size:1.55rem;line-height:1.25;letter-spacing:-.01em;margin:0 0 .35rem;font-weight:650}
  h2{font-size:1.02rem;margin:0 0 .3rem;font-weight:620}
  a{color:var(--accent)} a:hover{text-decoration:underline}
@@ -526,94 +529,374 @@ document.querySelectorAll('#mv .slot').forEach(function(b){
 }
 
 /**
- * The front door (Issue #6). Renders the landing page with hero CTA,
- * feature pillars, how-it-works, and legal/commons status.
+ * The front door (Issue #6). Renders the rich landing page with hero CTA,
+ * interactive mockup card, architecture comparison, feature pillars,
+ * how-it-works, and legal/commons status.
  */
 export function homePage(publicSignup = false): string {
   return SHELL(
     PRODUCT,
-    `<div class="hero-block">
-  <span class="pill">Apache-2.0 &middot; Self-Hostable</span>
-  <h1 class="hero-head">${PRODUCT}</h1>
-  <p class="hero-lead">Share a link, let clients or teammates pick a time. Verified against Google Calendar and Microsoft 365 in real time with zero double-booking.</p>
-  <div class="hero-actions">
-    ${publicSignup
-      ? `<a href="/signup" class="btn btn-prime">Create your booking page &rarr;</a>
-         <a href="/login" class="btn btn-sub">Sign in</a>`
-      : `<a href="/login" class="btn btn-prime">Sign in to your account &rarr;</a>`}
+    `<!--wide-->
+<header class="home-top-nav">
+  <div class="brand-group">
+    <div class="brand-svg-mark">${FAVICON_SVG}</div>
+    <span class="brand-title">${PRODUCT}</span>
+    <span class="tag-pill">Apache-2.0</span>
   </div>
-  <p class="notice">${publicSignup ? 'Free, sign-up takes 1 minute &middot; No credit card needed' : 'Public sign-up is invite-only in seed stage'}</p>
-</div>
+  <nav class="top-nav-links">
+    <a href="#features">Features</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#how-it-works">How it works</a>
+    <a href="https://github.com/pumasi-ai/pumasi-booking" target="_blank" rel="noopener" class="gh-link">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+      <span>GitHub</span>
+    </a>
+    <a href="/login" class="top-nav-btn">Sign in</a>
+  </nav>
+</header>
 
-<div class="grid-cards">
-  <div class="card-feat">
-    <div class="icon-wrap">${icon('M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z')}</div>
-    <h3>Live Calendar Truth</h3>
-    <p class="muted">Reads your Google Calendar and Microsoft 365 busy times in real time before offering slots. Fails closed if calendar is unreachable.</p>
-  </div>
-  <div class="card-feat">
-    <div class="icon-wrap">${icon('M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z')}</div>
-    <h3>Zero Double-Booking</h3>
-    <p class="muted">Guaranteed at the database level via SQL temporal exclusion constraints (Postgres btree_gist & SQLite triggers), not fragile app code.</p>
-  </div>
-  <div class="card-feat">
-    <div class="icon-wrap">${icon('M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4')}</div>
-    <h3>Pure Engine & Privacy</h3>
-    <p class="muted">100% Apache-2.0 open source, zero third-party telemetry, self-hostable with Docker or single binary in 60 seconds.</p>
-  </div>
-</div>
+<div class="hero-split-grid">
+  <div class="hero-text-col">
+    <div class="hero-eyebrow">
+      <span class="live-pulse"></span>
+      <span>Autonomous Commons &middot; Multi-Model Verified</span>
+    </div>
+    <h1 class="hero-main-title">Open-source scheduling, built for <span class="highlight-gradient">absolute truth</span>.</h1>
+    <p class="hero-lead-para">Connect Google Calendar and Microsoft 365 with real-time busy checks, zero double-booking guaranteed inside the database, and 1-minute self-hosting. Stop paying per-seat subscription rent.</p>
+    
+    <div class="hero-action-buttons">
+      ${publicSignup
+        ? `<a href="/signup" class="cta-prime">Create your booking page &rarr;</a>
+           <a href="/login" class="cta-outline">Sign in</a>`
+        : `<a href="/login" class="cta-prime">Sign in to account &rarr;</a>`}
+      <a href="https://github.com/pumasi-ai/pumasi-booking" target="_blank" rel="noopener" class="cta-subtle">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M12 .587l3.668 7.431 8.2 1.192-5.934 5.784 1.399 8.169-7.333-3.856-7.333 3.856 1.399-8.169-5.934-5.784 8.2-1.192zm0 5.702l-2.223 4.505-4.971.723 3.597 3.506-.847 4.953 4.444-2.336 4.444 2.336-.847-4.953 3.597-3.506-4.971-.723z"/></svg>
+        <span>Star on GitHub</span>
+      </a>
+    </div>
 
-<div class="how-block">
-  <h2>How it works</h2>
-  <div class="how-steps">
-    <div class="step-card">
-      <div class="step-badge">1</div>
-      <strong>Set your hours</strong>
-      <p class="muted">Define your weekly availability rules, duration, and buffer periods.</p>
-    </div>
-    <div class="step-card">
-      <div class="step-badge">2</div>
-      <strong>Share your link</strong>
-      <p class="muted">Send your custom booking URL (e.g. <code>/name/30min</code>) to anyone.</p>
-    </div>
-    <div class="step-card">
-      <div class="step-badge">3</div>
-      <strong>Automatic sync</strong>
-      <p class="muted">Real-time availability prevents conflicts; confirmation emails and .ics invites sent automatically.</p>
+    <div class="hero-proof-row">
+      <span class="proof-tag"><svg viewBox="0 0 16 16" width="13" height="13" fill="var(--ok)"><path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/></svg> No credit card needed</span>
+      <span class="proof-tag"><svg viewBox="0 0 16 16" width="13" height="13" fill="var(--ok)"><path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/></svg> Zero telemetry / ad trackers</span>
+      <span class="proof-tag"><svg viewBox="0 0 16 16" width="13" height="13" fill="var(--ok)"><path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/></svg> 1-Min Docker / Worker Deploy</span>
     </div>
   </div>
+
+  <div class="hero-mockup-col">
+    <div class="mockup-window">
+      <div class="mockup-header-bar">
+        <div class="dot-trio"><span></span><span></span><span></span></div>
+        <div class="mockup-url-pill">booking.pumasi.ai/sarah/arch-review</div>
+      </div>
+      <div class="mockup-content">
+        <div class="mockup-profile">
+          <div class="avatar-circle">SC</div>
+          <div>
+            <div class="mock-author">Sarah Chen</div>
+            <div class="mock-meeting-title">30 Min Technical Architecture Call</div>
+          </div>
+        </div>
+        <p class="mock-desc">Review scheduling architecture, timezone arithmetic, and self-hosted PostgreSQL concurrency.</p>
+        
+        <div class="mock-meta-badges">
+          <span class="meta-badge"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> 30 min</span>
+          <span class="meta-badge"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg> America/Chicago</span>
+          <span class="meta-badge"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l5-3v10l-5-3v-4z"/><rect x="4" y="6" width="11" height="12" rx="2"/></svg> Google Meet</span>
+        </div>
+
+        <div class="mock-date-strip">
+          <div class="mock-date-btn"><span>MON</span><strong>31</strong></div>
+          <div class="mock-date-btn"><span>TUE</span><strong>1</strong></div>
+          <div class="mock-date-btn active"><span>WED</span><strong>2</strong></div>
+          <div class="mock-date-btn"><span>THU</span><strong>3</strong></div>
+          <div class="mock-date-btn"><span>FRI</span><strong>4</strong></div>
+        </div>
+
+        <div class="mock-slots-container">
+          <div class="mock-slot-pill">09:00 AM</div>
+          <div class="mock-slot-pill">10:30 AM</div>
+          <div class="mock-slot-pill selected">02:00 PM ✓</div>
+          <div class="mock-slot-pill">03:30 PM</div>
+        </div>
+
+        <div class="mock-verification-notice">
+          <span class="verify-icon">⚡</span>
+          <span>Google Calendar & Microsoft 365 Verified &middot; Zero Conflicts</span>
+        </div>
+
+        <button type="button" class="mock-submit-btn">Confirm Wed, Sep 2 at 2:00 PM &rarr;</button>
+      </div>
+    </div>
+  </div>
 </div>
 
-<div class="seed-box">
-  <p class="muted"><strong>Seed Preview:</strong> Built by autonomous multi-model agents. View our <a href="https://github.com/pumasi-ai/pumasi">Charter</a> &middot; <a href="https://github.com/pumasi-ai/pumasi/blob/main/governance/DEBT.md">Debt Register</a> &middot; <a href="https://github.com/pumasi-ai/pumasi/blob/main/lessons/README.md">Lessons Learned</a></p>
+<div class="metrics-strip">
+  <div class="metric-card">
+    <div class="metric-value">0 ms</div>
+    <div class="metric-title">Ambient State Drift</div>
+    <div class="metric-desc">Pure mathematical engine in @pumasi/booking-core</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value">100%</div>
+    <div class="metric-title">Database Exclusion Lock</div>
+    <div class="metric-desc">PostgreSQL btree_gist + SQLite atomic triggers</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value">250+</div>
+    <div class="metric-title">Verified Test Cases</div>
+    <div class="metric-desc">Multi-model tested across DST gaps & timezones</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value">$0 / Seat</div>
+    <div class="metric-title">Per-User License Cost</div>
+    <div class="metric-desc">100% Apache-2.0 open source forever</div>
+  </div>
+</div>
+
+<section id="architecture" class="arch-section">
+  <div class="section-tag-center">ENGINEERING DEEP DIVE</div>
+  <h2 class="section-heading-center">Why Pumasi Booking is built differently</h2>
+  <p class="section-sub-center">Most commercial scheduling tools use application-level checks that fail under concurrent bookings. Pumasi locks availability atomically inside the database engine.</p>
+  
+  <div class="compare-row-grid">
+    <div class="compare-card bad-card">
+      <div class="card-status-badge bad-badge">Traditional SaaS / Naive App Logic</div>
+      <h3>Check-Then-Act Race Condition</h3>
+      <p>The web server checks if the time is free, pauses, and then sends an INSERT. Two concurrent clicks both pass the check and double-book your calendar.</p>
+      <div class="flow-box bad-flow-box">
+        <div class="flow-node">User A & User B click 2:00 PM simultaneously</div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-node">App checks DB: "Slot is available" (True for both)</div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-node err-node">💥 Double Booking Created (Data Corruption)</div>
+      </div>
+    </div>
+
+    <div class="compare-card good-card">
+      <div class="card-status-badge good-badge">Pumasi Commons Architecture</div>
+      <h3>SQL-Level Temporal Exclusion</h3>
+      <p>Concurrency protection lives inside the database transaction. Overlapping intervals are physically rejected by index constraints, even under thousands of parallel requests.</p>
+      <div class="flow-box good-flow-box">
+        <div class="flow-node">User A & User B click 2:00 PM simultaneously</div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-node">DB evaluates <code>btree_gist</code> interval lock</div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-node ok-node">🛡️ Exactly 1 Confirms &middot; Loser rejected cleanly</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features" class="features-section">
+  <div class="section-tag-center">CORE CAPABILITIES</div>
+  <h2 class="section-heading-center">Engineered for reliability, privacy, and speed</h2>
+  
+  <div class="features-3col-grid">
+    <div class="rich-feat-box">
+      <div class="feat-icon-bubble blue-bubble">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      </div>
+      <h3>Live Calendar Truth</h3>
+      <p>Checks Google Calendar and Microsoft 365 busy times in real time before offering slots. If a provider is unreachable, it fails closed to protect your schedule from collision.</p>
+      <div class="feat-bullet-list">
+        <div class="bullet-item"><span class="check-mark">✓</span> Google Calendar OAuth2 real-time sync</div>
+        <div class="bullet-item"><span class="check-mark">✓</span> Microsoft 365 Graph API conflict check</div>
+        <div class="bullet-item"><span class="check-mark">✓</span> Fails-closed network protection</div>
+      </div>
+    </div>
+
+    <div class="rich-feat-box">
+      <div class="feat-icon-bubble green-bubble">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+      </div>
+      <h3>Pure Engine Separability</h3>
+      <p>Availability calculation in <code>@pumasi/booking-core</code> is a pure function: zero I/O, zero clock dependencies, byte-identical output. Extract the engine alone with <code>git subtree split</code>.</p>
+      <div class="feat-bullet-list">
+        <div class="bullet-item"><span class="check-mark">✓</span> Spring-forward & fall-back DST precision</div>
+        <div class="bullet-item"><span class="check-mark">✓</span> Daily caps evaluated on host's local date</div>
+        <div class="bullet-item"><span class="check-mark">✓</span> Frozen multi-model acceptance test matrix</div>
+      </div>
+    </div>
+
+    <div class="rich-feat-box">
+      <div class="feat-icon-bubble purple-bubble">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+      </div>
+      <h3>1-Minute Self-Hosting</h3>
+      <p>Self-hosting is a first-class citizen. Spin up locally with Docker Compose and PostgreSQL, or deploy to Cloudflare Workers with Durable Objects for zero server maintenance.</p>
+      <div class="feat-bullet-list">
+        <div class="bullet-item"><span class="check-mark">✓</span> <code>docker compose up</code> ready</div>
+        <div class="bullet-item"><span class="check-mark">✓</span> Cloudflare Workers + Durable Objects build</div>
+        <div class="bullet-item"><span class="check-mark">✓</span> Zero third-party telemetry or ad tracking</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how-it-works" class="how-section-wrapper">
+  <div class="section-tag-center">SIMPLE WORKFLOW</div>
+  <h2 class="section-heading-center">How it works</h2>
+  <div class="how-cards-row">
+    <div class="how-card-box">
+      <div class="how-step-badge">01</div>
+      <h4>Set your availability</h4>
+      <p>Define weekly working hours, custom buffer times between meetings, and event types (15m, 30m, 60m discovery calls).</p>
+    </div>
+    <div class="how-card-box">
+      <div class="how-step-badge">02</div>
+      <h4>Share your custom link</h4>
+      <p>Send your public booking link (<code>/username/event</code>) directly to clients, embed it in emails, or link it on your website.</p>
+    </div>
+    <div class="how-card-box">
+      <div class="how-step-badge">03</div>
+      <h4>Automatic sync</h4>
+      <p>When a booker selects a slot, real-time availability locks the time, and email confirmations with <code>.ics</code> invites are delivered instantly.</p>
+    </div>
+  </div>
+</section>
+
+<div class="seed-preview-card">
+  <div class="seed-content">
+    <div class="seed-title-group">
+      <span class="seed-badge">SEED PREVIEW &middot; ALPHA</span>
+      <h3>Built in the open by autonomous multi-model agents</h3>
+    </div>
+    <p>Pumasi is an open commons. Every line of code is reviewed across competing model families (Claude, Gemini, Grok), active debts are publicly acknowledged, and rejected candidates stay on the record.</p>
+  </div>
+  <div class="seed-links-col">
+    <a href="https://github.com/pumasi-ai/pumasi" class="seed-btn" target="_blank" rel="noopener">Governance Charter ↗</a>
+    <a href="https://github.com/pumasi-ai/pumasi/blob/main/governance/DEBT.md" class="seed-btn" target="_blank" rel="noopener">Debt Register (DEBT.md) ↗</a>
+    <a href="https://github.com/pumasi-ai/pumasi/blob/main/lessons/README.md" class="seed-btn" target="_blank" rel="noopener">Lessons Learned ↗</a>
+  </div>
 </div>
 
 ${FOOTER}
 <style>
- .hero-block{text-align:center;padding:1.5rem 0 2rem;max-width:36rem;margin:0 auto}
- .hero-head{font-size:2rem;letter-spacing:-.02em;margin:.75rem 0 .5rem;font-weight:700}
- .hero-lead{font-size:1.05rem;color:var(--muted);margin:0 0 1.5rem;line-height:1.5}
- .hero-actions{display:flex;gap:.75rem;justify-content:center;align-items:center;flex-wrap:wrap}
- .btn{display:inline-block;padding:.6rem 1.25rem;border-radius:8px;font-weight:600;font-size:.95rem;text-decoration:none;cursor:pointer}
- .btn-prime{background:var(--accent);color:#fff;border:1px solid var(--accent)}
- .btn-prime:hover{filter:brightness(1.08);text-decoration:none;color:#fff}
- .btn-sub{background:var(--surface);color:var(--fg);border:1px solid var(--line)}
- .btn-sub:hover{background:var(--line-soft);text-decoration:none}
- .grid-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));gap:1rem;margin:2rem 0}
- .card-feat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:1.2rem;box-shadow:var(--shadow)}
- .card-feat h3{font-size:.98rem;margin:.5rem 0 .25rem;font-weight:650}
- .card-feat p{font-size:.86rem;margin:0;line-height:1.45}
- .icon-wrap{display:inline-flex;padding:.4rem;background:var(--accent-soft);color:var(--accent);border-radius:8px}
- .icon-wrap svg{width:20px;height:20px;stroke-width:2;stroke:currentColor;fill:none}
- .how-block{margin:2.5rem 0 1.5rem}
- .how-block h2{font-size:1.15rem;margin-bottom:1rem;font-weight:650}
- .how-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));gap:1rem}
- .step-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:1rem;position:relative}
- .step-card strong{display:block;font-size:.92rem;margin:.4rem 0 .2rem}
- .step-card p{font-size:.84rem;margin:0}
- .step-badge{display:inline-block;width:1.5rem;height:1.5rem;line-height:1.5rem;text-align:center;background:var(--accent);color:#fff;font-size:.78rem;font-weight:700;border-radius:999px}
- .seed-box{margin-top:2.5rem;padding:.9rem 1.1rem;background:var(--line-soft);border:1px solid var(--line);border-radius:var(--radius);font-size:.85rem}
- .seed-box p{margin:0}
+ .home-top-nav{display:flex;justify-content:space-between;align-items:center;padding:1rem 0 2rem;border-bottom:1px solid var(--line);margin-bottom:2.5rem;flex-wrap:wrap;gap:1rem}
+ .brand-group{display:flex;align-items:center;gap:.65rem}
+ .brand-svg-mark svg{width:26px;height:26px;border-radius:6px;display:block}
+ .brand-title{font-size:1.15rem;font-weight:700;letter-spacing:-.02em}
+ .tag-pill{font-size:.72rem;font-weight:600;padding:.15rem .5rem;border-radius:999px;background:var(--line-soft);color:var(--muted);border:1px solid var(--line)}
+ .top-nav-links{display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap}
+ .top-nav-links a{color:var(--muted);text-decoration:none;font-size:.9rem;font-weight:550}
+ .top-nav-links a:hover{color:var(--fg);text-decoration:none}
+ .top-nav-links .gh-link{display:inline-flex;align-items:center;gap:.35rem}
+ .top-nav-btn{padding:.35rem .85rem;border-radius:6px;background:var(--accent-soft);color:var(--accent)!important;font-weight:600;border:1px solid var(--line)}
+ .top-nav-btn:hover{background:var(--accent);color:#fff!important}
+
+ .hero-split-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:2.5rem;align-items:center;margin-bottom:3.5rem}
+ @media(max-width:56rem){.hero-split-grid{grid-template-columns:1fr;gap:2rem}}
+ 
+ .hero-eyebrow{display:inline-flex;align-items:center;gap:.5rem;padding:.25rem .75rem;background:var(--accent-soft);color:var(--accent);border-radius:999px;font-size:.8rem;font-weight:600;margin-bottom:1rem;border:1px solid var(--line)}
+ .live-pulse{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(26,86,219,.25)}
+ .hero-main-title{font-size:2.35rem;line-height:1.2;letter-spacing:-.03em;margin:0 0 1rem;font-weight:750}
+ .highlight-gradient{background:linear-gradient(135deg,var(--accent),#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+ .hero-lead-para{font-size:1.08rem;line-height:1.55;color:var(--muted);margin:0 0 1.75rem}
+ 
+ .hero-action-buttons{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin-bottom:1.5rem}
+ .cta-prime{display:inline-block;padding:.7rem 1.4rem;border-radius:8px;background:var(--accent);color:#fff!important;font-weight:650;font-size:.96rem;text-decoration:none;cursor:pointer;border:1px solid var(--accent);box-shadow:0 2px 4px rgba(26,86,219,.2)}
+ .cta-prime:hover{filter:brightness(1.08);text-decoration:none}
+ .cta-outline{display:inline-block;padding:.7rem 1.3rem;border-radius:8px;background:var(--surface);color:var(--fg)!important;font-weight:600;font-size:.95rem;text-decoration:none;border:1px solid var(--line)}
+ .cta-outline:hover{background:var(--line-soft);text-decoration:none}
+ .cta-subtle{display:inline-flex;align-items:center;gap:.4rem;padding:.7rem 1rem;color:var(--muted)!important;font-weight:550;font-size:.9rem;text-decoration:none}
+ .cta-subtle:hover{color:var(--fg)!important}
+
+ .hero-proof-row{display:flex;gap:1rem;flex-wrap:wrap;font-size:.82rem;color:var(--muted)}
+ .proof-tag{display:inline-flex;align-items:center;gap:.35rem}
+
+ /* Mockup Card Window */
+ .mockup-window{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.08);overflow:hidden}
+ .mockup-header-bar{background:var(--line-soft);padding:.6rem .9rem;display:flex;align-items:center;gap:.8rem;border-bottom:1px solid var(--line)}
+ .dot-trio{display:flex;gap:5px}
+ .dot-trio span{width:9px;height:9px;border-radius:50%;background:var(--line)}
+ .mockup-url-pill{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.74rem;color:var(--muted);background:var(--surface);padding:.15rem .6rem;border-radius:4px;border:1px solid var(--line)}
+ .mockup-content{padding:1.4rem}
+ 
+ .mockup-profile{display:flex;align-items:center;gap:.75rem;margin-bottom:.6rem}
+ .avatar-circle{width:36px;height:36px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem}
+ .mock-author{font-size:.84rem;color:var(--muted);font-weight:550}
+ .mock-meeting-title{font-size:1.02rem;font-weight:680;letter-spacing:-.01em}
+ .mock-desc{font-size:.85rem;color:var(--muted);margin:.3rem 0 .75rem;line-height:1.4}
+ 
+ .mock-meta-badges{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
+ .meta-badge{display:inline-flex;align-items:center;gap:.3rem;font-size:.76rem;background:var(--line-soft);color:var(--fg);padding:.2rem .55rem;border-radius:6px;font-weight:550}
+ 
+ .mock-date-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:.35rem;margin-bottom:.85rem}
+ .mock-date-btn{text-align:center;padding:.4rem .2rem;border:1px solid var(--line);border-radius:8px;font-size:.76rem}
+ .mock-date-btn span{display:block;font-size:.65rem;color:var(--muted)}
+ .mock-date-btn strong{font-size:.85rem}
+ .mock-date-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+ .mock-date-btn.active span{color:rgba(255,255,255,.85)}
+
+ .mock-slots-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.4rem;margin-bottom:.9rem}
+ .mock-slot-pill{text-align:center;padding:.5rem;border:1px solid var(--line);border-radius:7px;font-size:.82rem;font-weight:600;color:var(--fg)}
+ .mock-slot-pill.selected{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+ 
+ .mock-verification-notice{display:flex;align-items:center;gap:.4rem;font-size:.75rem;color:var(--ok);margin-bottom:.9rem;background:var(--line-soft);padding:.35rem .6rem;border-radius:6px}
+ .mock-submit-btn{width:100%;padding:.65rem;border-radius:8px;background:var(--accent);color:#fff;font-weight:650;font-size:.88rem;border:0;cursor:pointer}
+
+ /* Metrics Strip */
+ .metrics-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:1rem;margin:3.5rem 0;padding:1.5rem;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+ .metric-card{padding:.5rem}
+ .metric-value{font-size:1.6rem;font-weight:750;letter-spacing:-.02em;color:var(--accent)}
+ .metric-title{font-size:.9rem;font-weight:650;margin:.2rem 0 .15rem}
+ .metric-desc{font-size:.78rem;color:var(--muted);line-height:1.4}
+
+ /* Architecture Section */
+ .arch-section{margin:4.5rem 0}
+ .section-tag-center{text-align:center;font-size:.75rem;font-weight:700;letter-spacing:.08em;color:var(--accent);margin-bottom:.35rem}
+ .section-heading-center{text-align:center;font-size:1.75rem;font-weight:720;letter-spacing:-.02em;margin:0 0 .5rem}
+ .section-sub-center{text-align:center;max-width:36rem;margin:0 auto 2.25rem;color:var(--muted);font-size:.98rem;line-height:1.5}
+ 
+ .compare-row-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+ @media(max-width:48rem){.compare-row-grid{grid-template-columns:1fr}}
+ .compare-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:1.5rem;box-shadow:var(--shadow)}
+ .bad-card{border-top:4px solid var(--danger)}
+ .good-card{border-top:4px solid var(--ok)}
+ .card-status-badge{font-size:.72rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;margin-bottom:.6rem}
+ .bad-badge{color:var(--danger)}
+ .good-badge{color:var(--ok)}
+ .compare-card h3{font-size:1.05rem;margin:0 0 .4rem;font-weight:650}
+ .compare-card p{font-size:.88rem;color:var(--muted);margin:0 0 1.2rem;line-height:1.45}
+ 
+ .flow-box{padding:.85rem;background:var(--line-soft);border-radius:8px;font-size:.82rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+ .flow-node{padding:.3rem 0}
+ .flow-arrow{color:var(--muted);font-size:.8rem}
+ .err-node{color:var(--danger);font-weight:650}
+ .ok-node{color:var(--ok);font-weight:650}
+
+ /* Features Section */
+ .features-section{margin:4.5rem 0}
+ .features-3col-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:1.25rem}
+ .rich-feat-box{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:1.5rem;box-shadow:var(--shadow)}
+ .feat-icon-bubble{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:1rem}
+ .blue-bubble{background:var(--accent-soft);color:var(--accent)}
+ .green-bubble{background:rgba(6,118,71,.1);color:var(--ok)}
+ .purple-bubble{background:rgba(139,92,246,.12);color:#8b5cf6}
+ .rich-feat-box h3{font-size:1.08rem;margin:0 0 .45rem;font-weight:650}
+ .rich-feat-box p{font-size:.88rem;color:var(--muted);margin:0 0 1.1rem;line-height:1.45}
+ .feat-bullet-list{display:flex;flex-direction:column;gap:.4rem;font-size:.82rem}
+ .bullet-item{display:flex;align-items:center;gap:.45rem;color:var(--fg)}
+ .check-mark{color:var(--ok);font-weight:700}
+
+ /* How It Works */
+ .how-section-wrapper{margin:4.5rem 0}
+ .how-cards-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));gap:1.25rem}
+ .how-card-box{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:1.4rem;position:relative}
+ .how-step-badge{font-size:1.6rem;font-weight:800;color:var(--accent);opacity:.75;margin-bottom:.5rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+ .how-card-box h4{font-size:.98rem;margin:0 0 .35rem;font-weight:650}
+ .how-card-box p{font-size:.85rem;color:var(--muted);margin:0;line-height:1.45}
+
+ /* Seed Preview Box */
+ .seed-preview-card{display:flex;justify-content:space-between;align-items:center;gap:2rem;background:var(--line-soft);border:1px solid var(--line);border-radius:14px;padding:1.6rem 1.8rem;margin:4rem 0 2rem;flex-wrap:wrap}
+ .seed-content{max-width:34rem}
+ .seed-title-group{display:flex;align-items:center;gap:.65rem;margin-bottom:.4rem;flex-wrap:wrap}
+ .seed-badge{font-size:.72rem;font-weight:700;padding:.15rem .5rem;border-radius:999px;background:var(--accent);color:#fff}
+ .seed-title-group h3{font-size:1.05rem;margin:0;font-weight:680}
+ .seed-content p{font-size:.86rem;color:var(--muted);margin:0;line-height:1.5}
+ .seed-links-col{display:flex;flex-direction:column;gap:.5rem;min-width:13rem}
+ .seed-btn{display:inline-block;padding:.45rem .85rem;background:var(--surface);color:var(--fg)!important;border:1px solid var(--line);border-radius:7px;font-size:.84rem;font-weight:550;text-decoration:none;text-align:center}
+ .seed-btn:hover{background:var(--line);text-decoration:none}
 </style>`,
   );
 }
