@@ -26,6 +26,19 @@ export function googleSsoUrl(opts: {
   return `${AUTH_URL}?${p}`;
 }
 
+function decodeBase64Url(str: string): string {
+  let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (base64.length % 4 !== 0) {
+    base64 += '=';
+  }
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 export async function googleSsoExchange(opts: {
   clientId: string;
   clientSecret: string;
@@ -43,13 +56,21 @@ export async function googleSsoExchange(opts: {
       grant_type: 'authorization_code',
     }),
   });
-  if (!res.ok) throw new Error(`google sso exchange failed: ${res.status}`);
-  const t = (await res.json()) as { id_token: string };
-  const payload = t.id_token.split('.')[1] ?? '';
-  const claims = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))) as {
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`google sso exchange failed (${res.status}): ${errText.slice(0, 300)}`);
+  }
+  const t = (await res.json()) as { id_token?: string };
+  if (!t.id_token) throw new Error('google sso: no id_token in response');
+  const parts = t.id_token.split('.');
+  if (parts.length < 2 || !parts[1]) throw new Error('google sso: invalid id_token structure');
+
+  const payloadJson = decodeBase64Url(parts[1]);
+  const claims = JSON.parse(payloadJson) as {
     email?: string;
-    email_verified?: boolean;
+    email_verified?: boolean | string;
   };
   if (!claims.email) throw new Error('google sso: no email claim');
-  return { email: claims.email, emailVerified: claims.email_verified === true };
+  const emailVerified = claims.email_verified === true || claims.email_verified === 'true';
+  return { email: claims.email.trim().toLowerCase(), emailVerified };
 }

@@ -912,7 +912,11 @@ export interface SsoOptions {
   microsoft?: boolean;
 }
 
-/** P4 & Issue #5 — SSO buttons for Google and Microsoft. */
+const GOOGLE_ICON_SVG = `<svg class="sso-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.35 24 12 24Z"/><path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.14-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.04 0 12s.45 3.82 1.25 5.42l4.03-3.15Z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98Z"/></svg>`;
+
+const MICROSOFT_ICON_SVG = `<svg class="sso-icon" width="18" height="18" viewBox="0 0 21 21" aria-hidden="true"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>`;
+
+/** P4 & Issue #5 — SSO buttons for Google and Microsoft with brand icons. */
 function ssoButtons(inviteCode = '', sso: boolean | SsoOptions = true): string {
   const google = typeof sso === 'boolean' ? sso : (sso.google ?? false);
   const microsoft = typeof sso === 'boolean' ? false : (sso.microsoft ?? false);
@@ -923,26 +927,57 @@ function ssoButtons(inviteCode = '', sso: boolean | SsoOptions = true): string {
     buttons.push(`<form method="post" action="/auth/google/start" class="ssoform">
   <input type="hidden" name="invite" value="${esc(inviteCode)}">
   <input type="hidden" name="timezone" class="tzauto">
-  <button class="submit sso" type="submit">Continue with Google</button>
+  <button class="sso-btn sso-google" type="submit">
+    ${GOOGLE_ICON_SVG}
+    <span>Continue with Google</span>
+  </button>
 </form>`);
   }
   if (microsoft) {
     buttons.push(`<form method="post" action="/auth/microsoft/start" class="ssoform">
   <input type="hidden" name="invite" value="${esc(inviteCode)}">
   <input type="hidden" name="timezone" class="tzauto">
-  <button class="submit sso sso-ms" type="submit">Continue with Microsoft</button>
+  <button class="sso-btn sso-ms" type="submit">
+    ${MICROSOFT_ICON_SVG}
+    <span>Continue with Microsoft</span>
+  </button>
 </form>`);
   }
 
-  return `${buttons.join('\n')}
-<p class="muted" style="text-align:center">or</p>
+  return `<div class="sso-stack">${buttons.join('')}</div>
+<div class="auth-divider"><span>or continue with email</span></div>
 <script>document.querySelectorAll('.tzauto').forEach(function(i){
-  try{i.value=Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'}catch(e){}});</script>
-<style>.sso{background:transparent;color:var(--accent);border:1px solid var(--accent)}
-.sso-ms{color:var(--fg);border:1px solid var(--line)}
-.sso-ms:hover{background:var(--line-soft)}
-.ssoform{margin:.4rem 0}</style>`;
+  try{i.value=Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'}catch(e){}});</script>`;
 }
+
+const AUTH_STYLES = `<style>
+  .auth-wrap{max-width:27rem;margin:1.5rem auto 3.5rem;padding:0 1rem}
+  .auth-top{text-align:center;margin-bottom:1.5rem}
+  .auth-top .brand-logo{display:inline-flex;align-items:center;gap:.6rem;text-decoration:none;color:var(--fg);font-size:1.15rem;font-weight:700;letter-spacing:-.02em}
+  .auth-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:2rem 1.85rem;box-shadow:0 10px 28px -6px rgba(0,0,0,.06),0 2px 8px -2px rgba(0,0,0,.04)}
+  .auth-header{margin-bottom:1.4rem;text-align:center}
+  .auth-header h1{font-size:1.45rem;font-weight:700;letter-spacing:-.02em;margin:0 0 .35rem}
+  .auth-header p{margin:0;font-size:.88rem;color:var(--muted);line-height:1.45}
+  .sso-stack{display:flex;flex-direction:column;gap:.6rem;margin-bottom:1.25rem}
+  .ssoform{margin:0}
+  .sso-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:.75rem;padding:.68rem 1rem;border-radius:10px;font:inherit;font-size:.92rem;font-weight:600;cursor:pointer;transition:all .15s ease;background:var(--surface);border:1px solid var(--line);color:var(--fg)}
+  .sso-btn:hover{background:var(--line-soft);border-color:var(--muted);transform:translateY(-1px)}
+  .sso-icon{flex:none}
+  .auth-divider{display:flex;align-items:center;margin:1.35rem 0;text-align:center;color:var(--muted);font-size:.74rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+  .auth-divider::before,.auth-divider::after{content:'';flex:1;border-bottom:1px solid var(--line)}
+  .auth-divider span{padding:0 .85rem}
+  .auth-form label{margin:.75rem 0 .3rem;font-size:.85rem;font-weight:600}
+  .auth-form input{padding:.62rem .8rem;border-radius:9px}
+  .auth-form .submit{width:100%;margin-top:1.2rem;padding:.68rem 1.1rem;border-radius:9px;font-size:.95rem;display:flex;align-items:center;justify-content:center;gap:.4rem}
+  .auth-trust{margin-top:1.35rem;padding-top:1rem;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:center;gap:.45rem;font-size:.78rem;color:var(--muted);text-align:center}
+  .auth-trust svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:.8}
+  .auth-footer{text-align:center;margin-top:1.5rem;font-size:.88rem;color:var(--muted)}
+  .auth-footer a{color:var(--accent);text-decoration:none;font-weight:600}
+  .auth-footer a:hover{text-decoration:underline}
+  .sent-box{text-align:center;padding:1.5rem .5rem}
+  .sent-icon{width:54px;height:54px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:inline-flex;align-items:center;justify-content:center;margin-bottom:1rem}
+  .sent-icon svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+</style>`;
 
 export function signupPage(
   inviteCode: string,
@@ -951,18 +986,40 @@ export function signupPage(
 ): string {
   return SHELL(
     'Create your account',
-    `<h1>Create your account</h1>
-${error ? `<p class="err">${esc(error)}</p>` : ''}
-${opts.sso ? ssoButtons(inviteCode, opts.sso) : ''}
-<form method="post" action="/signup">
-  <input type="hidden" name="invite" value="${esc(inviteCode)}">
-  <label for="e">Email</label><input id="e" name="email" type="email" required autocomplete="email">
-  <label for="n">Your name</label><input id="n" name="display_name" required autocomplete="name">
-  <label for="tz">Your timezone</label><input id="tz" name="timezone" required value="UTC">
-  <p class="notice">${opts.publicSignup ? '' : 'Invite-only. '}Your address is used to sign you in and to tell
-    you about your own bookings, nothing else.</p>
-  <button class="submit" type="submit">Create account</button>
-</form>
+    `<div class="auth-wrap">
+  <div class="auth-top">
+    <a href="/" class="brand-logo">
+      <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M8 10h16M8 16h16M8 22h9" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/><circle cx="23" cy="22" r="2.5" fill="#ffffff"/></svg>
+      <span>Pumasi Booking</span>
+    </a>
+  </div>
+  <div class="auth-card">
+    <div class="auth-header">
+      <h1>Create your account</h1>
+      <p>Instant calendar sync with guaranteed zero double-booking.</p>
+    </div>
+    ${error ? `<p class="err">${esc(error)}</p>` : ''}
+    ${opts.sso ? ssoButtons(inviteCode, opts.sso) : ''}
+    <form method="post" action="/signup" class="auth-form">
+      <input type="hidden" name="invite" value="${esc(inviteCode)}">
+      <label for="e">Email address</label>
+      <input id="e" name="email" type="email" required autocomplete="email" placeholder="name@company.com">
+      <label for="n">Your name</label>
+      <input id="n" name="display_name" required autocomplete="name" placeholder="Sarah Chen">
+      <label for="tz">Your timezone</label>
+      <input id="tz" name="timezone" required value="UTC">
+      <button class="submit" type="submit">Create account &rarr;</button>
+    </form>
+    <div class="auth-trust">
+      <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span>${opts.publicSignup ? '100% telemetry-free · Open commons' : 'Invite-only · No third-party trackers'}</span>
+    </div>
+  </div>
+  <div class="auth-footer">
+    Already have an account? <a href="/login">Sign in</a>
+  </div>
+</div>
+${AUTH_STYLES}
 <script>var t=document.getElementById('tz');
  t.value=Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC';</script>`,
   );
@@ -971,20 +1028,50 @@ ${opts.sso ? ssoButtons(inviteCode, opts.sso) : ''}
 export function loginPage(sent?: boolean, error?: string, sso?: boolean | SsoOptions): string {
   return SHELL(
     'Sign in',
-    `<h1>Sign in</h1>
-${error ? `<p class="err">${esc(error)}</p>` : ''}
-${
-  sent
-    ? `<p class="ok">If that address has an account, a sign-in link is on its way.
-         It works once and expires in 20 minutes.</p>`
-    : `${sso ? ssoButtons('', sso) : ''}
-       <form method="post" action="/login">
-         <label for="e">Email</label><input id="e" name="email" type="email" required autocomplete="email">
-         <p class="notice">We send a link rather than asking for a password. There
-           is no password on this account to forget or to leak.</p>
-         <button class="submit" type="submit">Send me a link</button>
-       </form>`
-}`,
+    `<div class="auth-wrap">
+  <div class="auth-top">
+    <a href="/" class="brand-logo">
+      <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M8 10h16M8 16h16M8 22h9" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/><circle cx="23" cy="22" r="2.5" fill="#ffffff"/></svg>
+      <span>Pumasi Booking</span>
+    </a>
+  </div>
+  <div class="auth-card">
+    ${
+      sent
+        ? `<div class="sent-box">
+             <div class="sent-icon">
+               <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+             </div>
+             <h1>Check your email</h1>
+             <p class="muted" style="margin:.6rem 0 1.5rem">If that address is registered, a sign-in link is on its way. It works once and expires in 20 minutes.</p>
+             <a href="/login" class="submit" style="text-decoration:none;display:inline-block;text-align:center">Back to sign in</a>
+           </div>`
+        : `<div class="auth-header">
+             <h1>Sign in</h1>
+             <p>Select your SSO provider or sign in with your email.</p>
+           </div>
+           ${error ? `<p class="err">${esc(error)}</p>` : ''}
+           ${sso ? ssoButtons('', sso) : ''}
+           <form method="post" action="/login" class="auth-form">
+             <label for="e">Email address</label>
+             <input id="e" name="email" type="email" required autocomplete="email" placeholder="name@company.com">
+             <button class="submit" type="submit">Send magic sign-in link &rarr;</button>
+           </form>
+           <div class="auth-trust">
+             <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+             <span>Passwordless security · Zero telemetry</span>
+           </div>`
+    }
+  </div>
+  ${
+    sent
+      ? ''
+      : `<div class="auth-footer">
+           Don't have an account yet? <a href="/signup">Create an account</a>
+         </div>`
+  }
+</div>
+${AUTH_STYLES}`,
   );
 }
 
