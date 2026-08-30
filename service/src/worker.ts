@@ -30,7 +30,7 @@ import { RecordingMail, RetryingMail, type MailPort } from './mail.ts';
 import { GmailMail } from './mail-gmail.ts';
 import type { SqlClient, Transactor } from './store.ts';
 import { Serialiser } from './driver.ts';
-import { bindable, normalizeDbError, translateSql } from './sqlite-dialect.ts';
+import { bindable, normalizeDbError, splitSqlStatements, translateSql } from './sqlite-dialect.ts';
 import { CalendarHub } from './calendars.ts';
 import { Directory, dispatchDirectoryCall, type DirectoryCall } from './directory.ts';
 import { googleSsoExchange, googleSsoUrl } from './sso-google.ts';
@@ -93,7 +93,10 @@ function sqlClientOver(storage: DoStorage): SqlClient {
     },
     exec: async (text) => {
       try {
-        storage.sql.exec(text);
+        const stmts = splitSqlStatements(text);
+        for (const s of stmts) {
+          storage.sql.exec(translateSql(s));
+        }
       } catch (err) {
         throw normalizeDbError(err);
       }

@@ -55,6 +55,48 @@ export function normalizeDbError(err: unknown): Error {
   return e instanceof Error ? e : new Error(message);
 }
 
+/** Splits a multi-statement SQL script into executable statements, preserving triggers and BEGIN...END blocks. */
+export function splitSqlStatements(sql: string): string[] {
+  const statements: string[] = [];
+  let current = '';
+  let inString = false;
+  let inBlock = 0; // nesting depth of BEGIN ... END blocks in triggers
+
+  // Strip line comments
+  const clean = sql.replace(/--.*$/gm, '');
+
+  for (let i = 0; i < clean.length; i++) {
+    const char = clean[i];
+    const prev = clean[i - 1];
+
+    if (char === "'" && prev !== '\\') {
+      inString = !inString;
+    }
+
+    if (!inString) {
+      const rest = clean.slice(i);
+      if (/^BEGIN\b/i.test(rest) && (i === 0 || /\s/.test(clean[i - 1]!))) {
+        inBlock++;
+      } else if (/^END\b/i.test(rest) && (i === 0 || /\s/.test(clean[i - 1]!))) {
+        inBlock = Math.max(0, inBlock - 1);
+      }
+
+      if (char === ';' && inBlock === 0) {
+        const trimmed = current.trim();
+        if (trimmed) statements.push(trimmed);
+        current = '';
+        continue;
+      }
+    }
+
+    current += char;
+  }
+
+  const last = current.trim();
+  if (last) statements.push(last);
+  return statements;
+}
+
 /** SQLite binds no undefined and knows no booleans. */
 export function bindable(params: unknown[] | undefined): (string | number | null | bigint | Uint8Array)[] {
   return (params ?? []).map((v) => {
@@ -66,3 +108,5 @@ export function bindable(params: unknown[] | undefined): (string | number | null
     return String(v);
   });
 }
+
+
