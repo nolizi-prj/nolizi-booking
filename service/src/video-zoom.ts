@@ -104,6 +104,12 @@ export async function zoomExchangeCode(opts: {
   let personalMeetingUrl: string | undefined;
   let displayName: string | undefined;
 
+  if (!userRes.ok) {
+    // The silent half of a silent failure: connect "succeeded" while the
+    // profile fetch quietly died, so no PMI was ever stamped and the UI said
+    // Not Connected with no clue. Log status and body so the tail shows why.
+    console.warn(`[zoom] /users/me failed: ${userRes.status} ${(await userRes.text()).slice(0, 300)}`);
+  }
   if (userRes.ok) {
     const user = (await userRes.json()) as {
       email?: string;

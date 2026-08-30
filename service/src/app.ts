@@ -951,7 +951,8 @@ async function handleRoutes(
     const state = hub ? await hub.sealState({
       purpose: 'zoom_connect',
       owner_id: owner.owner_id,
-    }) : Buffer.from(JSON.stringify({ purpose: 'zoom_connect', owner_id: owner.owner_id })).toString('base64url');
+      tag: deps.orgTag ?? '',
+    }) : Buffer.from(JSON.stringify({ purpose: 'zoom_connect', owner_id: owner.owner_id, tag: deps.orgTag ?? '' })).toString('base64url');
 
     return {
       status: 303,
@@ -1194,6 +1195,8 @@ async function handleRoutes(
             `UPDATE schedules SET location_value = $2 WHERE owner_id = $1 AND location_kind = 'zoom'`,
             [ownerId, pmiUrl],
           );
+        } else {
+          console.warn(`[zoom] connect completed without a meeting URL: pmi=${zoomTokens.pmi ? 'y' : 'n'}`);
         }
       } catch (err) {
         console.warn(`[zoom] OAuth connect failed: ${(err as Error).message}`);
@@ -1965,8 +1968,8 @@ async function handleRoutes(
           const state = hub ? await hub.sealState({
             purpose: 'zoom_connect',
             owner_id: owner.owner_id,
-            tag: owner.owner_id,
-          }) : Buffer.from(JSON.stringify({ purpose: 'zoom_connect', owner_id: owner.owner_id, tag: owner.owner_id })).toString('base64url');
+            tag: deps.orgTag ?? '',
+          }) : Buffer.from(JSON.stringify({ purpose: 'zoom_connect', owner_id: owner.owner_id, tag: deps.orgTag ?? '' })).toString('base64url');
 
           return {
             status: 303,
@@ -2000,8 +2003,8 @@ async function handleRoutes(
             const state = hub ? await hub.sealState({
               purpose: 'zoom_connect',
               owner_id: owner.owner_id,
-              tag: owner.owner_id,
-            }) : Buffer.from(JSON.stringify({ purpose: 'zoom_connect', owner_id: owner.owner_id, tag: owner.owner_id })).toString('base64url');
+              tag: deps.orgTag ?? '',
+            }) : Buffer.from(JSON.stringify({ purpose: 'zoom_connect', owner_id: owner.owner_id, tag: deps.orgTag ?? '' })).toString('base64url');
 
             return {
               status: 303,
