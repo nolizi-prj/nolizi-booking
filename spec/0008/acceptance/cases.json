@@ -1,0 +1,105 @@
+{
+  "suite": "SPEC-0008 advisory-ci acceptance",
+  "version": "1.0.0",
+  "frozen_at_approval": true,
+  "runner": "service/test/ci-workflow.test.ts",
+  "note": "The cases inspect the repository, because the artefact under test IS the repository's checking configuration. The runner lives in the service suite on purpose: the frozen cases for the checking machine are then run by the checking machine and by pumasi/tools/gate.sh, on every change. A-001, A-002, A-003, A-005 and A-006 must FAIL against the tree at f16964e -- a defect spec proves itself by failing before (lessons/L-006). A-004 is green on both sides and says so on its own case, together with which half of it is vacuous before and which half runs identically on both trees; see SPEC.md 6.1. Every case carries the single mutation that turns it red on the FINAL tree, and the implementation report records that mutation being run and observed. Nothing here asserts that CI passed -- a case asserting the machine's own verdict would be the machine grading itself.",
+  "cases": [
+    {
+      "id": "A-001",
+      "clause": "1, 2",
+      "description": "The repository has a workflow, it runs on push and on pull request, and it delegates its checks to tools/ci.sh rather than restating them in YAML.",
+      "must_fail_before": true,
+      "why_red_before": "There is no .github/workflows/ directory at f16964e; .github/ contains only feedback-attachments.",
+      "assertions": [
+        ".github/workflows/ci.yaml exists",
+        "its `on:` block contains a `push` key",
+        "its `on:` block contains a `pull_request` key",
+        "its `on:` block contains no `pull_request_target` key",
+        "some step in the job invokes tools/ci.sh",
+        "no step in the job runs `npm test`, `tsc` or `wrangler` directly -- the checks live in the script, not in the YAML, so that reading one file answers what CI checks"
+      ],
+      "single_mutation_that_turns_it_red": "delete the `pull_request:` key from the workflow's `on:` block"
+    },
+    {
+      "id": "A-002",
+      "clause": "2.2",
+      "description": "The service test run is the product's own suite minus exactly one file; that file is browser-live.test.ts; and the run announces it by name with the reason.",
+      "must_fail_before": true,
+      "why_red_before": "tools/ci.sh does not exist at f16964e.",
+      "assertions": [
+        "tools/ci.sh exists and is executable",
+        "`tools/ci.sh --list-service-tests` prints the same file list the run uses (one selection function, used by both)",
+        "that list omits exactly one file from the service/test/*.test.ts set",
+        "the omitted file is browser-live",
+        "the omitted count is exactly 1 -- a second exclusion fails the case",
+        "the script fails, rather than silently running everything, if the file it excludes is not present in the compiled glob",
+        "the script's printed reason names both the live host booking.pumasi.ai and that the deployment is behind main"
+      ],
+      "single_mutation_that_turns_it_red": "add a second file name to the exclusion list in tools/ci.sh (the omitted count becomes 2)"
+    },
+    {
+      "id": "A-003",
+      "clause": "2.3",
+      "description": "No workspace is silently skipped by the type-check -- at the command, not only inside CI.",
+      "must_fail_before": true,
+      "why_red_before": "At f16964e service/package.json has no `typecheck` script and the root script is `npm run typecheck --workspaces --if-present`, so `npm run typecheck` checks core only and exits 0. Red twice over.",
+      "assertions": [
+        "every workspace named in root package.json `workspaces` has a `typecheck` script in its own package.json",
+        "the root `typecheck` script does not contain `--if-present`",
+        "tools/ci.sh independently re-checks the first assertion at run time and fails on a workspace without a typecheck script, so a workspace added later cannot be skipped in silence"
+      ],
+      "single_mutation_that_turns_it_red": "restore `--if-present` to the root package.json typecheck script"
+    },
+    {
+      "id": "A-004",
+      "clause": "3, 4",
+      "description": "The workflow is advisory and unprivileged, and no configuration that could block a merge ships anywhere in the repository.",
+      "must_fail_before": false,
+      "green_before_and_why_that_is_correct": "A repository with no CI blocks nothing, so this case SHOULD be green before -- its job is to keep that true, not to announce the change. It is split deliberately. The half that reads the workflow's permissions, triggers and secrets is VACUOUS on the change-absent tree, because there is no workflow to read; that is disclosed here rather than allowed to read as evidence. The half below it -- no file anywhere in the tree requests branch protection, a ruleset or a required status check -- runs identically and non-vacuously on BOTH trees, over real files, and is the half that states what the item promises. See SPEC.md 6.1.",
+      "assertions": [
+        "no file in the repository contains `required_status_checks`, `branch_protection` or a `rulesets` request (runs on both trees; non-vacuous on both)",
+        "for every workflow file present: `permissions:` is declared and grants `contents: read` and nothing else",
+        "for every workflow file present: it references no `secrets.` value",
+        "for every workflow file present: it declares no `pull_request_target` trigger",
+        "for every workflow file present: it declares no `permissions: write-all` and no `write` scope"
+      ],
+      "single_mutation_that_turns_it_red": "change the workflow's `permissions:` from `contents: read` to `contents: write`"
+    },
+    {
+      "id": "A-005",
+      "clause": "2, 3",
+      "description": "A red run is possible: no step of the machine's check can swallow a failure. Without this, every other case describes a tick that cannot go dark.",
+      "must_fail_before": true,
+      "why_red_before": "tools/ci.sh does not exist at f16964e.",
+      "assertions": [
+        "tools/ci.sh sets `set -euo pipefail`",
+        "tools/ci.sh contains no `|| true`, no `|| :`, and no `set +e`",
+        "the workflow declares no `continue-on-error` on any step or job",
+        "the workflow step that invokes tools/ci.sh has no `if: always()` and no trailing `|| true`"
+      ],
+      "single_mutation_that_turns_it_red": "append `|| true` to the `node --test` invocation in tools/ci.sh",
+      "additional_evidence_out_of_band": "A real red run: a scratch branch carrying one broken assertion in an existing service test, pushed, its workflow run observed failing, branch deleted. The run URL is recorded in the implementation report. This is evidence, not a frozen case -- a case that must push a branch cannot run in the gate."
+    },
+    {
+      "id": "A-006",
+      "clause": "2.4",
+      "description": "The entry point that serves booking.pumasi.ai is bundled on every run; the run can never deploy; and the claim about whether it is type-checked is derived from the tree rather than written from memory.",
+      "must_fail_before": true,
+      "why_red_before": "tools/ci.sh does not exist at f16964e, and nothing in the repository reads worker.ts's tsconfig status.",
+      "assertions": [
+        "tools/ci.sh invokes `wrangler deploy` with `--dry-run` on the same invocation",
+        "tools/ci.sh contains no `wrangler deploy` invocation lacking `--dry-run`, and no `wrangler versions upload`, `wrangler publish` or `wrangler deployments` invocation -- CI must never be able to ship",
+        "tools/ci.sh reads service/tsconfig.json AND service/tsconfig.test.json at run time to decide what it says about worker.ts, rather than hard-coding the sentence",
+        "the entry point tools/ci.sh bundles is the one service/wrangler.jsonc names as `main` -- read from the file, not repeated",
+        "tools/ci.sh's printed disclosure states that a bundle is not a type-check"
+      ],
+      "single_mutation_that_turns_it_red": "remove `--dry-run` from the wrangler invocation in tools/ci.sh"
+    }
+  ],
+  "not_frozen_as_cases_and_why": [
+    "Whether main has branch protection live on GitHub: needs `gh` and a credential the runner has not got. A case that announces itself skipped is a case that cannot fail (L-006). Measured instead, before and after, in SPEC.md 3 and the implementation report: `gh api .../branches/main/protection` -> 404 Branch not protected; `gh api .../rulesets` -> [].",
+    "Whether the workflow's own first run is green: the machine's verdict is not something the machine's acceptance suite may assert about itself. Recorded as a run URL in the implementation report, where a reader can open it.",
+    "Whether the suite is deterministic: measured in SPEC.md 0 D-f and handed to the product manager as a backlog finding. Freezing a flakiness threshold as an acceptance case for a CI item would make this item responsible for a defect it did not introduce and must not tune away."
+  ]
+}
