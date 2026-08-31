@@ -94,13 +94,29 @@ the release note. **For the operator this file courts, the merge is the
 delivery, once they pull** — and it has not reached `booking.pumasi.ai`, which
 was never affected because that deployment has Google Calendar configured
 ([`BACKLOG.md`](BACKLOG.md) item 1).
+*A second limit, found 2026-08-31 (job `0044`) and recorded the same day it was
+found.* Two of the features listed above — **workflows and webhooks** — have
+never worked on `booking.pumasi.ai`. `service/src/worker.ts:303` calls
+`processDueJobs` without importing it, so the Durable Object alarm that drains
+due jobs throws `ReferenceError` on the hosted build: timed workflow mail
+(reminders, follow-ups) and every webhook are silently never delivered there.
+Introduced `de4abbe` (2026-08-28), confirmed three ways — the missing import,
+`error TS2304` from the compiler, and the emitted `wrangler` bundle, which
+carries the call and no definition of it. It is **not** a limit of the free
+tier, of the licence, or of the design: both features are built and tested, and
+they work on the Node path a self-hoster runs. It is one unimported symbol in
+the file nothing type-checks ([`BACKLOG.md`](BACKLOG.md) items 2 and 3).
 *Falsified by:* any listed feature failing its E2E path for a real user; any
-feature appearing in a paid or hosted-only tier, ever. **Not counted as fired
-here, and the reason is stated rather than assumed:** no real user is known to
-have hit the limit above — it was found by reading, the tracker holds zero open
-issues, and `booking.pumasi.ai` has Google Calendar configured so it cannot
-occur there. If a self-hoster reports it, this claim is rewritten, not
-softened.
+feature appearing in a paid or hosted-only tier, ever. **The second clause has
+not fired and will not — nothing here is behind a tier.** On the first clause,
+applying the same standard this file already applied to the SSO limit above
+rather than a new one: **not counted as fired**, because no real user is known
+to have hit either — both were found by reading, the tracker holds zero open
+issues, and no workflow run against the live deployment has been reported or
+observed. That is a statement about who has *noticed*, not about whether the
+product works, and the distinction is the point: the workflow defect is real on
+the deployment today whether or not anyone has met it. **If a user reports
+either, this claim is rewritten, not softened.**
 
 **C4 — The privacy posture is enforced, not asserted.** The notice, terms and
 DPA are served by the running service, state operator, basis, deletion reach
@@ -109,13 +125,14 @@ every field the live booking form posts and fails unless the notice discloses
 it (`8f77d66`). *Scope of that word, tightened 2026-08-31 and re-measured at
 each evaluation since:* the test binds the code in `main`, and `main` is not
 automatically what `booking.pumasi.ai` is serving — the deployment has now been
-found unmoved at **2026-08-30 16:55:37 UTC** by three consecutive evaluations,
-~26 hours and four merged builds behind ([`STAGE.md`](STAGE.md), "the deployed
-build is not `main`"). *And a second limit on that word, named 2026-08-31
-rather than left implicit:* nothing re-runs that test automatically — this
-repository has no CI ([`BACKLOG.md`](BACKLOG.md) item 2), so "tested against the
-product" also means "tested by whichever agent last chose to run the suite, and
-reported what it said". The
+found unmoved at **2026-08-30 16:55:37 UTC** by four consecutive evaluations,
+~27.5 hours and five merged builds behind ([`STAGE.md`](STAGE.md), "the deployed
+build is not `main`"). *The second limit on that word, named 2026-08-31 and
+narrowed the same evening:* that test is now re-run automatically on every push
+and pull request by advisory CI (`d5a02bb`, Q-026), in public, so "tested
+against the product" no longer means "tested by whichever agent last chose to
+run the suite". What it still means is *against the branch* — CI checks `main`,
+and `main` is not what the deployment serves. The
 enforcement is real; "against the product" means against the branch the
 product is built from, until a merged build reliably reaches users. Mail through an undisclosed host is refused on the Node path;
 the deployed Workers path has a weaker, disclosed control
@@ -149,7 +166,7 @@ the Node path effectively requires both (`app.ts:984`–`986`, via the hub), so 
 Workers deployment with an id and no secret is sent to Google and refused on the
 way back rather than at the button. No provider is required that was not
 required before, and nothing is unguarded — it is a late refusal, not a lost
-feature. [`BACKLOG.md`](BACKLOG.md) item 4.
+feature. [`BACKLOG.md`](BACKLOG.md) item 5.
 *Falsified by:* a change that makes any single provider required to run or to
 leave. **Not fired:** nothing here was introduced by a change, no provider is
 required to *run* the product or to leave it, and the two releases of
@@ -185,11 +202,14 @@ deprecation candidate, and this file must say so rather than compete with it.
   deployed Workers path deliberately sends nothing. The test matrix is still one
   machine wide, and this file says so rather than implying a fleet. (D-108
   closed 2026-08-30 by the §5.1 amendment; the works-for-strangers claim still
-  cannot be made on one machine.) **Nor is any of it independently re-run:**
-  `.github/` holds no workflows and `gh run list` is empty, so `GATE: PASS` in a
-  release note is a report of a script an agent ran on its own checkout. This
-  evaluation re-ran it (311 service + 19 engine, 0 failures at `6b597dd`) and it
-  held — which is a check, not a system. [`BACKLOG.md`](BACKLOG.md) item 2.
+  cannot be made on one machine.) **The re-run half is now a system rather than
+  a check:** advisory CI runs the suites and the type-check on every push and
+  pull request in public (`d5a02bb`, Q-026, verified at this evaluation). This
+  seat also re-ran the gate by hand (317 service + 19 engine, 0 failures,
+  `GATE: PASS` at `d5a02bb`, 15:28 CDT). What neither covers is the deployed
+  entry point, whose types nothing checks and which no test executes — and that
+  gap held a live defect for three days ([`BACKLOG.md`](BACKLOG.md) items 2
+  and 3).
 
 ## 5 · Keeping this honest
 

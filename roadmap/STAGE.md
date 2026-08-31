@@ -1,9 +1,10 @@
 # STAGE — beta
 
 **Owned by the product-manager role** ([`pumasi-ops/roles/product-manager.md`](https://github.com/pumasi-ai/pumasi-ops/blob/main/roles/product-manager.md), duty 6).
-Set 2026-08-29; evidence refreshed 2026-08-31 at the sign-in-reachability
-evaluation (job `0030`; stage unchanged — the third refresh today, and the
-reason is below). A stage change — up or down — is a commit with its evidence in
+Set 2026-08-29; evidence refreshed 2026-08-31 at the advisory-CI post-release
+evaluation (job `0044`; **stage unchanged — `beta`** — the fourth refresh today,
+and the reason is below, including the one new finding that was weighed as a
+demotion ground and did not become one). A stage change — up or down — is a commit with its evidence in
 the message. **Nothing here reads a `STAGE_PLAYBOOK.md` exit gate as `MET`**, so
 its trigger-matrix **Event 3** — which fires a public marketing packet off that
 one word — does not fire from this pass. That coupling is `DECISIONS.md`
@@ -12,12 +13,17 @@ the absence is a decision rather than an oversight.
 
 **What this file is a claim about.** The deployment, not the branch. That
 distinction did no work until 2026-08-31, when the two came apart; it is now
-doing real work four times over. **Four merged builds** are ahead of what
+doing real work five times over. **Five merged builds** are ahead of what
 `booking.pumasi.ai` serves — the §5.1 reporting mechanism (`4f56df4`), the Zoom
-PMI fix (`16c3fd4`), the OAuth-callback fix (`4f6ddf0`) and the sign-in
-reachability fix (`6b597dd`) — every one of them a published release note, three
-of them reviewed can-hurt releases inside open veto windows. Evidence below that
-describes `main` says so, and says separately whether it has reached users.
+PMI fix (`16c3fd4`), the OAuth-callback fix (`4f6ddf0`), the sign-in
+reachability fix (`6b597dd`) and advisory CI (`d5a02bb`) — every one of them a
+published release note, four of them reviewed can-hurt releases inside open veto
+windows. Evidence below that describes `main` says so, and says separately
+whether it has reached users. **This pass the distinction stopped being
+bookkeeping and produced a defect:** the deployed Worker has a live broken
+feature that no evidence about `main` would ever have shown, because the tests
+and the type-check both describe a file the deployment does not run
+([`BACKLOG.md`](BACKLOG.md) items 2 and 3).
 
 **Beta means:** strangers can rely on it; the known gaps are listed here; data
 survives. **It does not mean launched**, and public sign-up being live is not
@@ -27,33 +33,59 @@ what decides that — the evidence is.
 
 ## Evidence for beta
 
-- **Tests.** **311 service tests + 19 engine tests pass and `GATE: PASS` at
-  `6b597dd`** — `pumasi/tools/gate.sh` and `npm test` re-run by this evaluation
-  rather than quoted from the release note (L-006: a number is only as good as
-  what it covers, so the suite was run, not counted). The six frozen SPEC-0007
-  acceptance cases **A-001…A-006 are all green** inside that total, as is the
-  15-case `service/test/oauth-state.test.ts` runner from spec/0006. The sharded
+- **Tests.** **317 service tests + 19 engine tests pass, and `GATE: PASS`, at
+  `d5a02bb`.** Per `DECISIONS.md` **Q-025 rider (a)**, this file does not cite
+  `GATE: PASS` without saying who re-ran it and when: `pumasi/tools/gate.sh` was
+  run by **this evaluation — the product-manager seat, job `0044`, on
+  2026-08-31 at 15:28 CDT** — not quoted from a release note and not inherited
+  from the job that merged (L-006: a number is only as good as what it covers,
+  so the suite was run, not counted). The service count rose 311 → 317 with the
+  six frozen SPEC-0008 acceptance cases. The six SPEC-0007 cases
+  **A-001…A-006 are all green** inside that total, as is the 15-case
+  `service/test/oauth-state.test.ts` runner from spec/0006. The sharded
   end-to-end suite was green 2026-08-29. Exclusivity is proven against real
   PostgreSQL with genuinely parallel connections
   ([`service/spec/0002/SPEC.md` §8.1](../service/spec/0002/SPEC.md)). Step 4/4
   of the gate still prints `tools/families.sh missing — breadth UNVERIFIED`,
   which is the known cosmetic defect in the script's path handling, not a
   finding about this tree.
-  **Determinism, measured here for the first time rather than assumed.**
-  `pumasi-tunnel`'s Stage 1 gate was recorded `MET` off 12 local runs and a
-  re-measurement at 40 found its suite failing **7.5%** of the time
-  (`DECISIONS.md` **Q-024**); this product's suite had never been run more than
-  once per evaluation. Re-run here **40 consecutive times** at `6b597dd`:
-  **40 of 40 green, 0 failures**, no run differing from any other, and no
-  failure artefact to keep. A single green run is not evidence of a
-  deterministic suite; this file will keep the figure current rather than
-  inherit it.
-  **What no number here can carry, and it is named rather than left implied:**
-  nothing re-runs any of this automatically. `.github/` holds no workflows and
-  `gh run list` is empty, so every one of these figures — here and in four
-  release notes — is a report of a script an agent chose to run on its own
-  checkout. This evaluation is that check for today, and a check is not a
-  system ([`BACKLOG.md`](BACKLOG.md) item 2).
+  **Determinism — the figure this file carried was too clean, and is corrected
+  here.** The previous refresh (job `0030`) ran `npm test` 40 consecutive times
+  at `6b597dd` and recorded **40 of 40 green**. That run **did not record the
+  machine load it was taken under**, so it cannot be read as evidence that the
+  suite is load-independent, and this file should not have implied it was.
+  Per **Q-025 rider (b)** — an evaluation measures determinism rather than
+  inheriting a green run — it was re-measured here at `d5a02bb`, 40 consecutive
+  sequential runs, recording the one-minute load average before each:
+  **21 of 40 green, then 19 consecutive failures — 19 of 40 runs failed.**
+  Runs 1–21 were 336/336 while the load average climbed **1.38 → 12.06**, driven
+  by the suite itself. Run 22 failed 5 tests, all in
+  `service/test/enterprise.test.ts`, in a `before` hook, on `FATAL: could not
+  create any TCP/IP sockets` — the previous run's PostgreSQL for that file had
+  not released its hard-coded port. Runs 23–40 then failed **identically**, on
+  `initdb: … directory "/tmp/pumasi-pg-enterprise" exists but is not empty`, at
+  load averages *including ones lower than green runs 17–21*. `rm -rf` on that
+  one directory, then three more runs at load 8.79/9.36/9.84: **336/336, green,
+  all three.**
+  **So the honest statement of this product's determinism is not a bare
+  number.** The suite passes 336/336 whenever it is given a clean `/tmp`; a
+  single contention event latches it red until a human deletes a directory,
+  because the 19 PostgreSQL files hard-code both their port and their data
+  directory. That is a property of the harness, not of the product's behaviour,
+  and it produces false **reds**, never a false green — a poisoned `before` hook
+  cannot pass a test that would otherwise fail. It is
+  [`BACKLOG.md`](BACKLOG.md) item 6, and the repair named there is unique
+  directories and OS-allocated ports, **not** lowering test concurrency: these
+  40 runs were strictly sequential, so there was no concurrency to lower.
+  **What the numbers above now do and do not rest on.** Since `d5a02bb` they are
+  no longer only an agent's report of its own run: advisory CI re-runs the core
+  suite, the service suite, and `npm run typecheck` on every push and pull
+  request, in public, where a stranger can read the result without an account
+  (run [`33428541886`](https://github.com/pumasi-ai/pumasi-booking/actions/runs/33428541886),
+  success at `d5a02bb`; verified at this evaluation, along with two deliberate
+  red runs proving it can fail). That was `BACKLOG.md` item 2 of the last order
+  and it is **delivered**. What it still does not cover is named in the gaps
+  below, and one of those gaps hid a live defect — now item 2 of this order.
 - **Data survives.** Durable-Object SQLite in the deployment, PostgreSQL when
   configured; deletion is verified by absence, not by claim.
 - **Strangers are admitted honestly.** Public sign-up released 2026-08-29 with
@@ -69,7 +101,7 @@ what decides that — the evidence is.
   `worktree-product-rules` at this evaluation, not from a cached copy (L-007);
   its absence from `pumasi` `main` is **Q-017**, not compliance. **PR-1 is not
   met** and binds always, not at a promotion — it is [`BACKLOG.md`](BACKLOG.md)
-  item 3 and a listed gap below, and the 2026-08-31 sign-in release note now
+  item 4 and a listed gap below, and the 2026-08-31 sign-in release note now
   says so in its own text (`pumasi` `29f0853`, *"Which build this is"*: the
   version clause cannot be met, so the commit is given instead).
 - **The legal pages tell the truth.** Checked 2026-08-29: `/privacy`,
@@ -84,13 +116,14 @@ what decides that — the evidence is.
   the gap.** `npx wrangler deployments list` for the `pumasi-booking` worker
   (`service/wrangler.jsonc`, custom domain `booking.pumasi.ai`) still puts the
   latest deployment at **2026-08-30 16:55:37 UTC** (version `d73c05b5`) — a
-  *Secret Change*; the last upload of *code* is **16:22:12 UTC** the same day
-  (version `ffa54b6d`). The host answers **200**. Re-measured at this
-  evaluation, and unchanged across three consecutive evaluations, which is the
-  point: **two** complete charter cycles have now finished on top of a
-  deployment that has not moved in ~26 hours. This is stated as evidence because
-  a maturity label that reads the branch and calls it the product is the
-  two-documents-forking failure with extra steps.
+  *Secret Change*. The host answers **200**. Re-measured at this evaluation
+  (15:28 CDT) and unchanged across **four** consecutive evaluations, which is
+  the point: three complete charter cycles have now finished on top of a
+  deployment that has not moved in **~27.5 hours**. This is stated as evidence
+  because a maturity label that reads the branch and calls it the product is the
+  two-documents-forking failure with extra steps — and this pass that failure
+  became concrete rather than theoretical (see item 7 under "why not
+  `launched`").
 - **No open `priority: high` bugs.** Tracker re-checked 2026-08-31 at this
   evaluation (`gh issue list --state open` → empty): **zero open issues**, and
   no new issue since 2026-08-30 14:54 despite the feedback widget being live on
@@ -113,17 +146,17 @@ answered, and regressions to be release-stoppers. Today:
    only for nominated Google test accounts until the OAuth app passes
    verification, which has not been submitted
    ([`GOOGLE-SETUP.md`](../service/spec/0003/GOOGLE-SETUP.md); VALUE C1's
-   stated limit; [`BACKLOG.md`](BACKLOG.md) item 5).
+   stated limit; [`BACKLOG.md`](BACKLOG.md) item 7).
 3. **The evidence is still one machine wide.** The §5.1 reporting mechanism
    now exists on the Node path (spec/0004, `4f56df4`) — but nothing receives
    reports (the intake is not live; sends fail and are dropped) and the
    deployed Workers path deliberately sends nothing. §5.1 binds at this
    promotion (amended 2026-08-30; D-108 closed by that amendment), so
    `launched` waits on the intake with its tested deletion path (spec R5c,
-   D-107) and the Workers-path decision ([`BACKLOG.md`](BACKLOG.md) item 6).
-   *Sharpened 2026-08-31:* the evidence is not only one machine wide, it is one
-   *observer* wide — no CI re-runs any suite on any change
-   ([`BACKLOG.md`](BACKLOG.md) item 2).
+   D-107) and the Workers-path decision ([`BACKLOG.md`](BACKLOG.md) item 8).
+   *Narrowed 2026-08-31 (evening):* the "one observer wide" half of this is
+   **closed** — advisory CI re-runs the suites on every push and pull request in
+   public (`d5a02bb`, Q-026). The reporting half stands unchanged.
 4. **No lawyer has reviewed the legal posture, and no SCCs cover the US
    transfer** (D-105, DEGRADING). For a UK/EU user the transfer rests on the
    disclosure alone.
@@ -139,19 +172,32 @@ answered, and regressions to be release-stoppers. Today:
    consults `location_value` (`schedules.ts:371`). But the deployment has not
    moved, so the live build is still the pre-fix one
    ([`BACKLOG.md`](BACKLOG.md) item 1). **Deliberately not struck, for the
-   third evaluation running**: this file is about what strangers meet. A
-   `launched` product would treat both the defect and the now ~26-hour gap
+   fourth evaluation running**: this file is about what strangers meet. A
+   `launched` product would treat both the defect and the now ~27.5-hour gap
    between "fixed" and "shipped" as release-stoppers.
-6. **Nothing but an agent's own report stands behind any quality claim.** There
-   is no CI in this repository at all (`.github/` holds only
-   `feedback-attachments`; `gh run list` is empty), so `launched`'s
-   "regressions are release-stoppers" has nothing to stop a release *with*.
-   This is not a defect in any change, which is why it took a post-release read
-   to surface it, and it is the one open gap that bears directly on the word
-   `beta` above — a stranger cannot re-run a script an agent ran on its own
-   machine. [`BACKLOG.md`](BACKLOG.md) item 2; the question of whether the
-   charter's gate should become machine-enforced commons-wide is `DECISIONS.md`
-   **Q-025**, which is the steward's and not this seat's.
+6. **A machine now re-runs the checks, and `GATE: PASS` still means an agent
+   ran it.** This was "nothing but an agent's own report stands behind any
+   quality claim", and the first half is **closed**: advisory CI runs on every
+   push and pull request (`d5a02bb`, Q-026 open to 2026-09-07), in public,
+   verified at this evaluation rather than read off the release note — run
+   `33428541886` success at `d5a02bb`, two demonstration runs red, and
+   `gh api …/branches/main/protection` → **404 Branch not protected** with
+   `…/rulesets` → **`[]`**, so it blocks nothing. That last fact is why the
+   entry stays open: `launched` means "regressions are release-stoppers", and an
+   advisory check stops nothing. Whether the charter's gate should become
+   machine-enforced commons-wide is `DECISIONS.md` **Q-025**, still open on that
+   half by its own terms, and it is the steward's rather than this seat's.
+7. **A feature this product sells has never worked on the deployment, and was
+   found this evaluation.** `service/src/worker.ts:303` calls `processDueJobs`
+   without importing it, so the Durable Object alarm that drains due jobs throws
+   `ReferenceError` on the hosted build: **every workflow email and every
+   webhook on `booking.pumasi.ai` is dead**, and has been since `de4abbe`
+   (2026-08-28). Confirmed three ways here — the missing import, the compiler
+   (`error TS2304`), and the emitted `wrangler` bundle, which contains the call
+   and no definition of it. Core booking is unaffected: a booking still confirms
+   and its confirmation mail goes out on the request path. This is
+   [`BACKLOG.md`](BACKLOG.md) item 2, it is the highest **build** entry, and its
+   repair queues behind **Q-012** like the five builds already waiting.
 
 ## Why not `alpha`
 
@@ -159,39 +205,82 @@ Demotions must be earned too, so the case against is recorded, and it was
 re-asked this evaluation rather than inherited: alpha says "works for people
 who talk to the builders; data may not survive." Data survives and is
 deletion-tested; strangers already sign up and book through a proven-address
-gate; the suites and the concurrency proofs are real and green at `6b597dd`,
-40 runs deep; the tracker holds zero open bugs. **Two candidate grounds
-for demotion were weighed this pass, not one.** *(i)* A reviewed fix to a live
-defect has now failed to reach users for ~26 hours and the flow has no one
-assigned to carry it (Q-012). *(ii)* Newly named: no CI re-runs anything, so the
-test evidence above is an agent's report of its own run. Neither is taken.
+gate; the suites and the concurrency proofs are real and green at `d5a02bb`,
+re-run by this seat and now re-run by a machine on every push; the tracker holds
+zero open bugs. **Three candidate grounds for demotion were weighed this pass.**
+*(i)* A reviewed fix to a live defect has now failed to reach users for ~27.5
+hours and the flow still has no one assigned to carry it (Q-012). *(ii)* Carried
+from the last pass and now **weaker**: the test evidence was an agent's report
+of its own run — advisory CI has since closed that half. *(iii)* **New, and the
+strongest of the three**: workflows and webhooks have never worked on the
+deployed build (why-not-`launched` item 7). None is taken.
 On *(i)*, that is a delivery gap this file is required to *list*, and beta's own
-definition asks that gaps be listed, not absent. On *(ii)* — the closer call,
-because it goes to whether a **stranger** can rely on this — the answer is that
-the evidence is re-derived independently at every evaluation by a seat that did
-not write the code, was re-derived again here, and held: 311 + 19, zero
-failures, 40 runs. That is weaker than CI and it is written down as
-weaker. It is not "the tests are unverified." Demoting on either would
-understate deletion-tested data, real stranger traffic and a suite that passes
-when it is run, and would substitute a label for the sentences that actually
-inform anyone: the fix is merged and not deployed, nothing watches the suite
-but the agents who run it, and here is who has to decide each.
+definition asks that gaps be listed, not absent. On *(ii)*, the evidence is
+re-derived independently at every evaluation by a seat that did not write the
+code, was re-derived again here (317 + 19, zero failures, `GATE: PASS` at
+15:28 CDT), and is now additionally re-run by a machine on every push; that
+ground is weaker than it was, not stronger.
+On *(iii)* — the one that deserved the most thought, because "strangers can rely
+on it" is exactly what `beta` asserts and a stranger who sets a reminder on
+`booking.pumasi.ai` gets silence. It is not taken, for three stated reasons and
+not by preference. **First**, what is broken is bounded and it is not the
+central promise: a stranger can still open a booking page, see real free times,
+book, and receive a confirmation — that path does not touch the queue.
+**Second**, `beta`'s definition asks that known gaps be *listed*, and this file
+lists it within hours of its discovery, in the same pass that found it.
+**Third** — and this is the honest counterweight rather than a comfort — the
+same argument was already accepted for the Zoom leak, which is a *worse* defect
+by every measure and has been listed here for four evaluations without a
+demotion; taking (iii) while (i) stands would be inconsistent. What would change
+this answer is a stranger reporting it, or a second such defect in `worker.ts`
+once item 3 makes them visible. Demoting today would understate deletion-tested
+data, real stranger traffic and a suite that passes when it is run, and would
+substitute a label for the sentences that actually inform anyone: the fix is
+merged and not deployed, the deployed entry point is the one file nothing
+checks, and here is who has to decide each.
 
 ## Known gaps, so nobody discovers them the hard way
 
-- **Four merged builds are not serving anyone**, every one with a published
-  release note and three of them reviewed can-hurt releases inside open
-  windows: `4f56df4`, `16c3fd4`, `4f6ddf0`, `6b597dd`. The deployment has not
-  moved since 2026-08-30 16:55:37 UTC.
-- **Nothing re-runs the merge gate, or anything else.** This repository has no
-  CI: `.github/` contains only `feedback-attachments`, there is no
-  `.github/workflows/`, and `gh run list` is empty. `pumasi/tools/gate.sh` is
-  not even in this repository — it is run by hand from a checkout by the agent
-  that wants to pass it. Every `GATE: PASS` and every test count, here and in
-  four release notes, is that agent's report. The repository is public so
-  Actions minutes are free and this is not a spend; it is simply work nobody has
-  done. [`BACKLOG.md`](BACKLOG.md) item 2; `DECISIONS.md` **Q-025** for the part
-  that is the steward's.
+- **Five merged builds are not serving anyone**, every one with a published
+  release note and four of them reviewed can-hurt releases inside open
+  windows: `4f56df4`, `16c3fd4`, `4f6ddf0`, `6b597dd`, `d5a02bb`. The deployment
+  has not moved since 2026-08-30 16:55:37 UTC, re-measured here at 15:28 CDT.
+- **Every workflow email and every webhook is dead on the deployment, and has
+  been since the feature shipped.** `service/src/worker.ts:303` calls
+  `processDueJobs` without importing it (it is exported from
+  `automation.ts:151` and imported only by `server.ts:20`), so
+  `PumasiService.alarm()` — the Durable Object alarm that drains due jobs and
+  re-arms — throws `ReferenceError` on the hosted build, drains nothing, and
+  dies before the re-arm. The alarm is really armed: `app.ts` calls
+  `deps.pump?.()` at five sites on booking, cancel and reschedule. Introduced
+  `de4abbe`, 2026-08-28. Found at this evaluation by type-checking the file that
+  nothing type-checks, confirmed in the emitted `wrangler` bundle, and not yet
+  fixed in `main`: [`BACKLOG.md`](BACKLOG.md) item 2.
+- **Nothing type-checks the deployed entry point, and no test executes it.**
+  `service/wrangler.jsonc:6` names `src/worker.ts`; both service `tsconfig`s
+  exclude it, so `npm run build`, `npm test` and the new CI `typecheck` all skip
+  it, and the eight test files that mention it read it as *text*. 17 errors sit
+  under it uncompiled — sixteen are missing Cloudflare ambient types and one was
+  the live defect above. [`BACKLOG.md`](BACKLOG.md) item 3.
+- **A machine re-runs the checks now, and it blocks nothing.** Advisory CI runs
+  the core suite, the service suite (minus `browser-live.test.ts`, named on
+  every run), `npm run typecheck` across both workspaces, and a credential-free
+  `wrangler deploy --dry-run`, on every push and pull request, in public
+  (`d5a02bb`; Q-026 open to 2026-09-07). Verified here, not quoted: run
+  `33428541886` green at `d5a02bb`, two demonstration runs red, no branch
+  protection (404) and no rulesets (`[]`). So `GATE: PASS` still means an agent
+  ran `pumasi/tools/gate.sh` by hand and signed the record — `DECISIONS.md`
+  **Q-025** for the half that is the steward's. And **bundling is not
+  type-checking**: the green tick above coexisted with the dead-workflow defect,
+  which is the gap the run prints about itself on every execution.
+- **The suite latches red on a shared machine.** The 19 service test files that
+  start PostgreSQL hard-code both their port and their data directory, so one
+  contention failure leaves `/tmp/pumasi-pg-<name>` behind and **every later run
+  of that file fails on it** until a human deletes it. Measured here: 40
+  sequential `npm test` runs gave 21 green, then **19 consecutive identical
+  failures**; removing one directory restored 336/336 at the same load. It is a
+  false red, never a false green, and a fresh CI runner cannot carry it between
+  runs. [`BACKLOG.md`](BACKLOG.md) item 6.
 - **Nothing in the flow deploys a merged fix.** The charter flow ends at
   `GATE: PASS` and a published release note; no role in
   `pumasi-ops/roles/` owns carrying the build to `booking.pumasi.ai`, and
@@ -204,8 +293,8 @@ but the agents who run it, and here is who has to decide each.
   `env['GIT_COMMIT'] ?? 'unknown'` and the deploy that would have set it did
   not. `package.json` has said `0.1.0` since the first commit and `/version`
   returns 404. Establishing what is deployed needed Cloudflare API access at
-  this evaluation, as it did at the two before it (`PRODUCT-RULES.md` PR-1 gap,
-  binds always; [`BACKLOG.md`](BACKLOG.md) item 3). The 2026-08-31 sign-in
+  this evaluation, as it did at the three before it (`PRODUCT-RULES.md` PR-1
+  gap, binds always; [`BACKLOG.md`](BACKLOG.md) item 4). The 2026-08-31 sign-in
   release note states outright that PR-1's version clause cannot be met by this
   product and gives the commit instead (`pumasi` `29f0853`).
 - **A half-configured deployment is refused in a way it cannot act on, and one
@@ -218,7 +307,7 @@ but the agents who run it, and here is who has to decide each.
   to Google and refused on the way back instead of at the button. Nothing is
   unguarded either way and no live user is affected — `booking.pumasi.ai` holds
   both credentials. Recorded by the spec/0007 run as found-not-fixed and ranked
-  here; [`BACKLOG.md`](BACKLOG.md) item 4.
+  here; [`BACKLOG.md`](BACKLOG.md) item 5.
 - Deletion cannot recall mail already sent — by nature, and disclosed in the
   notice.
 - The deployed (Workers/Gmail) mail path's subprocessor control is code review,
@@ -245,21 +334,26 @@ but the agents who run it, and here is who has to decide each.
 
 ## What `launched` requires
 
-The Q-009, Q-011, Q-015 and Q-023 windows passing unvetoed; Google verification
-cleared so C1 holds for strangers; the reporting *intake* live with its
-deletion path implemented and tested, and the Workers-path reporting decision
-made (§5.1 binds at this promotion; spec/0004 R5c, D-107 —
-[`BACKLOG.md`](BACKLOG.md) item 6); the PMI leak closed **on the deployment**,
-not only in `main` (item 1); a route by which a merged fix reaches users at all
-(`DECISIONS.md` Q-012); PR-1 met, since it binds always and this stage has been
-carrying the gap for four evaluations (item 3); **something other than the
-merging agent re-running the suite on every change** (item 2); and the D-105
-residue either cleared by counsel or explicitly accepted by the steward as the
-standing posture.
-*Satisfied since the last pass:* nothing new — the sign-in release removed a
-defect rather than clearing a gate, and that is said plainly instead of counted
-as progress. *Newly named by this pass:* CI, promoted straight from "not
-noticed by anyone" to a promotion requirement, on the same reasoning that
-promoted PR-1 last pass — `launched` means "regressions are release-stoppers",
-and a regression cannot stop a release that nothing is watching. Promotion is a
-commit citing each.
+The Q-009, Q-011, Q-015, Q-023 and **Q-026** windows passing unvetoed; Google
+verification cleared so C1 holds for strangers; the reporting *intake* live with
+its deletion path implemented and tested, and the Workers-path reporting
+decision made (§5.1 binds at this promotion; spec/0004 R5c, D-107 —
+[`BACKLOG.md`](BACKLOG.md) item 8); the PMI leak closed **on the deployment**,
+not only in `main` (item 1); **workflows and webhooks actually working on the
+deployment** (item 2), with the deployed entry point brought under a compiler so
+that can be checked rather than asserted (item 3); a route by which a merged fix
+reaches users at all (`DECISIONS.md` Q-012); PR-1 met, since it binds always and
+this stage has been carrying the gap for five evaluations (item 4); and the
+D-105 residue either cleared by counsel or explicitly accepted by the steward as
+the standing posture.
+*Satisfied since the last pass, and this is the first pass in a while that can
+say so:* the CI requirement named last pass is **met in the half that was a
+promotion requirement** — something other than the merging agent now re-runs the
+suite on every change — and is struck from this list. Its other half is not a
+requirement but a steward question (Q-025): an advisory check stops no release.
+*Newly named by this pass:* workflows and webhooks working on the deployment,
+and the file that serves them being type-checked. Neither is a new standard.
+`launched` means the [`VALUE.md`](VALUE.md) promises hold, and C3 lists
+workflows and webhooks by name; a promise that has never once worked in
+production is not a gap in the evidence, it is the thing the evidence was
+supposed to be about. Promotion is a commit citing each.
