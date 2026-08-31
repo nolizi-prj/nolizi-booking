@@ -1,0 +1,154 @@
+{
+  "suite": "SPEC-0005 zoom-truthful-connect acceptance",
+  "version": "1.0.0",
+  "frozen_at_approval": true,
+  "note": "Runner: service/test/video.test.ts. Runners are ordinary risk; this file is the truth. Z-002 and Z-005 must FAIL against the tree at 5ca3b91 -- a defect spec proves itself by failing before (lessons/L-006).",
+  "cases": [
+    {
+      "id": "Z-001",
+      "clause": "Z1a, Z1b, Z1e",
+      "description": "The Zoom OAuth connect callback stores the connection and writes nothing to schedules.",
+      "steps": [
+        { "call": "seed_zoom_schedule", "args": { "location_value": null }, "capture": "before" },
+        { "call": "run_zoom_connect_callback", "args": { "pmi_url": "https://us02web.zoom.us/j/1112223333" } },
+        { "call": "read_schedule", "capture": "after" },
+        { "assert": "$after.location_value == $before.location_value (still null) -- no UPDATE of schedules occurred" },
+        { "assert": "exactly one video_connections row exists for (owner, 'zoom'), with a non-null refresh_token and fallback_url == 'https://us02web.zoom.us/j/1112223333'" },
+        { "call": "run_zoom_connect_callback", "args": { "pmi_url": null, "account_email": "second@example.com" } },
+        { "assert": "a connection row exists for second@example.com with a null fallback_url -- the credential is stored even with no personal room" }
+      ]
+    },
+    {
+      "id": "Z-002",
+      "clause": "Z2a, Z2d, Z2e",
+      "description": "No joinable link reaches an anonymous visitor. FAILS before the fix.",
+      "steps": [
+        { "call": "seed_zoom_schedule", "args": { "location_value": "https://us02web.zoom.us/j/1112223333" } },
+        { "call": "get_public_booking_page", "capture": "html" },
+        { "assert": "$html does not contain 'us02web.zoom.us' nor '/j/1112223333' anywhere, escaped or unescaped" },
+        { "assert": "$html contains 'Zoom — link arrives with the confirmation'" },
+        { "call": "public_location_text", "args": { "kind": "meet", "location_value": "https://meet.google.com/abc-defg-hij" }, "capture": "m" },
+        { "call": "public_location_text", "args": { "kind": "teams", "location_value": "https://teams.microsoft.com/l/meetup-join/xyz" }, "capture": "t" },
+        { "call": "public_location_text", "args": { "kind": "google_chat", "location_value": "https://chat.google.com/room/AAA" }, "capture": "g" },
+        { "assert": "none of $m, $t, $g contains its location_value; each names its venue and says the link arrives with the confirmation" },
+        { "call": "public_location_text", "args": { "kind": "zoom", "meet_url": "https://us02web.zoom.us/j/999" }, "capture": "z" },
+        { "assert": "$z does not contain '/j/999' -- a minted URL is no more public than a stored one" }
+      ]
+    },
+    {
+      "id": "Z-003",
+      "clause": "Z2b",
+      "description": "Non-conferencing kinds are not degraded: what the owner typed still shows publicly.",
+      "steps": [
+        { "call": "public_location_text", "args": { "kind": "phone", "location_value": "+1 555 0100" }, "capture": "p" },
+        { "assert": "$p == 'Phone — +1 555 0100'" },
+        { "call": "public_location_text", "args": { "kind": "in_person", "location_value": "Cafe Nero, 2nd floor" }, "capture": "i" },
+        { "assert": "$i == 'Cafe Nero, 2nd floor'" },
+        { "call": "public_location_text", "args": { "kind": "custom", "location_value": "Ask on arrival" }, "capture": "c" },
+        { "assert": "$c == 'Ask on arrival'" }
+      ]
+    },
+    {
+      "id": "Z-004",
+      "clause": "Z1c",
+      "description": "Zoom credentials are sealed at rest and recoverable only with TOKEN_KEY.",
+      "steps": [
+        { "call": "run_zoom_connect_callback", "args": { "refresh_token": "zoom-refresh-SENTINEL", "access_token": "zoom-access-SENTINEL" } },
+        { "call": "read_raw_connection_row", "capture": "row" },
+        { "assert": "neither 'zoom-refresh-SENTINEL' nor 'zoom-access-SENTINEL' appears in any column of $row" },
+        { "call": "open_sealed", "args": { "value": "$row.refresh_token" }, "capture": "opened" },
+        { "assert": "$opened == 'zoom-refresh-SENTINEL'" },
+        { "call": "open_sealed", "args": { "value": "$row.refresh_token", "key": "a different 32-byte key" }, "capture": "wrong" },
+        { "assert": "$wrong is undefined -- never a partial value" }
+      ]
+    },
+    {
+      "id": "Z-005",
+      "clause": "Z3a, Z3b",
+      "description": "A stored fallback link no longer suppresses per-booking creation. FAILS before the fix.",
+      "steps": [
+        { "call": "seed_zoom_schedule", "args": { "location_value": "https://us02web.zoom.us/j/1112223333" } },
+        { "call": "store_zoom_connection", "args": { "access_token": "tok", "expires_in_seconds": 3600 } },
+        { "call": "book", "args": { "zoom_api": "recording" }, "capture": "b" },
+        { "assert": "$b.zoom_api recorded exactly one POST to /users/me/meetings, authorized with the stored connection's access token" },
+        { "assert": "$b.confirmation_mail location contains the minted join_url, not '/j/1112223333'" }
+      ]
+    },
+    {
+      "id": "Z-006",
+      "clause": "Z3b, Z3c",
+      "description": "An expired access token is refreshed, the rotated refresh token is persisted, and the booking still mints a room.",
+      "steps": [
+        { "call": "store_zoom_connection", "args": { "refresh_token": "old-refresh", "access_expires_at": "in the past" } },
+        { "call": "book", "args": { "zoom_api": "refresh-then-create" }, "capture": "b" },
+        { "assert": "$b.zoom_api recorded a refresh grant before the create call" },
+        { "call": "read_connection", "capture": "conn" },
+        { "assert": "the sealed refresh_token now opens to the rotated value returned by the refresh, not 'old-refresh'" },
+        { "assert": "$b.confirmation_mail location contains the minted join_url" },
+        { "call": "book", "args": { "zoom_api": "refresh-fails" }, "capture": "b2" },
+        { "assert": "$b2 succeeded as a booking; the connection row's status is 'error' with a non-null error_reason; nothing threw" }
+      ]
+    },
+    {
+      "id": "Z-007",
+      "clause": "Z3d, Z2c",
+      "description": "The fallback chain runs in the stated order, and only the confirmed audience ever sees its result.",
+      "steps": [
+        { "call": "book", "args": { "calendar_meet_url": "https://meet.google.com/cal-mint", "zoom_api": "recording" }, "capture": "b1" },
+        { "assert": "$b1 made no Zoom create call and the confirmation carries the calendar-minted URL (step 1)" },
+        { "call": "book", "args": { "connection": true, "zoom_api": "recording" }, "capture": "b2" },
+        { "assert": "$b2 confirmation carries the per-booking join_url from the connection (step 2)" },
+        { "call": "book", "args": { "connection": false, "s2s_credentials": true, "zoom_api": "recording" }, "capture": "b3" },
+        { "assert": "$b3 confirmation carries the per-booking join_url from the Server-to-Server path (step 3)" },
+        { "call": "book", "args": { "connection": true, "zoom_api": "failing", "location_value": "https://us02web.zoom.us/j/typed" }, "capture": "b4" },
+        { "assert": "$b4 confirmation carries '/j/typed' (step 4)" },
+        { "call": "book", "args": { "connection": true, "connection_fallback_url": "https://us02web.zoom.us/j/pmi", "zoom_api": "failing", "location_value": null }, "capture": "b5" },
+        { "assert": "$b5 confirmation carries '/j/pmi' (step 5)" },
+        { "call": "book", "args": { "connection": false, "s2s_credentials": false, "location_value": null }, "capture": "b6" },
+        { "assert": "$b6 confirmation says 'Zoom — link arrives with the confirmation' (step 6)" },
+        { "assert": "for every one of b1..b6 the public booking page rendered before the booking contained no join URL" }
+      ]
+    },
+    {
+      "id": "Z-008",
+      "clause": "Z3e, Z3f",
+      "description": "Zoom failing never fails a booking, and the owner's token is used for nothing else.",
+      "steps": [
+        { "call": "book", "args": { "connection": true, "zoom_api": "throws" }, "capture": "b" },
+        { "assert": "$b returned a confirmed booking with a booking id, and both booker and host confirmation mails were sent" },
+        { "call": "book", "args": { "connection": true, "zoom_api": "500" }, "capture": "b2" },
+        { "assert": "$b2 returned a confirmed booking" },
+        { "assert": "across every call in this suite, the only Zoom API paths contacted with a stored access token are the token endpoint and /users/me/meetings" }
+      ]
+    },
+    {
+      "id": "Z-009",
+      "clause": "Z4b, Z4c, Z4a, Z4d",
+      "description": "The integrations card reads connected-state from the connection, and its copy matches Z3d.",
+      "steps": [
+        { "call": "integrations_page", "args": { "connection": true, "location_value": null }, "capture": "h1" },
+        { "assert": "$h1 shows 'Connected ✓' and names the connected account's email or display name" },
+        { "call": "integrations_page", "args": { "connection": false, "location_value": "https://us02web.zoom.us/j/1112223333" }, "capture": "h2" },
+        { "assert": "$h2 shows 'Not Connected' -- a stamped location_value is not a connection" },
+        { "call": "integrations_page", "args": { "connection": false, "s2s_credentials": true }, "capture": "h3" },
+        { "assert": "$h3 shows 'Connected ✓'" },
+        { "assert": "$h1 does not claim a unique room unconditionally: its copy states the fallback order, and the static-link field's help text says the link is used only when a per-booking room cannot be created and is never shown before a booking" }
+      ]
+    },
+    {
+      "id": "Z-010",
+      "clause": "Z5a, Z5c, Z6a, Z6b",
+      "description": "Disconnect and account deletion both remove the stored credential; the table exists on both dialects.",
+      "steps": [
+        { "call": "store_zoom_connection" },
+        { "call": "seed_zoom_schedule", "args": { "location_value": "https://us02web.zoom.us/j/1112223333" } },
+        { "call": "post_disconnect" },
+        { "assert": "no video_connections row remains for that owner, and the schedule's location_value is null" },
+        { "call": "store_zoom_connection" },
+        { "call": "delete_account" },
+        { "assert": "no video_connections row remains for that owner -- verified by absence, in the same transaction as the rest of the erasure" },
+        { "assert": "the migration files exist for both dialects, are re-runnable (applying twice is a no-op), and the SQLite one is present in worker.ts's pre-loaded files list" }
+      ]
+    }
+  ]
+}
