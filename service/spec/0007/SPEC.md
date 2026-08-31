@@ -260,3 +260,26 @@ The three that pass on both sides are the ones that say the fix did not widen
 anything, and a case that cannot fail is decoration — so each names, in
 `cases.json`, the deliberate breakage that turns it red, and the implementation
 report records those mutations being run.
+
+> **Amended 2026-08-31 (`cases.json` v1.1.0), in the open, after the freeze and
+> after a cited code-review objection** (`reviews/20260831-111314-code-gemini.md`,
+> citing CHARTER Part 3 requirement 2). **No case, clause, step or assertion
+> changed.** The amendment is to the *runner's* setup helper, and it is recorded
+> here rather than folded into the implementation commit because the charter's
+> freeze covers the runner too — `cases.json`'s own line that "runners are
+> ordinary risk" is this spec's text, and the charter governs where they
+> disagree.
+>
+> `makeOrg()` resolved the org it had just created with
+> `SELECT org_id FROM orgs ORDER BY created_at DESC`. These deps freeze `now()`,
+> so two orgs created inside one test carry the same `created_at` and the
+> ordering is not a tiebreak: the helper returned the *first* org, whose admin is
+> a different owner, and A-003's frozen step *"create an org AND configure its
+> OIDC SSO"* then failed at 404 `'No such team.'` before it could assert
+> anything. It now resolves through the creating owner's own admin membership in
+> `org_members`.
+>
+> This is the L-006 shape the suite exists to respect, in the suite itself: a
+> lookup that is right until a second row exists, and that would have decided
+> A-003 on row order rather than on the behaviour A-003 names. Re-reviewed
+> cross-family before the code review was re-taken.
