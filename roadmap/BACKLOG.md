@@ -105,7 +105,7 @@ adds no provider and no scope, so it does not run ahead of Q-007.
 [`PRODUCT-RULES.md` PR-1](https://github.com/pumasi-ai/pumasi/blob/worktree-product-rules/PRODUCT-RULES.md)
 (v1.0, 2026-08-30; binds always — read fresh this evaluation, and still only on
 the unmerged `worktree-product-rules` branch, `0115758`; now raised as
-`DECISIONS.md` **Q-016**). Re-checked this tick: the root, `core/` and
+`DECISIONS.md` **Q-017**). Re-checked this tick: the root, `core/` and
 `service/` `package.json` all still say `0.1.0` and have never moved; there is
 no footer, about view or `/version` route, and `https://booking.pumasi.ai/version`
 returns **404** live; the release notes state no version.
