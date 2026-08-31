@@ -10,6 +10,7 @@
 import type { Slot } from '@pumasi/booking-core';
 import { locationText, type EventQuestion, type Schedule } from './schedules.ts';
 import { renderLegalBody, LEGAL_STATUS_LINE, type LegalDoc } from './legal.ts';
+import { VERSION } from './version.ts';
 
 const esc = (s: string): string =>
   s.replace(/[&<>"']/g, (c) => `&${{ '&': 'amp', '<': 'lt', '>': 'gt', '"': 'quot', "'": '#39' }[c]};`);
@@ -28,15 +29,22 @@ export const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0
 
 export const FAVICON_DATA_URL = `data:image/svg+xml,${encodeURIComponent(FAVICON_SVG)}`;
 
-/** D-105 · every public page carries the way to the privacy answers. */
+/**
+ * D-105 · every public page carries the way to the privacy answers.
+ * PR-1 · and the version it is being served by, so a person can find it
+ * without reading source. One source of truth: `version.ts` is generated
+ * from the root `package.json` (tools/sync-version.mjs).
+ */
 export const FOOTER = `<footer class="foot">
   <a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a> &middot;
   <a href="/subprocessors">Who sees data</a>
+  <span class="foot-v">v${VERSION}</span>
 </footer>
 <style>
  .foot{margin-top:2.5rem;padding-top:1rem;border-top:1px solid var(--line);
    font-size:.8rem;color:var(--muted)}
  .foot a{color:var(--muted)}
+ .foot-v{margin-left:.5rem;opacity:.75}
 </style>`;
 
 /** D-105 · the published documents, rendered from one source (legal.ts). */
@@ -619,6 +627,7 @@ table.rows{border-collapse:collapse;width:100%}
 
   function renderDiagnostics() {
     const diag = {
+      version: '${VERSION}',
       url: location.href,
       viewport: window.innerWidth + 'x' + window.innerHeight,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
@@ -708,6 +717,7 @@ table.rows{border-collapse:collapse;width:100%}
 
       const typeEl = form.querySelector('input[name="pf_type"]:checked');
       const payload = {
+        version: '${VERSION}',
         type: typeEl ? typeEl.value : 'bug',
         description: document.getElementById('pf-desc')?.value || '',
         email: document.getElementById('pf-email')?.value || '',

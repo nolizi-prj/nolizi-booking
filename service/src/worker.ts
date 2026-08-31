@@ -41,6 +41,7 @@ import { microsoftSsoExchange, microsoftSsoUrl } from './sso-microsoft.ts';
 import { errorPage, FAVICON_SVG, homePage, legalPage, loginPage, signupPage } from './pages.ts';
 import { submitFeedback, type FeedbackPayload } from './feedback.ts';
 import { LEGAL_DOCS } from './legal.ts';
+import { VERSION } from './version.ts';
 import { processDueJobs } from './automation.ts';
 // Bundled as text via the `rules` entry in wrangler.jsonc; typed by
 // types/sql-modules.d.ts, which tsconfig.worker.json includes.
@@ -439,12 +440,25 @@ export default {
     const ssoEnabled = { google: Boolean(config.googleClientId), microsoft: Boolean(config.msClientId) };
 
     // ── global, data-free surfaces ─────────────────────────────────────────
+    // L-009 · the same three answers the Node entry gives at app.ts, from the
+    // same generated constant. A version that appears on one entry point and
+    // not the other is the defect class this product has already paid for.
     if (url.pathname === '/healthz') {
-      return Response.json({ status: 'ok', commit: env['GIT_COMMIT'] ?? 'unknown', sharded: true });
+      return Response.json({
+        status: 'ok', version: VERSION, commit: env['GIT_COMMIT'] ?? 'unknown', sharded: true,
+      });
+    }
+    if (url.pathname === '/version') {
+      return Response.json({ version: VERSION, commit: env['GIT_COMMIT'] ?? 'unknown' });
     }
     if (url.pathname === '/readyz') {
       const owners = await dir('ownerCount');
-      return Response.json({ status: 'ready', owners });
+      // O4 · report the versions actually in use. This surface reported none
+      // at all; it now reports the two it can honestly know. `tzdata` stays
+      // off: the Node entry reads it from `process.versions.tz`, which the
+      // Workers runtime does not have, and echoing core's PINNED_TZDATA here
+      // would report an intention as a measurement.
+      return Response.json({ status: 'ready', version: VERSION, commit: env['GIT_COMMIT'] ?? 'unknown', owners });
     }
     // Issue #3 · favicon
     const isGetOrHead = request.method === 'GET' || request.method === 'HEAD';

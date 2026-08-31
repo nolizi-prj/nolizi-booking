@@ -1,6 +1,6 @@
 {
   "name": "pumasi-booking",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Pumasi Booking. A booking page people can send someone to pick a time on.",
   "license": "Apache-2.0",
   "private": true,
@@ -11,7 +11,10 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
+    "pretest": "node tools/sync-version.mjs --check",
     "test": "npm run test --workspaces",
+    "version:sync": "node tools/sync-version.mjs",
+    "version": "node tools/sync-version.mjs && git add package-lock.json core/package.json service/package.json service/src/version.ts",
     "typecheck": "npm run typecheck --workspaces",
     "dev": "npm run dev -w @pumasi/booking-service",
     "start": "node service/dist/server.js"

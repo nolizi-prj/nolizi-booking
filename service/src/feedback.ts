@@ -6,6 +6,8 @@
  * and sanitized diagnostic context.
  */
 
+import { VERSION } from './version.ts';
+
 export interface FeedbackDiagnosticError {
   message: string;
   source?: string;
@@ -16,6 +18,14 @@ export interface FeedbackDiagnosticError {
 
 export interface FeedbackPayload {
   type: 'bug' | 'feature' | 'general';
+  /**
+   * PR-1 · the build the reporter was actually looking at. The widget renders
+   * it from this server's own `VERSION` and shows it in the "Included
+   * Diagnostics" panel before submit, so it is not a hidden field appended
+   * after consent (PR-2). Optional because the API accepts reports that were
+   * not composed by the widget; those fall back to this process's VERSION.
+   */
+  version?: string;
   title?: string;
   description: string;
   email?: string;
@@ -51,6 +61,19 @@ function sanitizeUrl(rawUrl?: string): string {
   } catch {
     return rawUrl;
   }
+}
+
+/**
+ * PR-1 · the version the report concerns. The widget sends this server's own
+ * VERSION back, so the value is normally already correct; it is still checked
+ * against a version shape rather than pasted, because everything on the client
+ * side of this payload is attacker-controlled and this one ends up inside a
+ * GitHub issue body. Anything that is not a version falls back to the version
+ * this process is actually running, which is never a guess.
+ */
+function reportedVersion(reported?: string): string {
+  const v = reported?.trim() ?? '';
+  return /^[0-9A-Za-z.+-]{1,32}$/.test(v) ? v : VERSION;
 }
 
 export function formatFeedbackMarkdown(
@@ -96,6 +119,7 @@ ${payload.description}
 ### Diagnostic Environment (Client-Side)
 | Key | Value |
 | :--- | :--- |
+| **Product Version** | \`${reportedVersion(payload.version)}\` |
 | **Page URL** | \`${sanitizeUrl(payload.url)}\` |
 | **User Agent** | \`${payload.userAgent || 'Unknown'}\` |
 | **Viewport** | \`${payload.viewport || 'Unknown'}\` |

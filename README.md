@@ -222,6 +222,24 @@ that skips an entire calendar day.
 database answers, and reports the commit and tzdata version in use. Route on
 `/readyz`.
 
+## The version
+
+One number, one place. The root [`package.json`](package.json) is the only file
+in this repository that states a version by hand;
+[`tools/sync-version.mjs`](tools/sync-version.mjs) writes it into the other
+four — `core/package.json`, `service/package.json`, the workspace entries in
+`package-lock.json`, and the generated `service/src/version.ts` that both entry
+points import.
+
+    npm version minor --workspaces=false   # bump, sync and tag
+    npm run version:sync                   # or: edit package.json, then sync
+
+`service/test/version.test.ts` fails if those five ever disagree, so a bump
+without a sync does not ship quietly. A person can read the number off the
+footer of any public page, or from `/version`, `/healthz` and `/readyz` on
+either build. `commit` is a different question and a different answer: it is
+set at deploy time from `GIT_COMMIT`, and says `unknown` until one happens.
+
 ## What is not built
 
 See [`service/spec/0002/SPEC.md` §8.1](service/spec/0002/SPEC.md). The booker's

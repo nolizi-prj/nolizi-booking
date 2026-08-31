@@ -41,6 +41,7 @@ import { validateLogo } from './branding.ts';
 import { describeRecurrence, expandRecurrence, isValidRecurrence } from './recurrence.ts';
 import { cancelPendingJobs, fireTrigger, type BookingCtx } from './automation.ts';
 import { submitFeedback, type FeedbackPayload } from './feedback.ts';
+import { VERSION } from './version.ts';
 import { createZoomMeeting, createZoomUserMeeting, zoomAuthUrl, zoomExchangeCode } from './video-zoom.ts';
 import { VideoConnections } from './video.ts';
 import type { MailPort } from './mail.ts';
@@ -334,7 +335,12 @@ async function handleRoutes(
   const sessionId = readCookie(req.cookie, 'pumasi_session');
 
   // O3 · health means the process is up; readiness means it can actually serve.
-  if (req.path === '/healthz') return json(200, { status: 'ok', commit: config.commit });
+  if (req.path === '/healthz') return json(200, { status: 'ok', version: VERSION, commit: config.commit });
+  // PR-1 · the version, findable without reading source and without a database.
+  // `commit` travels with it because the two answer different questions: the
+  // version says which release this is, the commit says which build of it —
+  // and `commit` is 'unknown' until a deploy sets GIT_COMMIT (Q-012).
+  if (req.path === '/version') return json(200, { version: VERSION, commit: config.commit });
   if (req.path === '/readyz') {
     if (!deps.ready()) return json(503, { status: 'not_ready', reason: 'migrations incomplete' });
     try {
@@ -345,6 +351,7 @@ async function handleRoutes(
     // O4 · report the versions actually in use.
     return json(200, {
       status: 'ready',
+      version: VERSION,
       commit: config.commit,
       tzdata: (process.versions as { tz?: string }).tz ?? 'unknown',
     });

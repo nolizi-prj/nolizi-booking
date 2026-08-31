@@ -1,6 +1,6 @@
 {
   "name": "@pumasi/booking-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Availability computation and booking. Apache-2.0, embeddable. Implements SPEC-0001.",
   "license": "Apache-2.0",
   "type": "module",

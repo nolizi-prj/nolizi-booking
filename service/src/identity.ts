@@ -50,7 +50,7 @@ export type RedeemResult =
  */
 /** P4 · reserved first-segment routes an owner's link may never claim. */
 export const RESERVED_SLUGS = new Set(['app', 'auth', 'login', 'logout', 'signup', 'oauth', 'b',
-  's', 'r', 'p', 'embed.js', 'healthz', 'readyz', 'assets',
+  's', 'r', 'p', 'embed.js', 'healthz', 'readyz', 'version', 'assets',
   'privacy', 'terms', 'dpa', 'subprocessors']);
 
 /**

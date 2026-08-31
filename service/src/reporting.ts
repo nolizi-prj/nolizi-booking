@@ -19,6 +19,16 @@ import { CEILING_DEFAULTS, type Config } from './config.ts';
 
 export const REPORT_SCHEMA = 'pumasi-report/1';
 export const REPORT_ITEM = 'pumasi-booking';
+/**
+ * PR-1 asks that the diagnostics state the version, and this payload does not.
+ * Adding `version` here is deliberately NOT done in the change that added it
+ * everywhere else, because by this module's own rule above it is a schema
+ * change: a field not in these interfaces is a field a report may not carry,
+ * and adding one means `pumasi-report/2` and a fresh cross-family spec review
+ * (R1b). A silent field on a schema a receiver validates is worse than a
+ * missing one. The gap is real and stays named here until that review happens;
+ * `commit` continues to answer "which build" in the meantime.
+ */
 /** R5b — one held report per day, sent by the Node path only. */
 export const HELD_REPORT_INTERVAL_MS = 24 * 60 * 60 * 1000;
 /** R5b — "shortly after start", late enough to never delay serving. */
