@@ -125,7 +125,12 @@ the same reason, as the existing `videoConnections(config, now)` helper
 a second wiring path through `AppDeps` is a second thing to drift.
 
 **S2b.** The message on that refusal names `TOKEN_KEY`, not calendars. An
-operator who sees it can act on it.
+operator who sees it can act on it. "The message" is the error sentence the
+page renders (`<p class="err">` in `errorPage`), not the whole document —
+every page in this service ships the same stylesheet, and that stylesheet
+contains the comment `/* slots and calendar */`. Asserting over the document
+would be asserting about CSS. *(Clarified 2026-08-31 with S3a, same
+amendment.)*
 
 **S2c.** The state is opened with `states.open(...)`. The stale-or-invalid 400
 for an unopenable state or a missing `code` is unchanged.
@@ -165,8 +170,22 @@ points** (§5).
 ## 3 · No unsigned state is built, anywhere (S3)
 
 **S3a.** The `hub ? … : Buffer.from(JSON.stringify(...))` fallback is
-**deleted** at all three sites (`app.ts` ~966, ~2026, ~2061). After this
-change the string `base64url` does not appear in `app.ts`.
+**deleted** at all three sites (`app.ts` ~966, ~2026, ~2061). After this change
+the string `Buffer.from(JSON.stringify(` does not appear in `app.ts`, and no
+state emitted by any entry point decodes to readable JSON containing an
+`owner_id`.
+
+> **Amended 2026-08-31, after the freeze and before the code review, in the
+> open (CHARTER Part 3 req 2).** This clause first read "the string
+> `base64url` does not appear in `app.ts`", and case S-003's last step
+> asserted that grep. It is wrong and unsatisfiable: `app.ts` ~67 is
+> `export const newToken = (): string => randomBytes(32).toString('base64url')`,
+> which is an unrelated, correct use that predates this spec — encoding random
+> bytes, not hand-building an authenticated payload. Named the wrong thing:
+> the defect is the *construction*, not the *encoding*. The amended assertion
+> is narrower on the word and stronger on the behaviour, since it adds the
+> decode check that the grep was standing in for. Re-reviewed cross-family
+> before implementation was accepted.
 
 **S3b.** A deployment with no `TOKEN_KEY` **refuses to start** a Zoom connect,
 with the reason, rather than starting one it could not store:
