@@ -81,14 +81,19 @@ the single free self-hostable product (commit series `e688e8b`…`b0cb050`,
 the sharded E2E suite green on 2026-08-29). The commercialization foundations
 (§7) forbid open-core, dual licensing, licence switches, and hosted-exclusive
 features — in writing, in advance.
-*Today's honest limit, found 2026-08-31 by reading the tree behind a partial
-handover:* on a self-hosted copy, **per-org OIDC SSO is unreachable without
-Google Calendar credentials** — `/login/sso/<orgId>` returns "SSO is not
-configured on this deployment." because it is gated on the calendar hub
-(`service/src/app.ts:912`, on both the Node and the Workers path). Microsoft
-sign-in has the same gate on the Node path (`app.ts:998`). The features are
-built and tested; one of them cannot be reached by the operator this file
-courts. [`BACKLOG.md`](BACKLOG.md) item 2, and see C5.
+*The limit this file carried on 2026-08-31 is closed in `main`, and is recorded
+as closed rather than deleted.* Until `6b597dd`, on a self-hosted copy, **per-org
+OIDC SSO was unreachable without Google Calendar credentials** —
+`/login/sso/<orgId>` answered "SSO is not configured on this deployment."
+because it was gated on the calendar hub, on **both** the Node and the Workers
+path; Microsoft sign-in had the same gate on the Node path. Both doors now gate
+on being able to seal a sign-in ticket, which needs `TOKEN_KEY` and nothing else
+(`service/src/app.ts:922`, `app.ts:1017`; spec/0007, Q-023), each keeping its
+own credential check. Verified against the tree at this evaluation, not read off
+the release note. **For the operator this file courts, the merge is the
+delivery, once they pull** — and it has not reached `booking.pumasi.ai`, which
+was never affected because that deployment has Google Calendar configured
+([`BACKLOG.md`](BACKLOG.md) item 1).
 *Falsified by:* any listed feature failing its E2E path for a real user; any
 feature appearing in a paid or hosted-only tier, ever. **Not counted as fired
 here, and the reason is stated rather than assumed:** no real user is known to
@@ -101,10 +106,16 @@ softened.
 DPA are served by the running service, state operator, basis, deletion reach
 and subprocessors, and are **tested against the product**: a test extracts
 every field the live booking form posts and fails unless the notice discloses
-it (`8f77d66`). *Scope of that word, tightened 2026-08-31:* the test binds the
-code in `main`, and `main` is not automatically what
-`booking.pumasi.ai` is serving — on 2026-08-31 the deployment was found to be
-a day behind ([`STAGE.md`](STAGE.md), "the deployed build is not `main`"). The
+it (`8f77d66`). *Scope of that word, tightened 2026-08-31 and re-measured at
+each evaluation since:* the test binds the code in `main`, and `main` is not
+automatically what `booking.pumasi.ai` is serving — the deployment has now been
+found unmoved at **2026-08-30 16:55:37 UTC** by three consecutive evaluations,
+~26 hours and four merged builds behind ([`STAGE.md`](STAGE.md), "the deployed
+build is not `main`"). *And a second limit on that word, named 2026-08-31
+rather than left implicit:* nothing re-runs that test automatically — this
+repository has no CI ([`BACKLOG.md`](BACKLOG.md) item 2), so "tested against the
+product" also means "tested by whichever agent last chose to run the suite, and
+reported what it said". The
 enforcement is real; "against the product" means against the branch the
 product is built from, until a merged build reliably reaches users. Mail through an undisclosed host is refused on the Node path;
 the deployed Workers path has a weaker, disclosed control
@@ -125,15 +136,26 @@ unrelated one. That is fixed in `main`: the gate is now the ability to open a
 sealed state, which needs `TOKEN_KEY` and nothing else
 (`service/src/oauth-state.ts`; spec/0006, Q-015). For self-hosters — the people
 the claim is about — the merge is the delivery, once they pull.
-*And the same evaluation found the pattern is not fully gone:* Microsoft
-sign-in (Node path) and per-org OIDC SSO (both paths) are still gated on the
-Google calendar hub. See C3's honest limit and [`BACKLOG.md`](BACKLOG.md)
-item 2.
+*Moved again, and further, by the 2026-08-31 sign-in release (`6b597dd`,
+spec/0007, Q-023):* the last two gates of this shape are gone. Microsoft
+sign-in (Node path) and per-org OIDC SSO (**both** paths) no longer require
+Google Calendar credentials. Three provider-on-provider gates have now been
+found and closed in two days — Zoom connect, then these two — which is the count
+going down, and this file says so instead of implying it was always clean.
+*What remains, stated rather than allowed to accumulate quietly:* the divergence
+now points the other way, and only on one build. `worker.ts:596` opens
+`/auth/google/start` on `googleClientId` **without** `googleClientSecret`, where
+the Node path effectively requires both (`app.ts:984`–`986`, via the hub), so a
+Workers deployment with an id and no secret is sent to Google and refused on the
+way back rather than at the button. No provider is required that was not
+required before, and nothing is unguarded — it is a late refusal, not a lost
+feature. [`BACKLOG.md`](BACKLOG.md) item 4.
 *Falsified by:* a change that makes any single provider required to run or to
 leave. **Not fired:** nothing here was introduced by a change, no provider is
-required to *run* the product or to leave it, and the release moved the count
-of these gates down rather than up. The remaining two are listed instead of
-being allowed to accumulate quietly.
+required to *run* the product or to leave it, and the two releases of
+2026-08-31 took the count of these gates from three to zero. What is left is
+listed above rather than allowed to accumulate quietly, and it is a different
+defect — a refusal that arrives late, not a provider that is load-bearing.
 
 **C6 — It is the only maintained permissively-licensed product in the
 category.** Apache-2.0, inbound equals outbound; no CLA grants anyone
@@ -156,13 +178,18 @@ deprecation candidate, and this file must say so rather than compete with it.
 - **A reviewed legal posture.** The lawful basis is written and in force; no
   lawyer has reviewed it, and no standard contractual clauses cover the
   US transfer ([`DEBT.md` D-105](https://github.com/pumasi-ai/governance/blob/main/governance/DEBT.md)).
-- **Evidence beyond one machine.** The conformance-reporting *mechanism* now
-  exists (spec/0004, released 2026-08-30: signed opt-in conformance reports,
-  one-step `PUMASI_REPORTING=false` opt-out) — but nothing receives reports
-  yet, and the deployed Workers path deliberately sends nothing. The test
-  matrix is still one machine wide, and this file says so rather than
-  implying a fleet. (D-108 closed 2026-08-30 by the §5.1 amendment; the
-  works-for-strangers claim still cannot be made on one machine.)
+- **Evidence beyond one machine — and, named 2026-08-31, beyond one
+  *observer*.** The conformance-reporting *mechanism* now exists (spec/0004,
+  released 2026-08-30: signed opt-in conformance reports, one-step
+  `PUMASI_REPORTING=false` opt-out) — but nothing receives reports yet, and the
+  deployed Workers path deliberately sends nothing. The test matrix is still one
+  machine wide, and this file says so rather than implying a fleet. (D-108
+  closed 2026-08-30 by the §5.1 amendment; the works-for-strangers claim still
+  cannot be made on one machine.) **Nor is any of it independently re-run:**
+  `.github/` holds no workflows and `gh run list` is empty, so `GATE: PASS` in a
+  release note is a report of a script an agent ran on its own checkout. This
+  evaluation re-ran it (311 service + 19 engine, 0 failures at `6b597dd`) and it
+  held — which is a check, not a system. [`BACKLOG.md`](BACKLOG.md) item 2.
 
 ## 5 · Keeping this honest
 

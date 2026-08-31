@@ -25,16 +25,20 @@ and polish, and the list reflects that.
 ## The order
 
 **1 · Deploy the reviewed build to `booking.pumasi.ai` — the Zoom leak is closed
-in `main` and is still live in production, and two releases now wait behind it**
-— source: this evaluation (2026-08-31, 15:30 tick), checking the deployment
-rather than the merge, for the second consecutive evaluation. Re-verified this
-tick, not inherited: `npx wrangler deployments list` for the `pumasi-booking`
-worker (`service/wrangler.jsonc`, custom domain `booking.pumasi.ai`) still puts
-the latest deployment at **2026-08-30 16:55:37 UTC** (a *Secret Change*; the
-last upload of code is **16:22:12 UTC**), and `https://booking.pumasi.ai/`
-answers **200**. Both `16c3fd4` (the Zoom fix, 2026-08-31 05:27 UTC) and
-`4f6ddf0` (the OAuth-callback release) postdate it, so the live build is the
-pre-fix one and **nothing has moved since the last evaluation said so**.
+in `main` and is still live in production, and four merged builds now wait
+behind it** — source: this evaluation (2026-08-31, job `0030`), checking the
+deployment rather than the merge, for the **third** consecutive evaluation.
+**Re-measured this tick, not carried** — three evaluations have now written down
+the same timestamp, and a number that is quoted rather than taken stops being
+evidence: `npx wrangler deployments list` for the `pumasi-booking` worker
+(`service/wrangler.jsonc`, custom domain `booking.pumasi.ai`) still puts the
+latest deployment at **2026-08-30 16:55:37 UTC** (version `d73c05b5`, a *Secret
+Change*; the last upload of *code* is **16:22:12 UTC**, version `ffa54b6d`), and
+`https://booking.pumasi.ai/` answers **200**. `4f56df4`, `16c3fd4` (the Zoom
+fix, 2026-08-31 05:27 UTC), `4f6ddf0` (the OAuth-callback release) and now
+`6b597dd` (the sign-in release) all postdate it, so the live build is the
+pre-fix one and **nothing has moved in ~26 hours, across two complete charter
+cycles**.
 Deploying does close it even for rows the old flow already stamped, which was
 checked rather than assumed: `locationText(schedule, …, 'public')` returns
 `"<venue> — link arrives with the confirmation"` for every conferencing kind
@@ -47,80 +51,126 @@ on the deployment evidence plus the record that the steward's own 2026-08-30
 16:13 UTC Zoom connect (`ecdd60b`) ran against this same build — not on a page
 this evaluation loaded.
 Why here: nothing else on this list can hurt a user today and this still can.
-It is the same defect that topped the list at the last two evaluations; merging
-closed it in the repository and not in the product, and this file ranks what
-users meet, not what `main` contains. *Operator action, not a build — see
+It is the same defect that topped the list at the last three evaluations;
+merging closed it in the repository and not in the product, and this file ranks
+what users meet, not what `main` contains. *Operator action, not a build — see
 `DECISIONS.md` **Q-012**, which asks whose duty this is and names the coder as
-its default. The next **coder** packet takes item 2; this one must not be
-displaced by it.*
+its default. It keeps rank 1 rather than being demoted for being unbuildable.
+The next **coder** packet takes item 2; this one must not be displaced by it.*
 
-**2 · Two authentication entry points are gated on a *Google calendar hub*,
-and one of them is gated on both paths** — source: the spec/0006 coder run
-recorded one of these as "found, not fixed" (`service/spec/0006/SPEC.md` §5;
-ops digest job `0012`; the release note's "Also found, not fixed here") and
-handed the ranking here. **Ranked on this evaluation's own reading of the tree
-at `4f6ddf0`, which found the handover half wrong and half incomplete:**
-- **`/auth/microsoft/start` — Node path only.** `app.ts:998` reads
-  `const hub = deps.calendars; if (!hub || !config.msClientId)` and answers
-  *"Microsoft sign-in is not configured."*, while `deps.calendars` is built
-  only when `googleClientId && googleClientSecret && tokenKey` are all set
-  (`server.ts:114`, `worker.ts:244`). The login page shows the button on
-  `Boolean(config.msClientId)` alone, so an operator with Microsoft
-  credentials and no Google Calendar gets a visible button that denies its own
-  configuration.
-- **The handover's claim that `worker.ts` ~609 "has the same shape" is
-  shape-true and effect-false, and correcting it matters.** At `efce7a4` that
-  line read `if (!hub || !config.msClientId)` where `hub` was
-  `config.tokenKey ? new CalendarHub({}, config.tokenKey) : undefined` — a
-  *provider-less* hub, i.e. gated on `TOKEN_KEY` and never on Google Calendar.
-  Since `4f6ddf0` it reads `if (!states || !config.msClientId)` (`worker.ts:613`).
-  The Workers half was never broken and is now explicitly right; a coder taking
-  this item must not "fix" it and call the item done.
-- **`/login/sso/<orgId>` — both paths, and not previously recorded anywhere.**
-  `app.ts:912` reads `if (!hub) return html(404, … 'SSO is not configured on
-  this deployment.')` before reading the `org_sso` row. The Workers router does
-  **not** handle this route: it forwards it into the Durable Object
-  (`worker.ts:805`), which runs `handle()` with the same Google-gated
-  `deps.calendars` (`worker.ts:244`, wired at `worker.ts:266`). So per-org OIDC SSO — the enterprise
-  identity feature [`VALUE.md`](VALUE.md) C3 lists in the free tier — requires
-  Google Calendar credentials on **every** deployment shape. This is the wider
-  blast radius of the two and is the reason this item is ranked here rather
-  than below PR-1.
-The fix is the shape spec/0006 already established and reviewed:
-`deps.calendars?.state ?? oauthState(config)`, because sealing a state needs
-`TOKEN_KEY` and nothing else (`service/src/oauth-state.ts`). It is a
-reachability change on authentication surface, so it is `can_hurt` and takes
-the full charter flow — and its acceptance cases must assert that Google
-sign-in, org OIDC and calendar connect each keep exactly the reachability they
-have today, each still behind its own credential check.
-Why here: it is correctness of already-shipped surface, like the item it
-succeeds, but one class up — an authentication entry point rather than a
-conferencing one. **No live user on `booking.pumasi.ai` is affected** (that
-deployment has Google Calendar configured), which is why it does not displace
-item 1; it costs exactly the self-hoster [`VALUE.md`](VALUE.md) §1 courts, and
-it is a live counter-example to C5's "no host is load-bearing". Like item 1 it
-adds no provider and no scope, so it does not run ahead of Q-007.
+**2 · Nothing re-runs the gate. This repository has no CI at all** — source:
+this evaluation, from the job `0023` post-release read; not a defect in any
+change, which is exactly why nothing has ever surfaced it. Verified here rather
+than assumed: `.github/` contains only `feedback-attachments`, there is no
+`.github/workflows/` directory, and `gh run list` returns empty. The repository
+is **public** (`gh repo view`: `"visibility":"PUBLIC"`), so Actions minutes are
+free and this is not a spend under `HUMAN.md`. `tools/gate.sh` is not even in
+this repository — it lives in the commons (`pumasi/tools/gate.sh`) and is run by
+hand, from a checkout, by the agent that wants to pass it.
+So every quality claim this product makes — `GATE: PASS` in four release notes,
+the test counts in [`STAGE.md`](STAGE.md), the frozen acceptance suites — rests
+on an agent choosing to run a script and reporting what it said. This
+evaluation re-ran it independently and it is true (**311 service + 19 engine,
+0 failures, `GATE: PASS` at `6b597dd`**; the six SPEC-0007 cases A-001…A-006 all
+green). That is the point: the claim is only ever as good as the last seat that
+happened to check, and checking happens *after* merge, if an evaluation runs.
+*What the entry asks for, stated so a coder does not over-reach:* a workflow
+that runs on push and pull request, does what step 1 of the gate does
+(`npm test` across the workspaces) plus `npm run typecheck`, and publishes the
+result — **advisory**. Making CI *blocking* would change CHARTER §3's merge gate
+from "an agent ran it" to "a machine ran it" for every product and every role,
+which is not this seat's to decide; it is raised as `DECISIONS.md` **Q-025**
+with a default that keeps the charter as written. The workflow file ships
+nothing to a user and lies outside every path
+[`service/spec/0002/RISK_ZONES.yaml`](../service/spec/0002/RISK_ZONES.yaml) maps
+— but that file defaults the unmapped to `can_hurt`, so the risk class is the
+spec's to settle and is deliberately not decided here.
+Why here — above PR-1, and this is the argument rather than an assertion: it is
+the only entry on this list that makes every other entry's claim checkable, it
+is the cheapest thing on the list, and it is the one that bears on the bar
+[`STAGE.md`](STAGE.md) actually claims. `beta` means *strangers* can rely on it,
+and a stranger cannot re-run a script an agent ran on its own machine and
+summarised. It does not displace item 1 because it cannot hurt anyone today; it
+beats PR-1 because a diagnosis you cannot make is worse when nothing is
+watching for the regression either. **Nearby evidence that this is not
+theoretical:** `pumasi-tunnel`'s Stage 1 gate was recorded `MET` off 12 local
+runs and a re-measurement at 40 found the suite failing 7.5% of the time
+(`DECISIONS.md` **Q-024**). This product's suite had never been measured that
+way at all — until this evaluation, which ran `npm test` **40 consecutive
+times** at `6b597dd` and got **40 of 40 green** (see [`STAGE.md`](STAGE.md)).
+That is a good answer, and it is exactly the answer nobody had, and the next
+one depends on the next seat choosing to ask.
 
 **3 · PR-1 compliance: a version that moves and is visible** — source:
 [`PRODUCT-RULES.md` PR-1](https://github.com/pumasi-ai/pumasi/blob/worktree-product-rules/PRODUCT-RULES.md)
 (v1.0, 2026-08-30; binds always — read fresh this evaluation, and still only on
 the unmerged `worktree-product-rules` branch, `0115758`; now raised as
-`DECISIONS.md` **Q-017**). Re-checked this tick: the root, `core/` and
-`service/` `package.json` all still say `0.1.0` and have never moved; there is
-no footer, about view or `/version` route, and `https://booking.pumasi.ai/version`
-returns **404** live; the release notes state no version.
-Why here: it earned weight again, and in a sharper way than last time. The one
-endpoint that exists to answer *which build is live* answers nothing:
-`https://booking.pumasi.ai/healthz` returns
-`{"status":"ok","commit":"unknown","sharded":true}` — `worker.ts:443` serves
+`DECISIONS.md` **Q-017**). Re-checked this tick, and *the rule was read fresh
+from the branch, not from a memory of it*: the root, `core/` and `service/`
+`package.json` all still say `0.1.0` and have never moved; there is no footer,
+about view or `/version` route, and `https://booking.pumasi.ai/version` returns
+**404** live.
+**New this pass, and it is the sharpest form the gap has taken yet.** The
+2026-08-31 sign-in release note now carries a *"Which build this is"* section
+saying in as many words that **PR-1's version clause cannot be met by this
+product** and giving the commit `6b597dd` instead (`pumasi` `29f0853`). That is
+correct conduct by the release — naming a clause it cannot satisfy rather than
+omitting it — and it is precisely the shape duty 4 says becomes a backlog entry
+citing the rule. This is that entry, and it is now the *fourth* consecutive
+evaluation to carry it.
+Why here: the one endpoint that exists to answer *which build is live* answers
+nothing — `https://booking.pumasi.ai/healthz` returns
+`{"status":"ok","commit":"unknown","sharded":true}`; `worker.ts:443` serves
 `env['GIT_COMMIT'] ?? 'unknown'` and the deploy that would have set it
-(`npx wrangler deploy --var GIT_COMMIT:…`) did not. Establishing item 1 again
-required Cloudflare credentials and a `wrangler` call, exactly as it did
-yesterday. A product that cannot tell its own evaluator what it is running is
-the failure PR-1's "user-visible" and "in the diagnostics" clauses describe.
-Below item 2 because a broken sign-in beats a hard diagnosis.
+(`npx wrangler deploy --var GIT_COMMIT:…`) did not. Establishing item 1 needed
+Cloudflare credentials and a `wrangler` call for the third day running. A
+product that cannot tell its own evaluator what it is running is the failure
+PR-1's "user-visible" and "in the diagnostics" clauses describe.
+Below item 2 because a version number nobody can read is worth less than the
+machine that would notice it stopped moving; above item 4 because PR-1 binds
+always and a late refusal on an already-broken configuration does not.
 
-**4 · Submit the Google OAuth app for verification** — source:
+**4 · A half-configured deployment gets an answer it cannot act on — both
+refusals, on both builds** — source: the job `0023` run recorded both halves as
+found-not-fixed (`service/spec/0007/SPEC.md` §5) and handed the ranking here.
+**Ranked on this evaluation's own reading of the tree at `6b597dd`, and one of
+the two line references in the handover is stale — the finding is right and the
+number is not:**
+- **(b) `worker.ts:596` opens `/auth/google/start` on `config.googleClientId`
+  alone.** *Confirmed exactly*: `grep -n "if (!states || !config.googleClientId)"
+  service/src/worker.ts` → `596`. **The `app.ts:973` the handover cites could
+  not be confirmed and is stale**; the guard is at **`app.ts:984`–`986`**
+  (`const hub = deps.calendars; if (!hub || !config.googleClientId)`), and since
+  `deps.calendars` exists only when `googleClientId && googleClientSecret &&
+  tokenKey` are all set (`server.ts:113`–`115`, `worker.ts:243`–`245`), the Node
+  path effectively requires the secret and the Workers router does not. A
+  Workers deployment holding an id and no secret is sent out to Google and
+  refused on the way back (`worker.ts` ~638, *"Google sign-in is not
+  configured."*) instead of refusing at the button. It is a divergence pointing
+  the **opposite** way from the one item 2 of the last order closed.
+- **(a) Neither sign-in refusal names a missing `TOKEN_KEY`.** Confirmed
+  against `service/spec/0007/SPEC.md` §5 and the code: an operator who
+  configures Microsoft or an IdP and forgets `TOKEN_KEY` is told the feature is
+  not configured — true, and unactionable for the person who meets it. Fixing it
+  well means changing user-visible copy on the Node path and the Workers router
+  **at once**, which is L-009 ground.
+*One item, not two, and that is a ranking decision:* both are the same defect
+class — a deployment that is missing a credential is told something that does
+not name the credential — both span the same two builds, and splitting them
+into two `can_hurt` cycles buys nothing but a second review round on the same
+files. A coder packet takes both or neither.
+Why here, below PR-1, and why the last order's rule does **not** carry: that
+rule was *"a broken sign-in beats a hard diagnosis"*, and it was written for a
+defect that shut a **working** configuration out. Neither of these does. On a
+deployment with no `googleClientSecret`, Google sign-in cannot complete on
+either build; (b) only decides whether the refusal arrives before or after a
+round trip. Nothing is unguarded — the Workers callback still refuses — so no
+reachability is gained by anyone. That is a materially worse error path, not a
+denied feature, and it ranks under a rule that binds always and has now been
+carried for four evaluations. **No live user on `booking.pumasi.ai` is
+affected**: that deployment holds both Google credentials.
+
+**5 · Submit the Google OAuth app for verification** — source:
 [`0002-calendar-integration.md` §4](0002-calendar-integration.md);
 [`service/spec/0003/GOOGLE-SETUP.md`](../service/spec/0003/GOOGLE-SETUP.md)
 ("Not yet — deliberately").
@@ -129,7 +179,7 @@ nominated test accounts can connect; the blockers the setup doc waited on — a
 deployed homepage and a live privacy URL — now exist. *Mostly operator/steward
 action, not code; queue it in parallel, since it is calendar time, not work.*
 
-**5 · The reporting intake, and the Workers-path decision** — source:
+**6 · The reporting intake, and the Workers-path decision** — source:
 [`service/spec/0004/SPEC.md`](../service/spec/0004/SPEC.md) R5c;
 [`DEBT.md` D-107](https://github.com/pumasi-ai/pumasi/blob/main/governance/DEBT.md)
 (open half); surfaced by the job-0008 run (ops digest, 2026-08-30). The
@@ -146,19 +196,57 @@ it sits here because this product's `launched` claim waits on it.*
 Why here: both halves gate `launched` (STAGE.md), but neither hurts a user
 today, so shipped-surface correctness outranks them.
 
-**6 · A runtime subprocessor guard for the deployed mail path, or a recorded
+**7 · A runtime subprocessor guard for the deployed mail path, or a recorded
 why-not** — source: [`SUBPROCESSORS.md`](../SUBPROCESSORS.md), which names the
 Workers path's control as weaker than the Node path's.
 Why here: [`VALUE.md`](VALUE.md) C4 claims enforcement, and the deployed path
 is the one real bookers' mail actually crosses.
 
-**7 · O2 — secrets posture, completed** — source:
+**8 · O2 — secrets posture, completed** — source:
 [`service/spec/0002/SPEC.md` §8.1](../service/spec/0002/SPEC.md), the last
 clause declared but not implemented.
 Why here: small, and it closes the spec's only admitted gap; below the
 user-facing items because no user can currently be hurt by it.
 
 ## Completed (2026-08-31)
+
+- **Two sign-in doors gate on the state seal, not on the calendar hub** — item
+  2 of the previous order, delivered in full charter flow by job `0023`: intent
+  `3854f7e`-window **Q-022** (`service/spec/0007/INTENT.md`), frozen acceptance
+  cases and spec review `78aeb72`, build `3f2947c`, **an amendment taken in the
+  open** after a cited code-review objection (`27d9133`) with a fresh
+  cross-family spec review (`04f8dd1`), cross-family code review `6b597dd`;
+  release note `pumasi` `3854f7e` + `29f0853`, veto window **Q-023**.
+  **Re-verified against the tree at this evaluation, not read off the commit
+  subjects** — which is how the same check caught a half-done item on
+  `pumasi-tunnel` this morning:
+  - `/login/sso/<orgId>` now reads `const states = deps.calendars?.state ??
+    oauthState(config); if (!states) …` (`app.ts:922`–`923`) and seals with
+    `states.seal(…)` (`app.ts:937`), with the deployment gate still **above**
+    the `org_sso` lookup and *"This organization has no SSO configured."* still
+    answered from the row (`app.ts:928`, `app.ts:934`).
+  - `/auth/microsoft/start` likewise (`app.ts:1017`–`1019`), refusal wording
+    unchanged.
+  - **`service/src/worker.ts` is untouched by the whole range**
+    (`git diff --name-only 0036c74..6b597dd -- service/src/worker.ts` is
+    empty), so the half that was already right (`worker.ts:613`–`614`) was not
+    "fixed"; the trap the last evaluation set for this item held.
+  - The diff is 32 lines of `app.ts` and nothing else executable
+    (`git diff --stat 0036c74..6b597dd`): spec, cases, runner, reviews.
+  - Suite re-run here, not quoted: **311 service + 19 engine tests, 0
+    failures**, `tools/gate.sh` → **`GATE: PASS`**, and acceptance cases
+    **A-001…A-006 all green**.
+  **Both halves are delivered, including the wider one.** Per-org OIDC SSO — the
+  enterprise-identity feature [`VALUE.md`](VALUE.md) C3 sells as free-tier — was
+  broken on the Workers path too, because the router forwards `/login/sso/…`
+  into the Durable Object that runs this same `handle()` (`worker.ts:805`); the
+  `app.ts` fix therefore closes it on both shapes.
+  **Listed as completed for the repository, and for a self-hoster who pulls.**
+  `booking.pumasi.ai` was never affected — it has Google Calendar configured —
+  and it is still not serving this build; that is item 1. The population this
+  fixes deploys from this repository, so for them merged is the delivery path.
+  *This entry is the one job `0023` deliberately did not write: its packet
+  forbade it to reorder a file written hours earlier, and that was right.*
 
 - **`/oauth/*/callback` gates on the state, not the calendar hub** — item 2 of
   the previous order, delivered in full charter flow: intent `7958d41` (Q-013),
