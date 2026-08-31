@@ -1,14 +1,15 @@
 # SPEC-0007 · Two sign-in doors gate on the state seal, not on the calendar hub
 
-**Status:** draft — acceptance cases freeze at cross-family spec approval ·
+**Status:** approved 2026-08-31 (gemini, `reviews/20260831-110333-spec-gemini.md`);
+acceptance cases frozen ·
 **Intent:** [`INTENT.md`](INTENT.md) (veto window in `pumasi/DECISIONS.md`) ·
 **Source:** `roadmap/BACKLOG.md` item 2, ranked there by the product-manager
 evaluation of 2026-08-31 (`1a01b1c`) against its own reading of the tree at
 `4f6ddf0`. Half of it was recorded by the spec/0006 coder run as found-not-fixed
 ([`../0006/SPEC.md` §5](../0006/SPEC.md)); the other half — `/login/sso/<orgId>` —
 was recorded nowhere before that evaluation.
-**Acceptance:** [`acceptance/cases.json`](acceptance/cases.json). Runner:
-`service/test/auth-reachability.test.ts`.
+**Acceptance:** [`acceptance/cases.json`](acceptance/cases.json), **frozen 2026-08-31** at that
+approval, before implementation. Runner: `service/test/auth-reachability.test.ts`.
 
 **Risk class: can-hurt.** `service/spec/0002/RISK_ZONES.yaml` maps everything
 outside `README.md`, `INTENT.md` and `acceptance/` to `can_hurt`, and this is a
@@ -234,8 +235,8 @@ reasons, and org SSO is correct on both paths for the same reason.
 
 ## 6 · Acceptance
 
-[`acceptance/cases.json`](acceptance/cases.json), frozen at the cross-family
-spec approval, before implementation. Runner:
+[`acceptance/cases.json`](acceptance/cases.json), **frozen 2026-08-31** at the
+spec-review approval, before implementation. Runner:
 `service/test/auth-reachability.test.ts`.
 
 | Case | Clause | Must fail before the fix |
