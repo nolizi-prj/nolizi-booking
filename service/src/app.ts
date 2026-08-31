@@ -908,8 +908,19 @@ async function handleRoutes(
 
   // ── org SSO entry (P8): /login/sso/<orgId> starts the customer IdP flow ──
   if (parts[0] === 'login' && parts[1] === 'sso' && parts[2]) {
-    const hub = deps.calendars;
-    if (!hub) return html(404, errorPage(404, 'SSO is not configured on this deployment.'));
+    // SPEC-0007 S3a · what this route needs is the ability to SEAL a state, not
+    // a calendar. Gating it on `deps.calendars` — which exists only when Google
+    // Calendar is fully configured — turned an organisation's own single
+    // sign-on off wherever Google Calendar was unconfigured, on both paths: the
+    // Workers router does not handle this route, it forwards it into the
+    // Durable Object that runs this same handle() (worker.ts:805).
+    //
+    // S3b · the deployment check stays ABOVE the org_sso lookup. With no seal
+    // key nothing can start whatever the lookup finds, and looking up first
+    // would tell an unauthenticated caller which org ids exist on a deployment
+    // that cannot serve any of them.
+    const states = deps.calendars?.state ?? oauthState(config);
+    if (!states) return html(404, errorPage(404, 'SSO is not configured on this deployment.'));
     // Sharding · the public entry addresses the TENANT ('main' = founding org).
     let ssoOrgId = parts[2];
     if (ssoOrgId === 'main') {
@@ -923,7 +934,7 @@ async function handleRoutes(
     if (!sso) return html(404, errorPage(404, 'This organization has no SSO configured.'));
     try {
       const endpoints = await discoverOidc(String(sso['issuer']));
-      const state = await hub.sealState({ purpose: 'oidc', org: ssoOrgId,
+      const state = await states.seal({ purpose: 'oidc', org: ssoOrgId,
         tag: deps.orgTag ?? '' });
       return {
         status: 303,
@@ -994,11 +1005,20 @@ async function handleRoutes(
 
   // ── "Sign in with Microsoft" (Issue #5) — openid+email+profile only ────────
   if (parts[0] === 'auth' && parts[1] === 'microsoft' && parts[2] === 'start' && req.method === 'POST') {
-    const hub = deps.calendars;
-    if (!hub || !config.msClientId) {
+    // SPEC-0007 S2a · Microsoft sign-in needs a Microsoft app and a key to seal
+    // the state with. It has never needed Google Calendar, which is what
+    // `deps.calendars` actually stands for — so an operator holding Microsoft
+    // credentials and no Google Calendar was shown a button (app.ts ~947, on
+    // `msClientId` alone) whose own answer was that it is not configured.
+    //
+    // S2b · this is now the guard worker.ts:614 already holds, word for word
+    // and message for message. Two builds answering the same question
+    // differently is L-009, and this pair had drifted for exactly that long.
+    const states = deps.calendars?.state ?? oauthState(config);
+    if (!states || !config.msClientId) {
       return html(404, errorPage(404, 'Microsoft sign-in is not configured.'));
     }
-    const state = await hub.sealState({
+    const state = await states.seal({
       purpose: 'sso_ms',
       invite: (req.form?.['invite'] ?? '').trim(),
       timezone: (req.form?.['timezone'] ?? '').trim(),

@@ -124,10 +124,20 @@ async function makeOwner(email: string): Promise<string> {
   return cookieOf(r as never);
 }
 
+/**
+ * The org is resolved through the membership of the owner who just created it,
+ * not by `ORDER BY created_at` — `now()` is frozen in these deps, so two orgs
+ * made in one test share a timestamp and the ordering is not a tiebreak. That
+ * is the shape L-006 warns about: a lookup that happens to be right until a
+ * second row exists.
+ */
 async function makeOrg(email = 'boss@corp.example'): Promise<{ cookie: string; orgId: string }> {
   const cookie = await makeOwner(email);
   await call('POST', '/app/team', { cookie, form: { name: 'Corp' } });
-  const org = await db.query(`SELECT org_id FROM orgs ORDER BY created_at DESC`);
+  const org = await db.query(
+    `SELECT m.org_id FROM org_members m JOIN owners o ON o.owner_id = m.owner_id
+      WHERE o.email = $1 AND m.role = 'admin'`, [email]);
+  assert.ok(org.rows[0], `the org for ${email} must exist`);
   return { cookie, orgId: String(org.rows[0]!['org_id']) };
 }
 
