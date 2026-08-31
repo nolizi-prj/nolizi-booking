@@ -94,29 +94,51 @@ the release note. **For the operator this file courts, the merge is the
 delivery, once they pull** — and it has not reached `booking.pumasi.ai`, which
 was never affected because that deployment has Google Calendar configured
 ([`BACKLOG.md`](BACKLOG.md) item 1).
-*A second limit, found 2026-08-31 (job `0044`) and recorded the same day it was
-found.* Two of the features listed above — **workflows and webhooks** — have
-never worked on `booking.pumasi.ai`. `service/src/worker.ts:303` calls
+*A second limit, found 2026-08-31 (job `0044`), **repaired in `main` the same
+day, and still live in production at this evaluation.** Recorded as moved
+rather than rewritten, because both halves of that sentence are the claim.*
+Two of the features listed above — **workflows and webhooks** — have never been
+delivered on `booking.pumasi.ai`. `service/src/worker.ts:303` called
 `processDueJobs` without importing it, so the Durable Object alarm that drains
-due jobs throws `ReferenceError` on the hosted build: timed workflow mail
-(reminders, follow-ups) and every webhook are silently never delivered there.
-Introduced `de4abbe` (2026-08-28), confirmed three ways — the missing import,
-`error TS2304` from the compiler, and the emitted `wrangler` bundle, which
-carries the call and no definition of it. It is **not** a limit of the free
-tier, of the licence, or of the design: both features are built and tested, and
-they work on the Node path a self-hoster runs. It is one unimported symbol in
-the file nothing type-checks ([`BACKLOG.md`](BACKLOG.md) items 2 and 3).
+due jobs threw `ReferenceError` on the hosted build and died before it re-armed:
+timed workflow mail (reminders, follow-ups) and every webhook were silently
+never delivered there, from `de4abbe` (2026-08-28) onward.
+**Repaired at `0a35ddc`** in full charter flow (gemini `VERDICT: APPROVE`,
+`GATE: PASS`, release note `pumasi` `0f574f6`, **Q-029** open to 2026-09-07),
+and verified by this seat rather than read off the release note: the import is
+at `worker.ts:44`, the call at `:303`, `npm run typecheck` covers `src/worker.ts`
+for the first time and exits 0, and three cases in
+`service/test/worker-alarm.test.ts` execute `alarm()` and assert that a due job
+drains, a not-yet-due job is left alone, and the next alarm is armed.
+**And it has not reached anyone.** `booking.pumasi.ai` was last deployed
+2026-08-30 16:55:37 UTC, re-measured by this seat at 2026-08-31 21:58 UTC. A
+stranger who sets a reminder there today still gets silence, exactly as they did
+before the repair existed. It is **not** a limit of the free tier, of the
+licence, or of the design: both features are built, tested, and work on the Node
+path a self-hoster runs. It is one unimported symbol in the file nothing
+type-checked, now fixed, in the sixth merged build waiting on
+`DECISIONS.md` **Q-012** ([`BACKLOG.md`](BACKLOG.md) item 1).
 *Falsified by:* any listed feature failing its E2E path for a real user; any
 feature appearing in a paid or hosted-only tier, ever. **The second clause has
-not fired and will not — nothing here is behind a tier.** On the first clause,
-applying the same standard this file already applied to the SSO limit above
-rather than a new one: **not counted as fired**, because no real user is known
-to have hit either — both were found by reading, the tracker holds zero open
-issues, and no workflow run against the live deployment has been reported or
-observed. That is a statement about who has *noticed*, not about whether the
-product works, and the distinction is the point: the workflow defect is real on
-the deployment today whether or not anyone has met it. **If a user reports
-either, this claim is rewritten, not softened.**
+not fired and will not — nothing here is behind a tier.**
+**On the first clause, asked again this pass rather than inherited, because the
+repair changes what the question is.** Still **not counted as fired**, and the
+reasoning is deliberately *unchanged* by `0a35ddc` — which is the honest answer
+and not the comfortable one. The falsifier turns on a **real user**, and no real
+user is known to have hit either limit: both were found by reading, the tracker
+has held zero open issues for more than 31 hours with the feedback widget live,
+and no workflow run against the live deployment has been reported or observed.
+That was true before the repair and it is true after it.
+**What the repair explicitly does *not* do is un-fire it.** Merging changes
+`main`; the falsifier is about a user's E2E path, and that path still runs on a
+build from 2026-08-30. If this claim were counted as repaired because the fix is
+merged, this file would be asserting about the branch what it promises about the
+product — which is precisely the drift it exists to prevent. So the limit stays
+listed, in the present tense, until a deploy moves it.
+The distinction is the point: the workflow defect is real on the deployment
+today whether or not anyone has met it, and "nobody has noticed" is a statement
+about observers, not about the product. **If a user reports either, this claim
+is rewritten, not softened.**
 
 **C4 — The privacy posture is enforced, not asserted.** The notice, terms and
 DPA are served by the running service, state operator, basis, deletion reach
@@ -125,14 +147,19 @@ every field the live booking form posts and fails unless the notice discloses
 it (`8f77d66`). *Scope of that word, tightened 2026-08-31 and re-measured at
 each evaluation since:* the test binds the code in `main`, and `main` is not
 automatically what `booking.pumasi.ai` is serving — the deployment has now been
-found unmoved at **2026-08-30 16:55:37 UTC** by four consecutive evaluations,
-~27.5 hours and five merged builds behind ([`STAGE.md`](STAGE.md), "the deployed
+found unmoved at **2026-08-30 16:55:37 UTC** by five consecutive evaluations —
+**29 h 03 m** and **six** merged builds behind, re-measured by this seat at
+2026-08-31 21:58 UTC rather than carried ([`STAGE.md`](STAGE.md), "the deployed
 build is not `main`"). *The second limit on that word, named 2026-08-31 and
 narrowed the same evening:* that test is now re-run automatically on every push
 and pull request by advisory CI (`d5a02bb`, Q-026), in public, so "tested
 against the product" no longer means "tested by whichever agent last chose to
 run the suite". What it still means is *against the branch* — CI checks `main`,
-and `main` is not what the deployment serves. The
+and `main` is not what the deployment serves. *Strengthened this pass in one
+respect worth recording inside the Q-026 window:* since `0a35ddc` that
+workflow's `npm run typecheck` step reaches `src/worker.ts`, the deployed entry
+point, for the first time — without `.github/workflows/` being edited, because
+the check derives its work from the tree. The
 enforcement is real; "against the product" means against the branch the
 product is built from, until a merged build reliably reaches users. Mail through an undisclosed host is refused on the Node path;
 the deployed Workers path has a weaker, disclosed control
@@ -166,7 +193,10 @@ the Node path effectively requires both (`app.ts:984`–`986`, via the hub), so 
 Workers deployment with an id and no secret is sent to Google and refused on the
 way back rather than at the button. No provider is required that was not
 required before, and nothing is unguarded — it is a late refusal, not a lost
-feature. [`BACKLOG.md`](BACKLOG.md) item 5.
+feature. [`BACKLOG.md`](BACKLOG.md) item 3 — both line references
+re-verified against the tree at `0a35ddc` by this evaluation, since that commit
+touched `worker.ts`: `worker.ts:596` is unchanged and the Node-path guard is at
+`app.ts:985`.
 *Falsified by:* a change that makes any single provider required to run or to
 leave. **Not fired:** nothing here was introduced by a change, no provider is
 required to *run* the product or to leave it, and the two releases of
@@ -205,11 +235,21 @@ deprecation candidate, and this file must say so rather than compete with it.
   cannot be made on one machine.) **The re-run half is now a system rather than
   a check:** advisory CI runs the suites and the type-check on every push and
   pull request in public (`d5a02bb`, Q-026, verified at this evaluation). This
-  seat also re-ran the gate by hand (317 service + 19 engine, 0 failures,
-  `GATE: PASS` at `d5a02bb`, 15:28 CDT). What neither covers is the deployed
-  entry point, whose types nothing checks and which no test executes — and that
-  gap held a live defect for three days ([`BACKLOG.md`](BACKLOG.md) items 2
-  and 3).
+  seat also re-ran the gate by hand at `0a35ddc` (**320 service + 19 engine, 0
+  failures, `GATE: PASS`** at 2026-08-31 21:59 UTC), plus 15 further sequential
+  `npm test` runs, all green. *Closed since the last pass:* what neither covered
+  was the deployed entry point, whose types nothing checked and which no test
+  executed — a gap that held a live defect for three days. `npm run typecheck`
+  now reaches `src/worker.ts` and three tests execute its alarm (`0a35ddc`,
+  verified here). *Named in its place, and it is smaller:* the router's bindings
+  are still untyped, bridged by three casts widened through `unknown`
+  ([`BACKLOG.md`](BACKLOG.md) item 8).
+- **Review breadth, named 2026-08-31 (evening).** This product's most recent
+  merge was reviewed by **one** cross-family reviewer, which meets CHARTER §4's
+  bar and is less breadth than the five that were driven: three failed in their
+  driver before any model saw the diff (an argv size limit) and one returned
+  HTTP 402. The transcripts are committed and named in
+  [`STAGE.md`](STAGE.md). This file does not claim breadth it did not get.
 
 ## 5 · Keeping this honest
 
