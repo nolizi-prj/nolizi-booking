@@ -66,9 +66,13 @@ one of those things sends a single reminder. The wait is no longer a delay in
 closing a defect — it *is* the defect, for as long as it lasts.
 **Recorded against `DECISIONS.md` Q-012 as evidence and nothing more.** Job
 `0049` added an evidence row there and did not touch the date or the default;
-this seat adds nothing to that file — `pumasi` had a live writer throughout this
-pass (`.lock_pumasi` BUSY, verified with `./dispatch.sh --locks`) and this
-packet confined this seat's writes to this repository and the ops digest. The
+this seat adds nothing to that file, because this packet confined its writes to
+this repository and the ops digest. *(A first version of this entry gave a
+second reason — that `pumasi` had a live writer — on a `./dispatch.sh --locks`
+reading of `.lock_pumasi` **BUSY** taken at 22:05 UTC. That reading was an
+artefact of a prefix-match defect in the lock census, repaired by job `0054`
+during this pass; re-run at 22:18 UTC the same command reports `.lock_pumasi`
+**free**. The reason is withdrawn and the instruction is the reason.)* The
 measurement above is the evidence, it is recorded here and in
 [`STAGE.md`](STAGE.md), and the digest entry names Q-012 so the steward can find
 it. **Nothing here closes, extends, softens or dates that window.**

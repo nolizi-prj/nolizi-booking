@@ -151,9 +151,14 @@ what decides that — the evidence is.
   absence of it. That is the D-104 pattern arriving somewhere new: not a family
   switched off, but a family that answers a liveness probe and cannot review.
   **Not this seat's to fix, and deliberately not fixed.** `tools/review.sh`
-  lives in `pumasi` and `tools/recruit.sh` in `pumasi-ops`; both had live
-  writers during this pass (`./dispatch.sh --locks`: `.lock_pumasi` **BUSY**,
-  `.lock_pumasi-ops` **BUSY**), and neither is this product's code.
+  lives in `pumasi` and `tools/recruit.sh` in `pumasi-ops`; neither is this
+  product's code, and this packet confined this seat's writes to this repository
+  and the ops digest. `.lock_pumasi-ops` was **BUSY** throughout
+  (`./dispatch.sh --locks`). *`.lock_pumasi` read **BUSY** at 22:05 UTC and
+  **free** at 22:18; the first reading was an artefact of a prefix-match defect
+  in the lock census, repaired by job `0054` mid-pass. Corrected here rather
+  than left standing, because a lock state is exactly the kind of measurement
+  this file asks other seats not to quote without taking.*
   **Read at whatever state they were in, and reported rather than relied on:**
   at `pumasi` **`133d337`** (2026-08-31 16:45 CDT, job `0048`) `review.sh` now
   hands the bundle to `recruit` on **stdin**, and `pumasi-ops/tools/recruit.sh`
