@@ -138,6 +138,43 @@ export async function zoomExchangeCode(opts: {
 }
 
 /**
+ * SPEC-0005 Z3c — exchanges a stored refresh token for a fresh access token.
+ *
+ * Zoom **rotates** the refresh token on every use: the response's
+ * `refresh_token` replaces the stored one, and the old value is dead the moment
+ * this returns. A caller that does not persist the new pair before using the
+ * access token has locked the owner out of their own connection on the next
+ * booking.
+ */
+export async function zoomRefreshToken(opts: {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+}): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
+  const authHeader = btoa(`${opts.clientId}:${opts.clientSecret}`);
+  const res = await fetch(ZOOM_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      authorization: `Basic ${authHeader}`,
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: opts.refreshToken,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`Zoom refresh failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
+  }
+  const d = (await res.json()) as {
+    access_token: string;
+    refresh_token: string;
+    expires_in: number;
+  };
+  return { accessToken: d.access_token, refreshToken: d.refresh_token, expiresIn: d.expires_in };
+}
+
+/**
  * Creates a dynamic Zoom meeting on behalf of an authorized Zoom user.
  */
 export async function createZoomUserMeeting(

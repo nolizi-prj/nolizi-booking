@@ -40,7 +40,8 @@ import { validateLogo } from './branding.ts';
 import { describeRecurrence, expandRecurrence, isValidRecurrence } from './recurrence.ts';
 import { cancelPendingJobs, fireTrigger, type BookingCtx } from './automation.ts';
 import { submitFeedback, type FeedbackPayload } from './feedback.ts';
-import { createZoomMeeting, zoomAuthUrl, zoomExchangeCode } from './video-zoom.ts';
+import { createZoomMeeting, createZoomUserMeeting, zoomAuthUrl, zoomExchangeCode } from './video-zoom.ts';
+import { VideoConnections } from './video.ts';
 import type { MailPort } from './mail.ts';
 import type { Interval, Slot } from '@pumasi/booking-core';
 
@@ -137,6 +138,20 @@ export interface DirectoryPort {
   registerDomain(domain: string | null): Promise<void>;
   releaseOwner(email: string, linkSlug?: string): Promise<void>;
   mintInvite(kind: 'platform' | 'org'): Promise<string>;
+}
+
+/**
+ * SPEC-0005 · the stored video connections, keyed by the deployment's
+ * `TOKEN_KEY`.
+ *
+ * Built here from `config` rather than wired through `AppDeps`: TOKEN_KEY is
+ * already the single source of the seal key, and a second wiring path is a
+ * second thing to drift apart from the first (L-007). Absent TOKEN_KEY there is
+ * nowhere safe to put a credential, so there is no store — the connect flow
+ * refuses rather than writing a token in the clear.
+ */
+function videoConnections(config: Config, now: () => string): VideoConnections | undefined {
+  return config.tokenKey ? new VideoConnections(config.tokenKey, now) : undefined;
 }
 
 /**
@@ -1189,14 +1204,28 @@ async function handleRoutes(
           redirectUri: `${config.baseUrl}/oauth/zoom/callback`,
         });
         const ownerId = state['owner_id'] || (await ownerForSession(sql, sessionId, now))?.owner_id;
-        if (ownerId && (zoomTokens.personalMeetingUrl || zoomTokens.pmi)) {
-          const pmiUrl = zoomTokens.personalMeetingUrl || `https://zoom.us/j/${zoomTokens.pmi}`;
-          await sql.query(
-            `UPDATE schedules SET location_value = $2 WHERE owner_id = $1 AND location_kind = 'zoom'`,
-            [ownerId, pmiUrl],
-          );
-        } else {
-          console.warn(`[zoom] connect completed without a meeting URL: pmi=${zoomTokens.pmi ? 'y' : 'n'}`);
+        // Z1a · the connection is stored; `schedules` is not touched. This used
+        // to stamp the owner's personal meeting URL onto every zoom event type,
+        // which the public booking page then printed to strangers (§0 D-b1) and
+        // which suppressed per-booking creation for exactly the owners who had
+        // pressed the button (§0 D-c1).
+        const video = videoConnections(config, deps.now);
+        if (!ownerId) {
+          console.warn('[zoom] connect completed with no owner in state or session');
+          return html(400, errorPage(400, 'This connection attempt is stale or invalid. Start again from your dashboard.'));
+        }
+        if (!video) {
+          // Z1c · no TOKEN_KEY means no sealed column to put a credential in.
+          // Storing it in the clear would be worse than not connecting.
+          console.warn('[zoom] connect refused: TOKEN_KEY is not configured');
+          return html(500, errorPage(500,
+            'This deployment cannot store a Zoom connection: TOKEN_KEY is not configured.'));
+        }
+        await video.save(sql, ownerId, zoomTokens);
+        // Z1e · a connection with no personal room is still a connection; the
+        // credential is the point. Kept as a log line, not a failure.
+        if (!zoomTokens.personalMeetingUrl && !zoomTokens.pmi) {
+          console.warn('[zoom] connect stored without a personal meeting URL');
         }
       } catch (err) {
         console.warn(`[zoom] OAuth connect failed: ${(err as Error).message}`);
@@ -1256,6 +1285,9 @@ async function handleRoutes(
           [owner.owner_id],
         );
         await tx.query(`DELETE FROM calendar_connections WHERE owner_id = $1`, [owner.owner_id]);
+        // Z5c · a third party's credential must not outlive the person who
+        // granted it. Same transaction as the rest of the erasure.
+        await tx.query(`DELETE FROM video_connections WHERE owner_id = $1`, [owner.owner_id]);
         // P3 · contacts and sharing artefacts go with the account (D3).
         await tx.query(`DELETE FROM contacts WHERE owner_id = $1`, [owner.owner_id]);
         await tx.query(`DELETE FROM contact_exclusions WHERE owner_id = $1`, [owner.owner_id]);
@@ -1938,7 +1970,13 @@ async function handleRoutes(
           [owner.owner_id],
         );
         const zoomLink = zoomRow.rows[0]?.['location_value'] ? String(zoomRow.rows[0]['location_value']) : undefined;
-        const zoomConnected = Boolean(zoomLink || (config.zoomAccountId && config.zoomClientId));
+        // Z4b · connected means a stored connection (or Server-to-Server
+        // credentials), never a stamped location_value. Since Z1a nothing
+        // writes that column on connect, so the old derivation would now read
+        // "Not Connected" for a genuinely connected owner.
+        const zoomConn = await videoConnections(config, deps.now)?.find(sql, owner.owner_id);
+        const zoomConnected = Boolean(zoomConn
+          || (config.zoomAccountId && config.zoomClientId && config.zoomClientSecret));
 
         const notice = req.query?.['zoom_needed'] === '1'
           ? 'To enable 1-Click Zoom OAuth connect, provide your Zoom Client ID & Client Secret below, or set them as environment variables.'
@@ -1958,6 +1996,8 @@ async function handleRoutes(
             msEmail: ms?.account_email,
             msConnectionId: ms?.connection_id,
             zoomConnected,
+            zoomAccount: zoomConn?.displayName ?? zoomConn?.accountEmail,
+            zoomStatus: zoomConn?.status,
             zoomLink,
             zoomAccountId: config.zoomAccountId,
             baseUrl: config.baseUrl,
@@ -1967,6 +2007,11 @@ async function handleRoutes(
       }
       if (parts[2] === 'zoom') {
         if (parts[3] === 'disconnect' && req.method === 'POST') {
+          // Z5a · both halves. The stored credential is what "disconnect"
+          // means; clearing location_value is kept because this is the only
+          // route by which a personal room stamped by the old connect flow
+          // ever leaves the database (Z6c: no data migration does it).
+          await videoConnections(config, deps.now)?.remove(sql, owner.owner_id);
           await sql.query(
             `UPDATE schedules SET location_value = NULL WHERE owner_id = $1 AND location_kind = 'zoom'`,
             [owner.owner_id],
@@ -3206,7 +3251,9 @@ async function bookHandler(
     await mail.send({
       kind: 'verify', to: email, bookingId: 'pending', start,
       token: tagged(deps, intentToken), timezone: bookerTz,
-      location: locationText(schedule),
+      // Z2d · nothing is booked yet and the address is unproven. Pre-booking by
+      // definition, so it gets the public rendering.
+      location: locationText(schedule, undefined, 'public'),
     });
     // The same page whether or not the mail could be delivered: a different
     // answer for a deliverable address is an address oracle.
@@ -3412,25 +3459,67 @@ async function bookHandler(
     if (i === 0) meetUrl = written?.meetUrl;
   }
 
-  // Dynamic Zoom meeting generation if Zoom API credentials are configured and no calendar meetUrl was minted
-  if (schedule.location_kind === 'zoom' && !meetUrl && !schedule.location_value) {
-    const zoomRes = await createZoomMeeting({
+  // Z3 · a room per booking, for the owner who actually connected.
+  //
+  // The old guard was `!meetUrl && !schedule.location_value`, and the connect
+  // flow always set location_value — so per-booking creation was skipped for
+  // exactly the population the integrations card promised it to (§0 D-c1). The
+  // location_value half is gone: a stored link is a fallback, not a suppressor.
+  //
+  // Z3d steps 2 and 3, in order. Every step is best-effort (Z3e): a booking is
+  // already committed by this point and must never fail because Zoom did.
+  if (schedule.location_kind === 'zoom' && !meetUrl) {
+    const zoomOpts = {
       topic: `${schedule.title} — ${name}`,
       startTime: start,
       durationMinutes: schedule.duration_minutes,
       timezone: schedule.owner_timezone,
       agenda: `Booked by ${name} <${email}> via Pumasi Booking`,
-    }, {
-      accountId: config.zoomAccountId,
-      clientId: config.zoomClientId,
-      clientSecret: config.zoomClientSecret,
-    });
-    if (zoomRes?.joinUrl) {
-      meetUrl = zoomRes.joinUrl;
+    };
+    try {
+      // 2 · the owner's own connection. Z3f · this token is used to create a
+      // meeting for a booking on that owner's event type, and for nothing else.
+      const video = videoConnections(config, deps.now);
+      const conn = await video?.find(sql, schedule.owner_id);
+      if (video && conn) {
+        const token = await video.accessToken(sql, conn.connectionId, {
+          clientId: config.zoomClientId,
+          clientSecret: config.zoomClientSecret,
+        });
+        if (token) {
+          const minted = await createZoomUserMeeting(token, zoomOpts);
+          if (minted?.joinUrl) meetUrl = minted.joinUrl;
+          else await video.markError(sql, conn.connectionId, 'Zoom declined the meeting creation');
+        }
+      }
+    } catch (err) {
+      console.warn('[zoom] per-booking creation from the stored connection failed:', err);
+    }
+    // 3 · Server-to-Server credentials, when the deployment has all three.
+    if (!meetUrl) {
+      const zoomRes = await createZoomMeeting(zoomOpts, {
+        accountId: config.zoomAccountId,
+        clientId: config.zoomClientId,
+        clientSecret: config.zoomClientSecret,
+      });
+      if (zoomRes?.joinUrl) meetUrl = zoomRes.joinUrl;
+    }
+    // 5 · the personal meeting room, last. Step 4 (a link the owner typed, or
+    // the residue of the old connect flow) is `schedule.location_value` and is
+    // applied by locationText below, so this only fills in behind it.
+    if (!meetUrl && !schedule.location_value) {
+      try {
+        const conn = await videoConnections(config, deps.now)?.find(sql, schedule.owner_id);
+        if (conn?.fallbackUrl) meetUrl = conn.fallbackUrl;
+      } catch (err) {
+        console.warn('[zoom] fallback lookup failed:', err);
+      }
     }
   }
 
-  const location = locationText(schedule, meetUrl);
+  // Z2c · the confirmed audience. This is a booker who booked and the hosts of
+  // that booking, so the link belongs here — and only here.
+  const location = locationText(schedule, meetUrl, 'confirmed');
 
   // M2 · after commit, never inside the transaction. M3 · a failure here must
   // not invalidate a confirmed booking.

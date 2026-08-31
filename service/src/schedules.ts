@@ -332,8 +332,44 @@ export function unionSlots(lists: Slot[][]): Slot[] {
   return [...seen.values()].sort((a, b) => (a.start < b.start ? -1 : 1));
 }
 
-/** P2 · what "where" means for an event type, rendered for people. */
-export function locationText(schedule: Schedule, meetUrl?: string): string | undefined {
+/**
+ * SPEC-0005 Z2a · who is being shown the location.
+ *
+ * `public` is anyone who loaded a URL — the booking page before a booking
+ * exists, and the verification mail sent to an address nobody has proven yet.
+ * `confirmed` is a booker who booked and the hosts of that booking.
+ */
+export type LocationAudience = 'public' | 'confirmed';
+
+/** Z2a · the conferencing kinds, whose joinable link is never public. */
+const CONFERENCING: Record<string, string> = {
+  meet: 'Google Meet',
+  teams: 'Microsoft Teams',
+  zoom: 'Zoom',
+  google_chat: 'Google Chat',
+};
+
+/**
+ * P2 · what "where" means for an event type, rendered for people.
+ *
+ * SPEC-0005 Z2a: for a conferencing kind the **public** rendering carries no
+ * joinable link — not the stored `location_value`, not a freshly minted URL.
+ * A booking page is unauthenticated, so anything printed there is printed to
+ * everyone; the leak this closes was a real person's permanent meeting room
+ * readable by anyone who opened their page (§0 D-b2).
+ *
+ * Z2b: `phone`, `in_person` and `custom` are unchanged in both audiences. The
+ * owner typed those into a field whose value is visibly the page's "where";
+ * blanking them would degrade working event types to fix a different bug.
+ */
+export function locationText(
+  schedule: Schedule,
+  meetUrl?: string,
+  audience: LocationAudience = 'confirmed',
+): string | undefined {
+  const venue = CONFERENCING[schedule.location_kind];
+  if (venue && audience === 'public') return `${venue} — link arrives with the confirmation`;
+
   switch (schedule.location_kind) {
     case 'phone':
       return schedule.location_value ? `Phone — ${schedule.location_value}` : 'Phone call';
@@ -344,9 +380,12 @@ export function locationText(schedule: Schedule, meetUrl?: string): string | und
     case 'teams':
       return meetUrl ?? (schedule.location_value ? `Microsoft Teams — ${schedule.location_value}` : 'Microsoft Teams — link arrives with the confirmation');
     case 'zoom':
-      return schedule.location_value ? `Zoom — ${schedule.location_value}` : (meetUrl ?? 'Zoom — link arrives with the confirmation');
+      // Z3d · a minted per-booking room outranks a stored fallback link, which
+      // is the whole point of minting one. Before SPEC-0005 this was the other
+      // way round, so a connected owner's stamped PMI won every time.
+      return meetUrl ?? (schedule.location_value ? `Zoom — ${schedule.location_value}` : 'Zoom — link arrives with the confirmation');
     case 'google_chat':
-      return schedule.location_value ? `Google Chat Space — ${schedule.location_value}` : 'Google Chat';
+      return schedule.location_value ? `Google Chat Space — ${schedule.location_value}` : 'Google Chat — link arrives with the confirmation';
     default:
       return schedule.location_value ?? undefined;
   }

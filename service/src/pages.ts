@@ -814,7 +814,9 @@ export function bookingPage(
     .join('');
 
   const empty = slots.length === 0 ? '<p class="muted">No times available in this window.</p>' : '';
-  const where = locationText(schedule);
+  // Z2a/Z2d · this page is unauthenticated: whatever it prints, it prints to
+  // everyone. A conferencing event type says where, never with what link.
+  const where = locationText(schedule, undefined, 'public');
 
   return SHELL(
     schedule.title,
@@ -3074,6 +3076,9 @@ export function integrationsPage(opts: {
   msEmail?: string;
   msConnectionId?: string;
   zoomConnected: boolean;
+  /** Z4c · the connected account, so "Connected ✓" is checkable rather than asserted. */
+  zoomAccount?: string;
+  zoomStatus?: 'active' | 'error';
   zoomLink?: string;
   zoomAccountId?: string;
   baseUrl: string;
@@ -3094,11 +3099,14 @@ ${opts.notice ? `<p class="ok" style="border-left-color:var(--accent);background
       </div>
       <div>
         <h2 style="margin:0 0 .2rem;font-size:1.1rem">Zoom Video</h2>
-        <p class="muted" style="margin:0;font-size:.85rem">Auto-create unique Zoom meeting rooms for every booked session via Zoom OAuth (Calendly workflow).</p>
+        <p class="muted" style="margin:0;font-size:.85rem">A new Zoom meeting room for each booked session, created when the booking is made. If Zoom cannot be reached we fall back — first to the static link below, then to your personal meeting room. The link goes out with the confirmation; your booking page never shows it before someone books.</p>
       </div>
     </div>
     <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
-      <span class="pill ${opts.zoomConnected ? 'pill-ok' : ''}">${opts.zoomConnected ? 'Connected ✓' : 'Not Connected'}</span>
+      <span class="pill ${opts.zoomConnected && opts.zoomStatus !== 'error' ? 'pill-ok' : ''}">${
+        opts.zoomStatus === 'error' ? 'Reconnect needed'
+        : opts.zoomConnected ? `Connected ✓${opts.zoomAccount ? ` — ${esc(opts.zoomAccount)}` : ''}`
+        : 'Not Connected'}</span>
       <a href="/app/integrations/zoom/connect" class="submit" style="display:inline-block;padding:.35rem .75rem;font-size:.85rem;text-decoration:none">${opts.zoomConnected ? 'Reconnect Zoom' : 'Connect with Zoom ↗'}</a>
       ${opts.zoomConnected ? `<form method="post" action="/app/integrations/zoom/disconnect" style="margin:0;display:inline"><button class="submit btn-disconnect" type="submit">Disconnect</button></form>` : ''}
     </div>
@@ -3113,7 +3121,8 @@ ${opts.notice ? `<p class="ok" style="border-left-color:var(--accent);background
           <label>Zoom Client ID <input name="zoom_client_id" placeholder="e.g. 74X_xxxxxx"></label>
           <label>Zoom Client Secret <input name="zoom_client_secret" type="password" placeholder="e.g. abc123xxxxxx"></label>
           <label>Zoom Account ID (for Server-to-Server, optional) <input name="zoom_account_id" value="${esc(opts.zoomAccountId ?? '')}" placeholder="e.g. abcdEFGH1234"></label>
-          <label>Personal Meeting Room / Static Fallback Link <input id="zm_link" name="zoom_link" value="${esc(opts.zoomLink ?? '')}" placeholder="https://us02web.zoom.us/j/1234567890"></label>
+          <label>Static fallback link (optional) <input id="zm_link" name="zoom_link" value="${esc(opts.zoomLink ?? '')}" placeholder="https://us02web.zoom.us/j/1234567890"></label>
+          <p class="muted" style="margin:0;font-size:.8rem">Used only when a per-booking room cannot be created. It is sent with the confirmation and is never shown on your public booking page.</p>
           <button class="submit" type="submit" style="margin-top:.5rem">Save Zoom Credentials & Connect</button>
         </div>
       </details>
