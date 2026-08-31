@@ -1,0 +1,136 @@
+{
+  "suite": "SPEC-0006 oauth-state-is-the-gate acceptance",
+  "version": "1.0.0",
+  "frozen_at_approval": true,
+  "note": "Runner: service/test/oauth-state.test.ts. Runners are ordinary risk; this file is the truth. S-002 and S-003 must FAIL against the tree at efce7a4 -- a defect spec proves itself by failing before (lessons/L-006). 'hub-less deps' throughout means AppDeps built with calendars: undefined, which is what server.ts/worker.ts produce when GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET is unset.",
+  "cases": [
+    {
+      "id": "S-001",
+      "clause": "S1a, S1b, S1d",
+      "description": "OAuthState seals and opens on TOKEN_KEY alone, in the format CalendarHub used.",
+      "steps": [
+        { "call": "new_oauth_state", "args": { "token_key": "$KEY" }, "capture": "st" },
+        { "call": "seal", "args": { "on": "$st", "payload": { "purpose": "zoom_connect", "owner_id": "owner-1", "tag": "" } }, "capture": "s" },
+        { "assert": "$s contains no '+' and no '/' -- base64url-safe substitution (S1b)" },
+        { "assert": "$s is not decodable as plain base64/base64url JSON: the payload is sealed, not encoded" },
+        { "call": "open", "args": { "on": "$st", "state": "$s" }, "capture": "p" },
+        { "assert": "$p.purpose == 'zoom_connect' and $p.owner_id == 'owner-1'" },
+        { "assert": "$p.exp is a number strictly greater than now and at most now + 15 minutes (S1b)" },
+        { "assert": "constructing OAuthState performs no database query and no network call (S1d)" }
+      ]
+    },
+    {
+      "id": "S-002",
+      "clause": "S2a, S2b, S2c",
+      "description": "A Zoom connect completes on a deployment with no calendar hub. FAILS before the fix.",
+      "steps": [
+        { "call": "make_deps", "args": { "calendars": null, "TOKEN_KEY": "$KEY", "ZOOM_CLIENT_ID": "zcid", "ZOOM_CLIENT_SECRET": "zsec" } },
+        { "call": "seed_owner_with_zoom_schedule" },
+        { "call": "stub_zoom_api" },
+        { "call": "http", "args": { "method": "GET", "path": "/app/integrations/zoom/connect", "as": "owner" }, "capture": "start" },
+        { "assert": "$start.status == 303 and $start.location host is zoom.us" },
+        { "call": "http", "args": { "method": "GET", "path": "/oauth/zoom/callback", "query": { "code": "c1", "state": "$start.location.query.state" } }, "capture": "back" },
+        { "assert": "$back.status == 303 -- NOT 404; today this is 404 'Calendar integration is not configured.' (D-a)" },
+        { "assert": "$back.location == '/app/integrations'" },
+        { "assert": "exactly one video_connections row exists for the owner, with a non-null refresh_token" },
+        { "call": "make_deps", "args": { "calendars": null, "TOKEN_KEY": null, "ZOOM_CLIENT_ID": "zcid", "ZOOM_CLIENT_SECRET": "zsec" } },
+        { "call": "http", "args": { "method": "GET", "path": "/oauth/zoom/callback", "query": { "code": "c1", "state": "anything" } }, "capture": "nokey" },
+        { "assert": "$nokey.status == 404 and $nokey.body names TOKEN_KEY and does not name calendars (S2b)" },
+        { "call": "make_deps", "args": { "calendars": null, "TOKEN_KEY": "$KEY", "ZOOM_CLIENT_ID": "zcid", "ZOOM_CLIENT_SECRET": "zsec" } },
+        { "call": "http", "args": { "method": "GET", "path": "/oauth/zoom/callback", "query": { "code": "c1", "state": "not-a-sealed-state" } }, "capture": "stale" },
+        { "assert": "$stale.status == 400 -- an unopenable state is stale, not a 404 (S2c)" }
+      ]
+    },
+    {
+      "id": "S-003",
+      "clause": "S3a, S3b, S3c",
+      "description": "No unsigned state is ever built, and a keyless deployment refuses at the start. FAILS before the fix.",
+      "steps": [
+        { "call": "make_deps", "args": { "calendars": null, "TOKEN_KEY": "$KEY", "ZOOM_CLIENT_ID": "zcid", "ZOOM_CLIENT_SECRET": "zsec" } },
+        { "call": "seed_owner_with_zoom_schedule" },
+        { "for_each_entry_point": ["GET /oauth/zoom/authorize", "GET /app/integrations/zoom/connect", "POST /app/integrations/zoom (form zoom_client_id=zcid)"], "steps": [
+          { "call": "http", "args": { "as": "owner" }, "capture": "r" },
+          { "assert": "$r.status == 303 and $r.location host is zoom.us" },
+          { "assert": "$r.location.query.state is NOT decodable as base64url JSON containing 'owner_id' -- today all three emit exactly that (D-b)" },
+          { "call": "open_with_oauth_state", "args": { "state": "$r.location.query.state", "token_key": "$KEY" }, "capture": "p" },
+          { "assert": "$p is defined and $p.owner_id == the signed-in owner and $p.purpose == 'zoom_connect'" }
+        ]},
+        { "call": "make_deps", "args": { "calendars": null, "TOKEN_KEY": null, "ZOOM_CLIENT_ID": "zcid", "ZOOM_CLIENT_SECRET": "zsec" } },
+        { "call": "http", "args": { "method": "GET", "path": "/oauth/zoom/authorize", "as": "owner" }, "capture": "nokey" },
+        { "assert": "$nokey.status is 5xx, its body names TOKEN_KEY, and it does not redirect to zoom.us (S3b)" },
+        { "call": "make_deps", "args": { "calendars": null, "TOKEN_KEY": "$KEY", "ZOOM_CLIENT_ID": null } },
+        { "call": "http", "args": { "method": "GET", "path": "/oauth/zoom/authorize", "as": "owner" }, "capture": "noclient" },
+        { "assert": "$noclient.status == 303 and $noclient.location == '/app/integrations?zoom_needed=1' -- unchanged (S3c)" },
+        { "call": "grep_source", "args": { "file": "service/src/app.ts", "pattern": "base64url" }, "capture": "hits" },
+        { "assert": "$hits is empty (S3a)" }
+      ]
+    },
+    {
+      "id": "S-004",
+      "clause": "S2d, S2e",
+      "description": "The calendar 404 survives the move, and no other flow gains reachability.",
+      "steps": [
+        { "call": "make_deps", "args": { "calendars": null, "TOKEN_KEY": "$KEY" } },
+        { "call": "seal_state", "args": { "token_key": "$KEY", "payload": { "owner_id": "owner-1", "level": "freebusy", "tag": "" } }, "capture": "cal" },
+        { "call": "http", "args": { "method": "GET", "path": "/oauth/google/callback", "query": { "code": "c1", "state": "$cal" } }, "capture": "r" },
+        { "assert": "$r.status == 404 and $r.body contains 'Calendar integration is not configured.' -- byte-identical to today (S2d)" },
+        { "call": "seal_state", "args": { "token_key": "$KEY", "payload": { "purpose": "sso" } }, "capture": "sso" },
+        { "call": "http", "args": { "method": "GET", "path": "/oauth/google/callback", "query": { "code": "c1", "state": "$sso" } }, "capture": "r2" },
+        { "assert": "$r2.status == 404 and $r2.body contains 'Google sign-in is not configured.' -- no Google credentials, no exchange (S2e)" },
+        { "assert": "no outbound request was made to any Google endpoint during $r2" },
+        { "call": "seal_state", "args": { "token_key": "$KEY", "payload": { "purpose": "sso_ms" } }, "capture": "ms" },
+        { "call": "http", "args": { "method": "GET", "path": "/oauth/microsoft/callback", "query": { "code": "c1", "state": "$ms" } }, "capture": "r3" },
+        { "assert": "$r3.status == 404 and $r3.body contains 'Microsoft sign-in is not configured.' (S2e)" },
+        { "call": "seal_state", "args": { "token_key": "$KEY", "payload": { "purpose": "oidc", "org": "no-such-org" } }, "capture": "oidc" },
+        { "call": "http", "args": { "method": "GET", "path": "/oauth/oidc/callback", "query": { "code": "c1", "state": "$oidc" } }, "capture": "r4" },
+        { "assert": "$r4.status == 404 and $r4.body contains 'This organization has no SSO configured.' (S2e)" },
+        { "call": "make_deps", "args": { "calendars": null, "TOKEN_KEY": "$KEY", "ZOOM_CLIENT_ID": null } },
+        { "call": "seal_state", "args": { "token_key": "$KEY", "payload": { "purpose": "zoom_connect", "owner_id": "owner-1", "tag": "" } }, "capture": "z" },
+        { "call": "http", "args": { "method": "GET", "path": "/oauth/zoom/callback", "query": { "code": "c1", "state": "$z" } }, "capture": "r5" },
+        { "assert": "$r5.status == 400 and $r5.body names Zoom credentials -- the zoom branch's own guard still holds (S2e)" }
+      ]
+    },
+    {
+      "id": "S-005",
+      "clause": "S4b, S4c",
+      "description": "One state format across the service; every forged, stale or foreign state opens as undefined.",
+      "steps": [
+        { "call": "new_calendar_hub", "args": { "providers": {}, "token_key": "$KEY" }, "capture": "hub" },
+        { "call": "new_oauth_state", "args": { "token_key": "$KEY" }, "capture": "st" },
+        { "call": "seal", "args": { "on": "$hub", "payload": { "purpose": "zoom_connect", "owner_id": "owner-1" } }, "capture": "a" },
+        { "call": "open", "args": { "on": "$st", "state": "$a" }, "capture": "pa" },
+        { "assert": "$pa.owner_id == 'owner-1' -- hub seals, OAuthState opens (S4b)" },
+        { "call": "seal", "args": { "on": "$st", "payload": { "purpose": "zoom_connect", "owner_id": "owner-2" } }, "capture": "b" },
+        { "call": "open", "args": { "on": "$hub", "state": "$b" }, "capture": "pb" },
+        { "assert": "$pb.owner_id == 'owner-2' -- OAuthState seals, hub opens (S4b)" },
+        { "call": "open", "args": { "on": "$st", "state": "base64url({\"purpose\":\"zoom_connect\",\"owner_id\":\"attacker\",\"tag\":\"\"})" }, "capture": "forged" },
+        { "assert": "$forged is undefined -- the exact string the deleted fallback produced is not a state (S4c, D-c)" },
+        { "call": "new_oauth_state", "args": { "token_key": "$OTHER_KEY" }, "capture": "other" },
+        { "call": "open", "args": { "on": "$other", "state": "$a" }, "capture": "foreign" },
+        { "assert": "$foreign is undefined -- a state from another deployment's key (S4c)" },
+        { "call": "open", "args": { "on": "$st", "state": "flip one character of $a" }, "capture": "tampered" },
+        { "assert": "$tampered is undefined (S4c)" },
+        { "call": "open", "args": { "on": "$st", "state": "a state whose exp is 16 minutes in the past" }, "capture": "stale" },
+        { "assert": "$stale is undefined (S4c)" },
+        { "call": "open", "args": { "on": "$st", "state": "a validly sealed value whose plaintext JSON has no exp" }, "capture": "noexp" },
+        { "assert": "$noexp is undefined -- an unexpiring state is not a state (S4c)" }
+      ]
+    },
+    {
+      "id": "S-006",
+      "clause": "S4a",
+      "description": "A deployment with a calendar hub is unchanged; SPEC-0005's frozen cases still hold.",
+      "steps": [
+        { "call": "run_suite", "args": { "file": "service/test/video.test.ts" }, "capture": "v" },
+        { "assert": "$v passes with no edit to service/test/video.test.ts and no edit to service/spec/0005/acceptance/cases.json" },
+        { "call": "make_deps", "args": { "calendars": "CalendarHub({}, $KEY)", "TOKEN_KEY": "$KEY", "ZOOM_CLIENT_ID": "zcid", "ZOOM_CLIENT_SECRET": "zsec" } },
+        { "call": "seed_owner_with_zoom_schedule" },
+        { "call": "stub_zoom_api" },
+        { "call": "http", "args": { "method": "GET", "path": "/oauth/zoom/authorize", "as": "owner" }, "capture": "start" },
+        { "call": "http", "args": { "method": "GET", "path": "/oauth/zoom/callback", "query": { "code": "c1", "state": "$start.location.query.state" } }, "capture": "back" },
+        { "assert": "$back.status == 303 and $back.location == '/app/integrations' -- with a hub, identical to before (S4a)" },
+        { "assert": "the video_connections row is the same shape SPEC-0005 Z-001 asserts" }
+      ]
+    }
+  ]
+}
