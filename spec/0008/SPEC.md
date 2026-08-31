@@ -261,6 +261,23 @@ states the property the item promises. The first half is disclosed on the case
 itself as vacuous-before, with its named mutation, rather than being allowed to
 read as evidence.
 
+**Amended 2026-08-31, in the open, before implementation** (`cases.json`
+v1.1.0, after the v1.0.0 spec approval). A-004's first assertion as frozen read
+*"no file in the repository contains `required_status_checks`,
+`branch_protection` or a `rulesets` request"* — and **`cases.json` itself fails
+that**, because it names those strings in order to forbid them, as do this file
+and the runner. A case that goes red the moment the project *describes* what it
+refuses to ship is a spelling rule, not a check, and it is exactly the kind of
+thing that gets repaired quietly inside a build. The property was never about
+prose: it is that **no configuration** requesting branch protection ships. The
+assertion is rescoped to the files that could carry such configuration — every
+tracked file under `.github/`, plus any tracked file whose name marks it as
+branch-protection or ruleset configuration — which is where it was always
+aimed, and which still runs non-vacuously on the change-absent tree, where
+`.github/feedback-attachments` exists. No case, assertion, mutation or
+red/green expectation moved. Re-reviewed cross-family before implementation
+began.
+
 **The live absence of branch protection is a measurement, not a case.** It
 needs `gh` and a credential the runner does not have, and a case that announces
 itself as skipped is a case that cannot fail. It is recorded in §3 and re-taken
