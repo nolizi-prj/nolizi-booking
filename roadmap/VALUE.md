@@ -81,8 +81,21 @@ the single free self-hostable product (commit series `e688e8b`…`b0cb050`,
 the sharded E2E suite green on 2026-08-29). The commercialization foundations
 (§7) forbid open-core, dual licensing, licence switches, and hosted-exclusive
 features — in writing, in advance.
+*Today's honest limit, found 2026-08-31 by reading the tree behind a partial
+handover:* on a self-hosted copy, **per-org OIDC SSO is unreachable without
+Google Calendar credentials** — `/login/sso/<orgId>` returns "SSO is not
+configured on this deployment." because it is gated on the calendar hub
+(`service/src/app.ts:912`, on both the Node and the Workers path). Microsoft
+sign-in has the same gate on the Node path (`app.ts:998`). The features are
+built and tested; one of them cannot be reached by the operator this file
+courts. [`BACKLOG.md`](BACKLOG.md) item 2, and see C5.
 *Falsified by:* any listed feature failing its E2E path for a real user; any
-feature appearing in a paid or hosted-only tier, ever.
+feature appearing in a paid or hosted-only tier, ever. **Not counted as fired
+here, and the reason is stated rather than assumed:** no real user is known to
+have hit the limit above — it was found by reading, the tracker holds zero open
+issues, and `booking.pumasi.ai` has Google Calendar configured so it cannot
+occur there. If a self-hoster reports it, this claim is rewritten, not
+softened.
 
 **C4 — The privacy posture is enforced, not asserted.** The notice, terms and
 DPA are served by the running service, state operator, basis, deletion reach
@@ -104,8 +117,23 @@ field the notice does not cover; a deletion that leaves identity behind.
 PostgreSQL URL; or Cloudflare Workers on Durable-Object SQLite, which is what
 serves booking.pumasi.ai. Nothing in the code knows about a particular
 provider — `P12`, plus the self-hosting-first-class commitment.
+*Moved by the 2026-08-31 OAuth-callback release, in the right direction:* until
+`4f6ddf0`, connecting **Zoom** required **Google Calendar** credentials to be
+configured — the OAuth callback 404'd on the absent calendar hub before it read
+what kind of connection was arriving. One provider was load-bearing for an
+unrelated one. That is fixed in `main`: the gate is now the ability to open a
+sealed state, which needs `TOKEN_KEY` and nothing else
+(`service/src/oauth-state.ts`; spec/0006, Q-015). For self-hosters — the people
+the claim is about — the merge is the delivery, once they pull.
+*And the same evaluation found the pattern is not fully gone:* Microsoft
+sign-in (Node path) and per-org OIDC SSO (both paths) are still gated on the
+Google calendar hub. See C3's honest limit and [`BACKLOG.md`](BACKLOG.md)
+item 2.
 *Falsified by:* a change that makes any single provider required to run or to
-leave.
+leave. **Not fired:** nothing here was introduced by a change, no provider is
+required to *run* the product or to leave it, and the release moved the count
+of these gates down rather than up. The remaining two are listed instead of
+being allowed to accumulate quietly.
 
 **C6 — It is the only maintained permissively-licensed product in the
 category.** Apache-2.0, inbound equals outbound; no CLA grants anyone

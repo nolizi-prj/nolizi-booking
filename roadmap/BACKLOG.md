@@ -24,66 +24,101 @@ and polish, and the list reflects that.
 
 ## The order
 
-**1 · Deploy the reviewed Zoom fix to `booking.pumasi.ai` — the leak is closed
-in `main` and is still live in production** — source: this evaluation
-(2026-08-31), checking the deployment rather than the merge. The code half of
-the old item 1 is genuinely done and was re-verified here against the tree, not
-taken on the coder's word: the connect callback stores a sealed connection and
-writes nothing to `schedules` (`app.ts` ~1195), `locationText(schedule, …,
-'public')` returns "link arrives with the confirmation" for every conferencing
-kind (`schedules.ts` §Z2a), the `!schedule.location_value` suppressor is gone
-from the booking path, and the only remaining `UPDATE schedules SET
-location_value` writes are disconnect (to `NULL`) and a link the owner typed
-themselves. 290 service + 19 engine tests and `GATE: PASS` re-run at `3d313d2`.
-**But `wrangler deployments list` for the `pumasi-booking` worker
-(`service/wrangler.jsonc`, custom domain `booking.pumasi.ai`) shows its most
-recent deployment at 2026-08-30 16:55 UTC, and the fix commit `16c3fd4` is
-2026-08-31 05:27 UTC.** The live build is the pre-fix one, so a personal
-meeting room stamped by the old flow — the steward's own 2026-08-30 end-to-end
-test connected Zoom against this deployment (`ecdd60b`, 16:13 UTC) — is still
-being printed to anyone who loads that owner's booking page. Fix: deploy the
-reviewed build, then re-check a real public page.
+**1 · Deploy the reviewed build to `booking.pumasi.ai` — the Zoom leak is closed
+in `main` and is still live in production, and two releases now wait behind it**
+— source: this evaluation (2026-08-31, 15:30 tick), checking the deployment
+rather than the merge, for the second consecutive evaluation. Re-verified this
+tick, not inherited: `npx wrangler deployments list` for the `pumasi-booking`
+worker (`service/wrangler.jsonc`, custom domain `booking.pumasi.ai`) still puts
+the latest deployment at **2026-08-30 16:55:37 UTC** (a *Secret Change*; the
+last upload of code is **16:22:12 UTC**), and `https://booking.pumasi.ai/`
+answers **200**. Both `16c3fd4` (the Zoom fix, 2026-08-31 05:27 UTC) and
+`4f6ddf0` (the OAuth-callback release) postdate it, so the live build is the
+pre-fix one and **nothing has moved since the last evaluation said so**.
+Deploying does close it even for rows the old flow already stamped, which was
+checked rather than assumed: `locationText(schedule, …, 'public')` returns
+`"<venue> — link arrives with the confirmation"` for every conferencing kind
+*before* it ever consults `schedule.location_value` (`schedules.ts:371`), so a
+stale PMI in the column stops printing the moment the new build serves.
+**What could not be confirmed from outside, and is not claimed:** no public
+booking-page slug for the affected owner is recorded anywhere in these
+repositories, and this seat will not guess at one, so the leak's liveness rests
+on the deployment evidence plus the record that the steward's own 2026-08-30
+16:13 UTC Zoom connect (`ecdd60b`) ran against this same build — not on a page
+this evaluation loaded.
 Why here: nothing else on this list can hurt a user today and this still can.
-It is the same defect that topped the list yesterday; merging closed it in the
-repository and not in the product, and this file ranks what users meet, not
-what `main` contains. *Operator action, not a build — see `DECISIONS.md`
-**Q-012**, which asks whose duty this is and names the coder as its default.
-The next **coder** packet takes item 2; this one must not be displaced by it.*
+It is the same defect that topped the list at the last two evaluations; merging
+closed it in the repository and not in the product, and this file ranks what
+users meet, not what `main` contains. *Operator action, not a build — see
+`DECISIONS.md` **Q-012**, which asks whose duty this is and names the coder as
+its default. The next **coder** packet takes item 2; this one must not be
+displaced by it.*
 
-**2 · `/oauth/*/callback` 404s without a calendar hub, and the dead branch it
-creates builds an unsigned state** — source: found by the spec/0005 coder run
-and deliberately not fixed under a frozen spec (ops digest job `0010`; release
-note "Also found, not fixed here"). Confirmed here: the callback is gated by
-`if (!hub) return html(404, …)` (`app.ts` ~999) *before* the `zoom` branch, so
-on a deployment with no calendar integration configured the Zoom connect flow
-can never complete — while `/oauth/zoom/authorize` and the integrations POST
-happily start it. The same absent hub makes the connect handler fall back to
-`Buffer.from(JSON.stringify({purpose, owner_id, tag})).toString('base64url')`
-instead of `hub.sealState(…)`. That state is unreachable today, which is the
-whole of its safety: **the two halves must be fixed together**, because
-removing the 404 on its own would leave a callback that accepts an
-attacker-chosen `owner_id` in an unsigned string.
-Why here: [`VALUE.md` §1](VALUE.md) sells this to "the operator who wants to
-run it themselves", and for the operator who wants conferencing without
-surrendering a calendar it is a shipped button that cannot work at all. No live
-user is hurt today (this deployment has a hub), which is why it sits below
-item 1 — and it is correctness of already-shipped surface, so like item 1 it
-does not run ahead of Q-007.
+**2 · Two authentication entry points are gated on a *Google calendar hub*,
+and one of them is gated on both paths** — source: the spec/0006 coder run
+recorded one of these as "found, not fixed" (`service/spec/0006/SPEC.md` §5;
+ops digest job `0012`; the release note's "Also found, not fixed here") and
+handed the ranking here. **Ranked on this evaluation's own reading of the tree
+at `4f6ddf0`, which found the handover half wrong and half incomplete:**
+- **`/auth/microsoft/start` — Node path only.** `app.ts:998` reads
+  `const hub = deps.calendars; if (!hub || !config.msClientId)` and answers
+  *"Microsoft sign-in is not configured."*, while `deps.calendars` is built
+  only when `googleClientId && googleClientSecret && tokenKey` are all set
+  (`server.ts:114`, `worker.ts:244`). The login page shows the button on
+  `Boolean(config.msClientId)` alone, so an operator with Microsoft
+  credentials and no Google Calendar gets a visible button that denies its own
+  configuration.
+- **The handover's claim that `worker.ts` ~609 "has the same shape" is
+  shape-true and effect-false, and correcting it matters.** At `efce7a4` that
+  line read `if (!hub || !config.msClientId)` where `hub` was
+  `config.tokenKey ? new CalendarHub({}, config.tokenKey) : undefined` — a
+  *provider-less* hub, i.e. gated on `TOKEN_KEY` and never on Google Calendar.
+  Since `4f6ddf0` it reads `if (!states || !config.msClientId)` (`worker.ts:613`).
+  The Workers half was never broken and is now explicitly right; a coder taking
+  this item must not "fix" it and call the item done.
+- **`/login/sso/<orgId>` — both paths, and not previously recorded anywhere.**
+  `app.ts:912` reads `if (!hub) return html(404, … 'SSO is not configured on
+  this deployment.')` before reading the `org_sso` row. The Workers router does
+  **not** handle this route: it forwards it into the Durable Object
+  (`worker.ts:805`), which runs `handle()` with the same Google-gated
+  `deps.calendars` (`worker.ts:244`, wired at `worker.ts:266`). So per-org OIDC SSO — the enterprise
+  identity feature [`VALUE.md`](VALUE.md) C3 lists in the free tier — requires
+  Google Calendar credentials on **every** deployment shape. This is the wider
+  blast radius of the two and is the reason this item is ranked here rather
+  than below PR-1.
+The fix is the shape spec/0006 already established and reviewed:
+`deps.calendars?.state ?? oauthState(config)`, because sealing a state needs
+`TOKEN_KEY` and nothing else (`service/src/oauth-state.ts`). It is a
+reachability change on authentication surface, so it is `can_hurt` and takes
+the full charter flow — and its acceptance cases must assert that Google
+sign-in, org OIDC and calendar connect each keep exactly the reachability they
+have today, each still behind its own credential check.
+Why here: it is correctness of already-shipped surface, like the item it
+succeeds, but one class up — an authentication entry point rather than a
+conferencing one. **No live user on `booking.pumasi.ai` is affected** (that
+deployment has Google Calendar configured), which is why it does not displace
+item 1; it costs exactly the self-hoster [`VALUE.md`](VALUE.md) §1 courts, and
+it is a live counter-example to C5's "no host is load-bearing". Like item 1 it
+adds no provider and no scope, so it does not run ahead of Q-007.
 
 **3 · PR-1 compliance: a version that moves and is visible** — source:
 [`PRODUCT-RULES.md` PR-1](https://github.com/pumasi-ai/pumasi/blob/worktree-product-rules/PRODUCT-RULES.md)
 (v1.0, 2026-08-30; binds always — read fresh this evaluation, and still only on
-the unmerged `worktree-product-rules` branch, `0115758`). Re-checked: the root,
-`core/` and `service/` `package.json` all still say `0.1.0` and have never
-moved; there is no footer, about view or `/version` route in the code, and
-`https://booking.pumasi.ai/version` returns 404 live; the release notes state
-no version.
-Why here: it earned weight this evaluation. Establishing item 1 — *which build
-is actually serving users* — was not possible from the repository, the live
-site, or the release note, and took Cloudflare API credentials to answer. A
-product whose own evaluation cannot tell what is deployed without querying its
-host is exactly the failure PR-1's "user-visible" and "in the diagnostics"
-clauses describe. Below item 2 because a broken button beats a hard diagnosis.
+the unmerged `worktree-product-rules` branch, `0115758`; now raised as
+`DECISIONS.md` **Q-016**). Re-checked this tick: the root, `core/` and
+`service/` `package.json` all still say `0.1.0` and have never moved; there is
+no footer, about view or `/version` route, and `https://booking.pumasi.ai/version`
+returns **404** live; the release notes state no version.
+Why here: it earned weight again, and in a sharper way than last time. The one
+endpoint that exists to answer *which build is live* answers nothing:
+`https://booking.pumasi.ai/healthz` returns
+`{"status":"ok","commit":"unknown","sharded":true}` — `worker.ts:443` serves
+`env['GIT_COMMIT'] ?? 'unknown'` and the deploy that would have set it
+(`npx wrangler deploy --var GIT_COMMIT:…`) did not. Establishing item 1 again
+required Cloudflare credentials and a `wrangler` call, exactly as it did
+yesterday. A product that cannot tell its own evaluator what it is running is
+the failure PR-1's "user-visible" and "in the diagnostics" clauses describe.
+Below item 2 because a broken sign-in beats a hard diagnosis.
 
 **4 · Submit the Google OAuth app for verification** — source:
 [`0002-calendar-integration.md` §4](0002-calendar-integration.md);
@@ -125,6 +160,27 @@ user-facing items because no user can currently be hurt by it.
 
 ## Completed (2026-08-31)
 
+- **`/oauth/*/callback` gates on the state, not the calendar hub** — item 2 of
+  the previous order, delivered in full charter flow: intent `7958d41` (Q-013),
+  frozen acceptance cases `a5ab8d0`, spec review `9bbfd0d`, spec amendment in
+  the open `38f8efb`, build `7ea730a`, cross-family code review `4f6ddf0`;
+  release note pumasi `9b45a30`, veto window Q-015 closes 2026-09-07.
+  **Re-verified against the tree at this evaluation rather than taken from the
+  release note**: the callback's gate is `const states = hub?.state ??
+  oauthState(config)` and a failure to open the state, with the calendar 404
+  kept verbatim and moved below every purpose branch (`app.ts:1051`, `app.ts:1053`; the calendar 404 at `app.ts:1297`);
+  `sealState`/`openState` have exactly one implementation, in
+  `service/src/oauth-state.ts`, to which `CalendarHub` delegates
+  (`calendars.ts:142`); `grep -rn base64url service/src` returns only
+  `newToken()`, `newSecret()`, `bootstrap.ts` invite codes and two comments —
+  no state construction; and `startZoomConnect` refuses **before** the redirect
+  with *"This deployment cannot start a Zoom connection: TOKEN_KEY is not
+  configured."* (`app.ts:191`–`199`). Suite re-run here, not quoted:
+  **305 service + 19 engine tests, 0 failures**.
+  **Listed as completed for the repository, and for a self-hoster who pulls.**
+  `booking.pumasi.ai` is not serving it — that is item 1 — but unlike the Zoom
+  leak, the population this fixes deploys from this repository, so for them
+  merged is the delivery path.
 - **The Zoom PMI leak, in the code** — old item 1 parts (b) and (c), delivered
   in full charter flow: intent `8093dc7` (Q-010), frozen acceptance cases
   `40712d9`, build `16c3fd4`, cross-family code review `3d313d2`; release note
