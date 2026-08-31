@@ -12,7 +12,7 @@
   "scripts": {
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces",
     "dev": "npm run dev -w @pumasi/booking-service",
     "start": "node service/dist/server.js"
   },

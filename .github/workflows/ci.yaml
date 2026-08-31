@@ -1,0 +1,50 @@
+# Advisory CI — SPEC-0008 (spec/0008), roadmap/BACKLOG.md item 2.
+#
+# THIS WORKFLOW BLOCKS NOTHING. No branch protection references it, no required
+# status check names it, and CHARTER §3's merge gate remains pumasi/tools/gate.sh
+# run by an agent — `GATE: PASS` still means what it has always meant. Whether it
+# should mean "a machine ran it" is pumasi/DECISIONS.md Q-025, open, whose
+# default keeps the charter exactly as written. A red run here is information.
+#
+# The checks live in tools/ci.sh, not in this file, so that what CI checks is
+# answerable by reading one script — and runnable by hand, identically, by
+# anyone: `npm ci && tools/ci.sh`.
+name: CI (advisory)
+
+on:
+  push:
+  pull_request:
+
+# Read-only, and no secrets are referenced anywhere in this file. A workflow in
+# a public repository is a privilege surface: `pull_request` (not
+# `pull_request_target`) runs a fork's pull request with this token and nothing
+# else, so an untrusted contribution can read the code it was already able to
+# read and do nothing more. SPEC-0008 case A-004 checks this rather than trusting
+# this comment.
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: tests + typecheck (advisory — blocks nothing)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # The only puppeteer test in the suite is service/test/browser-live.test.ts,
+      # which tools/ci.sh excludes from this run and names out loud when it does.
+      # Downloading a browser for a test that will not run would be minutes spent
+      # on nothing. One decision, stated once, in two places that must agree.
+      PUPPETEER_SKIP_DOWNLOAD: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install
+        run: npm ci
+
+      - name: Advisory checks (tools/ci.sh)
+        run: tools/ci.sh
