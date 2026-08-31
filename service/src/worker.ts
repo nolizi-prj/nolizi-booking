@@ -32,6 +32,7 @@ import type { SqlClient, Transactor } from './store.ts';
 import { Serialiser } from './driver.ts';
 import { bindable, normalizeDbError, splitSqlStatements, translateSql } from './sqlite-dialect.ts';
 import { CalendarHub } from './calendars.ts';
+import { OAuthState } from './oauth-state.ts';
 import { GoogleCalendarProvider } from './calendar-google.ts';
 import { MicrosoftCalendarProvider } from './calendar-microsoft.ts';
 import { Directory, dispatchDirectoryCall, type DirectoryCall } from './directory.ts';
@@ -430,7 +431,11 @@ export default {
       });
     };
 
-    const hub = config.tokenKey ? new CalendarHub({}, config.tokenKey) : undefined;
+    // SPEC-0006 S4d · the router only ever needed to seal and open an OAuth
+    // state — it held a provider-less CalendarHub to do it, which is what
+    // named the thing wrongly in the first place. Same condition, same wire
+    // format, one implementation (S1c); the router's responses do not move.
+    const states = config.tokenKey ? new OAuthState(config.tokenKey) : undefined;
     const ssoEnabled = { google: Boolean(config.googleClientId), microsoft: Boolean(config.msClientId) };
 
     // ── global, data-free surfaces ─────────────────────────────────────────
@@ -588,10 +593,10 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
     // "Continue with Google": the router seals the state and runs the
     // exchange; the directory decides which world the identity belongs to.
     if (url.pathname === '/auth/google/start' && request.method === 'POST') {
-      if (!hub || !config.googleClientId) {
+      if (!states || !config.googleClientId) {
         return htmlResponse(404, errorPage(404, 'Google sign-in is not configured.'));
       }
-      const state = await hub.sealState({
+      const state = await states.seal({
         purpose: 'sso',
         invite: (form['invite'] ?? '').trim(),
         timezone: (form['timezone'] ?? '').trim(),
@@ -606,10 +611,10 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
     // "Continue with Microsoft": the router seals the state and runs the
     // exchange; the directory decides which world the identity belongs to.
     if (url.pathname === '/auth/microsoft/start' && request.method === 'POST') {
-      if (!hub || !config.msClientId) {
+      if (!states || !config.msClientId) {
         return htmlResponse(404, errorPage(404, 'Microsoft sign-in is not configured.'));
       }
-      const state = await hub.sealState({
+      const state = await states.seal({
         purpose: 'sso_ms',
         invite: (form['invite'] ?? '').trim(),
         timezone: (form['timezone'] ?? '').trim(),
@@ -622,8 +627,8 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
     }
 
     if (seg[0] === 'oauth' && seg[2] === 'callback' && request.method === 'GET') {
-      if (!hub) return htmlResponse(404, errorPage(404, 'Not configured.'));
-      const state = await hub.openState(url.searchParams.get('state') ?? '');
+      if (!states) return htmlResponse(404, errorPage(404, 'Not configured.'));
+      const state = await states.open(url.searchParams.get('state') ?? '');
       const code = url.searchParams.get('code');
       if (!state || !code) {
         return htmlResponse(400, errorPage(400, 'This attempt is stale or invalid. Start again.'));

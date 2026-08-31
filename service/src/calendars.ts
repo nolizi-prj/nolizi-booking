@@ -12,6 +12,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Interval } from '@pumasi/booking-core';
 import type { SqlClient } from './store.ts';
+import { OAuthState } from './oauth-state.ts';
 import { importSealKey, open, seal, type SealKey } from './seal.ts';
 
 /** 401/invalid_grant/410 mean the grant is gone, not that the provider is down. */
@@ -102,12 +103,15 @@ const isSystemCalendar = (id: string): boolean => id.includes('#');
 
 export class CalendarHub {
   #key: SealKey | undefined;
+  readonly #state: OAuthState;
 
   constructor(
     private readonly providers: Partial<Record<'google' | 'microsoft', CalendarProvider>>,
     private readonly tokenKey: string,
     private readonly now: () => string = () => new Date().toISOString().replace(/\.\d+Z/, 'Z'),
-  ) {}
+  ) {
+    this.#state = new OAuthState(tokenKey);
+  }
 
   provider(id: string): CalendarProvider | undefined {
     return id === 'google' || id === 'microsoft' ? this.providers[id] : undefined;
@@ -118,19 +122,29 @@ export class CalendarHub {
     return this.#key;
   }
 
-  /** Opaque, authenticated OAuth state: survives the round trip, nothing else. */
+  /**
+   * SPEC-0006 S1c · the hub's own OAuth state facility, sealed under the key
+   * this hub was built with — which is not always `config.tokenKey`: a host
+   * may construct the hub with a key from anywhere, and several test harnesses
+   * do. A caller that needs to open a state a hub sealed must use this one,
+   * not one built from config, or a state stops opening on the way back.
+   */
+  get state(): OAuthState {
+    return this.#state;
+  }
+
+  /**
+   * SPEC-0006 S1c · OAuth state is not a calendar concern and no longer lives
+   * here. These two delegate to the one implementation (`oauth-state.ts`) so
+   * that a caller holding a hub keeps working and no second copy of the wire
+   * format exists to drift (L-007).
+   */
   async sealState(payload: Record<string, string>): Promise<string> {
-    return (await seal(await this.#sealKey(), JSON.stringify({ ...payload, exp: Date.now() + 15 * 60_000 })))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_');
+    return this.#state.seal(payload);
   }
 
   async openState(state: string): Promise<Record<string, string> | undefined> {
-    const raw = await open(await this.#sealKey(), state.replace(/-/g, '+').replace(/_/g, '/'));
-    if (!raw) return undefined;
-    const parsed = JSON.parse(raw) as Record<string, string> & { exp?: number };
-    if (typeof parsed.exp !== 'number' || parsed.exp < Date.now()) return undefined;
-    return parsed;
+    return this.#state.open(state);
   }
 
   /** Store (or re-store) a connection after an OAuth exchange. */

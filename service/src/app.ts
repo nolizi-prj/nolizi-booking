@@ -34,6 +34,7 @@ import { microsoftSsoExchange, microsoftSsoUrl } from './sso-microsoft.ts';
 import { discoverOidc, oidcAuthUrl, oidcExchange } from './sso-oidc.ts';
 import { RATE_LIMITS, type Config } from './config.ts';
 import type { CalendarHub } from './calendars.ts';
+import { OAuthState } from './oauth-state.ts';
 import { icsFor } from './ics.ts';
 import { LEGAL_DOCS } from './legal.ts';
 import { validateLogo } from './branding.ts';
@@ -152,6 +153,66 @@ export interface DirectoryPort {
  */
 function videoConnections(config: Config, now: () => string): VideoConnections | undefined {
   return config.tokenKey ? new VideoConnections(config.tokenKey, now) : undefined;
+}
+
+/**
+ * SPEC-0006 S2a · the OAuth state, built from `config` for the same reason
+ * `videoConnections` is: TOKEN_KEY is already the single source of the seal
+ * key, and a second wiring path through `AppDeps` is a second thing to drift
+ * (L-007).
+ *
+ * This — not `deps.calendars` — is what an OAuth callback needs before it can
+ * decide anything, because the state is what says which flow is arriving and
+ * whose it is. Gating the callback on a calendar hub meant a deployment with a
+ * Zoom app and no Google Calendar could start a connection it could never
+ * finish (SPEC-0006 §0 D-a).
+ */
+function oauthState(config: Config): OAuthState | undefined {
+  return config.tokenKey ? new OAuthState(config.tokenKey) : undefined;
+}
+
+/**
+ * SPEC-0006 S3c · the one way this service starts a Zoom connect.
+ *
+ * Three call sites used to hold byte-identical copies of this redirect, each
+ * with its own `hub ? sealState(...) : <unsigned base64url>` fallback. Three
+ * copies of a security check is how one of them gets fixed and the others do
+ * not; the unsigned branch is gone from all of them because there is only one
+ * of them now.
+ */
+async function startZoomConnect(
+  deps: AppDeps,
+  config: Config,
+  ownerId: string,
+): Promise<Reply> {
+  if (!config.zoomClientId) {
+    return { status: 303, headers: { location: '/app/integrations?zoom_needed=1' }, body: '' };
+  }
+  const states = deps.calendars?.state ?? oauthState(config);
+  if (!states) {
+    // S3b · the same refusal SPEC-0005 Z1c already gives after the round trip,
+    // given before it instead. With no TOKEN_KEY there is nowhere safe to put
+    // the credential and no way to authenticate the state that fetches it.
+    console.warn('[zoom] connect refused at start: TOKEN_KEY is not configured');
+    return html(500, errorPage(500,
+      'This deployment cannot start a Zoom connection: TOKEN_KEY is not configured.'));
+  }
+  const state = await states.seal({
+    purpose: 'zoom_connect',
+    owner_id: ownerId,
+    tag: deps.orgTag ?? '',
+  });
+  return {
+    status: 303,
+    headers: {
+      location: zoomAuthUrl({
+        clientId: config.zoomClientId,
+        redirectUri: `${config.baseUrl}/oauth/zoom/callback`,
+        state,
+      }),
+    },
+    body: '',
+  };
 }
 
 /**
@@ -959,27 +1020,7 @@ async function handleRoutes(
   if (parts[0] === 'oauth' && parts[1] === 'zoom' && parts[2] === 'authorize') {
     const owner = await ownerForSession(sql, sessionId, now);
     if (!owner) return { status: 303, headers: { location: '/login' }, body: '' };
-    if (!config.zoomClientId) {
-      return { status: 303, headers: { location: '/app/integrations?zoom_needed=1' }, body: '' };
-    }
-    const hub = deps.calendars;
-    const state = hub ? await hub.sealState({
-      purpose: 'zoom_connect',
-      owner_id: owner.owner_id,
-      tag: deps.orgTag ?? '',
-    }) : Buffer.from(JSON.stringify({ purpose: 'zoom_connect', owner_id: owner.owner_id, tag: deps.orgTag ?? '' })).toString('base64url');
-
-    return {
-      status: 303,
-      headers: {
-        location: zoomAuthUrl({
-          clientId: config.zoomClientId,
-          redirectUri: `${config.baseUrl}/oauth/zoom/callback`,
-          state,
-        }),
-      },
-      body: '',
-    };
+    return startZoomConnect(deps, config, owner.owner_id);
   }
 
   if (parts[0] === 'auth' && parts[1]) {
@@ -998,11 +1039,26 @@ async function handleRoutes(
   // sealed state, not the session, says whose connection this is.
   if (parts[0] === 'oauth' && parts[2] === 'callback' && req.method === 'GET') {
     const hub = deps.calendars;
-    if (!hub) return html(404, errorPage(404, 'Calendar integration is not configured.'));
+    // S2a · the gate is the ability to OPEN A STATE, not the presence of a
+    // calendar hub. The state is what says which flow is arriving and whose it
+    // is; a hub is a calendar's business and is checked below, where a
+    // calendar callback actually needs one (S2d). Gating here answered
+    // "Calendar integration is not configured" to an operator connecting Zoom,
+    // and did it before the zoom branch ~200 lines down could be reached.
+    // The hub's own sealer first where there is one: a hub may hold a key that
+    // did not come from `config.tokenKey`, and a state must open under the key
+    // that sealed it. With no hub, the config key is the only one there is.
+    const states = hub?.state ?? oauthState(config);
+    // S2b · name what is missing. TOKEN_KEY is the one thing without which no
+    // state on any path can be authenticated.
+    if (!states) {
+      return html(404, errorPage(404,
+        'This deployment cannot complete an OAuth connection: TOKEN_KEY is not configured.'));
+    }
     if (req.query?.['error']) {
       return html(400, errorPage(400, 'The calendar connection was declined. Nothing was stored.'));
     }
-    const state = await hub.openState(req.query?.['state'] ?? '');
+    const state = await states.open(req.query?.['state'] ?? '');
     const code = req.query?.['code'];
     if (!state || !code) {
       return html(400, errorPage(400, 'This connection attempt is stale or invalid. Start again from your dashboard.'));
@@ -1234,6 +1290,11 @@ async function handleRoutes(
       return { status: 303, headers: { location: '/app/integrations' }, body: '' };
     }
 
+    // S2d · the calendar 404 kept, moved to where it belongs: after every
+    // purpose branch, immediately before the first thing that needs a hub. A
+    // calendar callback on a deployment with no calendar integration answers
+    // exactly what it answered before this change.
+    if (!hub) return html(404, errorPage(404, 'Calendar integration is not configured.'));
     const provider = hub.provider(parts[1] ?? '');
     if (!provider) return html(404, errorPage(404, 'Calendar integration is not configured.'));
     if (!state['owner_id']) {
@@ -2019,27 +2080,7 @@ async function handleRoutes(
           return { status: 303, headers: { location: '/app/integrations?zoom_disconnected=1' }, body: '' };
         }
         if (parts[3] === 'connect' || req.query?.['connect'] === '1') {
-          if (!config.zoomClientId) {
-            return { status: 303, headers: { location: '/app/integrations?zoom_needed=1' }, body: '' };
-          }
-          const hub = deps.calendars;
-          const state = hub ? await hub.sealState({
-            purpose: 'zoom_connect',
-            owner_id: owner.owner_id,
-            tag: deps.orgTag ?? '',
-          }) : Buffer.from(JSON.stringify({ purpose: 'zoom_connect', owner_id: owner.owner_id, tag: deps.orgTag ?? '' })).toString('base64url');
-
-          return {
-            status: 303,
-            headers: {
-              location: zoomAuthUrl({
-                clientId: config.zoomClientId,
-                redirectUri: `${config.baseUrl}/oauth/zoom/callback`,
-                state,
-              }),
-            },
-            body: '',
-          };
+          return startZoomConnect(deps, config, owner.owner_id);
         }
         if (req.method === 'POST') {
           const form = req.form ?? {};
@@ -2057,24 +2098,7 @@ async function handleRoutes(
             );
           }
           if (config.zoomClientId) {
-            const hub = deps.calendars;
-            const state = hub ? await hub.sealState({
-              purpose: 'zoom_connect',
-              owner_id: owner.owner_id,
-              tag: deps.orgTag ?? '',
-            }) : Buffer.from(JSON.stringify({ purpose: 'zoom_connect', owner_id: owner.owner_id, tag: deps.orgTag ?? '' })).toString('base64url');
-
-            return {
-              status: 303,
-              headers: {
-                location: zoomAuthUrl({
-                  clientId: config.zoomClientId,
-                  redirectUri: `${config.baseUrl}/oauth/zoom/callback`,
-                  state,
-                }),
-              },
-              body: '',
-            };
+            return startZoomConnect(deps, config, owner.owner_id);
           }
           return { status: 303, headers: { location: '/app/integrations' }, body: '' };
         }
