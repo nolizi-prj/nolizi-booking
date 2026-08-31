@@ -1,13 +1,14 @@
 # SPEC-0005 · Zoom connect tells the truth, and the room stops being public
 
-**Status:** draft, for cross-family spec review · **Intent:**
+**Status:** approved 2026-08-31 (gemini, `reviews/20260831-001546-spec-gemini.md`);
+acceptance cases frozen · **Intent:**
 [`INTENT.md`](INTENT.md) (window Q-010, `pumasi/DECISIONS.md`) ·
 **Source:** `roadmap/BACKLOG.md` item 1 (parts (b) and (c); part (a) fixed at
 `e9eb9fe`), the steward's Zoom E2E test 2026-08-30 (`ecdd60b`),
 [issue #26](https://github.com/pumasi-ai/pumasi-booking/issues/26),
 [issue #30](https://github.com/pumasi-ai/pumasi-booking/issues/30).
-**Acceptance:** [`acceptance/cases.json`](acceptance/cases.json), frozen when
-the spec review completes; the executable runner is `service/test/video.test.ts`.
+**Acceptance:** [`acceptance/cases.json`](acceptance/cases.json), **frozen 2026-08-31** at
+that approval; the executable runner is `service/test/video.test.ts`.
 
 **Risk class: can-hurt.** `service/spec/0002/RISK_ZONES.yaml` maps everything
 outside `README.md`, `INTENT.md` and `acceptance/` to `can_hurt`, and this item
@@ -212,8 +213,8 @@ whole of the harm.
 
 ## 8 · Acceptance
 
-[`acceptance/cases.json`](acceptance/cases.json), frozen at spec-review
-approval. Ten cases, each naming the clause it exercises. Two of them (Z-002,
+[`acceptance/cases.json`](acceptance/cases.json), frozen 2026-08-31 at
+spec-review approval. Ten cases, each naming the clause it exercises. Two of them (Z-002,
 Z-005) are written specifically to fail against the tree at `5ca3b91` — a case
 that cannot fail is not a case (L-006), and for a defect spec the proof is that
 it fails *before*.
