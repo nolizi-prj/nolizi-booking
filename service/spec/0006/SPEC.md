@@ -1,14 +1,15 @@
 # SPEC-0006 · The OAuth state is the gate, not the calendar hub
 
-**Status:** draft, awaiting cross-family spec review ·
+**Status:** approved 2026-08-31 (gemini, `reviews/20260831-090554-spec-gemini.md`);
+acceptance cases frozen ·
 **Intent:** [`INTENT.md`](INTENT.md) (window Q-013, `pumasi/DECISIONS.md`,
 closes 2026-09-01) ·
 **Source:** `roadmap/BACKLOG.md` item 2 — found by the spec/0005 coder run and
 deliberately not fixed under that frozen spec (ops digest job `0010`; the
 2026-08-31 release note's "Also found, not fixed here"), confirmed by the
 product-manager evaluation at `efce7a4`.
-**Acceptance:** [`acceptance/cases.json`](acceptance/cases.json), frozen at
-spec-review approval; the executable runner is `service/test/oauth-state.test.ts`.
+**Acceptance:** [`acceptance/cases.json`](acceptance/cases.json), **frozen 2026-08-31** at
+that approval; the executable runner is `service/test/oauth-state.test.ts`.
 
 **Risk class: can-hurt.** `service/spec/0002/RISK_ZONES.yaml` maps everything
 outside `README.md`, `INTENT.md` and `acceptance/` to `can_hurt`, and this
@@ -222,8 +223,9 @@ branch exactly as reachable as it is today.
 
 ## 6 · Acceptance
 
-[`acceptance/cases.json`](acceptance/cases.json), frozen at spec-review
-approval. Runner: `service/test/oauth-state.test.ts`.
+[`acceptance/cases.json`](acceptance/cases.json), **frozen 2026-08-31** at the
+spec-review approval, before implementation began. Runner:
+`service/test/oauth-state.test.ts`.
 
 | Case | Clause | Must fail before the fix |
 |---|---|---|
