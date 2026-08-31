@@ -146,9 +146,20 @@ const main = m[1];
 console.log(`   service/wrangler.jsonc names "${main}" as the deployed entry point.`);
 
 // Whether it is type-checked is READ FROM THE TREE, never written from memory:
-// the day someone stops excluding it, this sentence changes with them.
+// the day someone stops excluding it, this sentence changes with them. The
+// configs are DISCOVERED rather than listed, because the gap this block used to
+// report was closed by adding a third one (service/tsconfig.worker.json) — and a
+// hardcoded pair would have gone on saying nothing checks the worker while
+// something did. Every service/tsconfig*.json is plain JSON for this reason;
+// the prose that would have been comments in tsconfig.worker.json lives in
+// service/types/sql-modules.d.ts.
+const configs = fs.readdirSync('service')
+  .filter((f) => /^tsconfig.*\.json$/.test(f))
+  .sort()
+  .map((f) => `service/${f}`);
+if (configs.length === 0) { console.error('   service/ holds no tsconfig'); process.exit(1); }
 const holders = [];
-for (const cfg of ['service/tsconfig.json', 'service/tsconfig.test.json']) {
+for (const cfg of configs) {
   const t = JSON.parse(fs.readFileSync(cfg, 'utf8'));
   const excluded = (t.exclude ?? []).includes(main);
   console.log(`   ${cfg}: ${excluded ? 'EXCLUDES' : 'includes'} ${main}`);
@@ -164,6 +175,8 @@ if (holders.length === 0) {
 } else {
   console.log(`   => ${main} is type-checked by ${holders.join(' and ')}; the bundle`);
   console.log('      below is an additional check, not the only one.');
+  console.log('      A bundle is still not a type-check — see the branch above for');
+  console.log('      why — so both run, and 3/4 above is where the types are read.');
 }
 WORKER_DISCLOSURE
 DRYRUN_OUT="$(mktemp -d)"
@@ -173,7 +186,9 @@ echo
 
 echo "══ done. What this run did NOT check, restated so it cannot be read off a tick:"
 echo "   · service/test/browser-live.test.ts — the live site, see 2/4 above."
-echo "   · the TYPES of the deployed worker entry point — see 4/4 above."
+echo "   · that src/worker.ts BEHAVES — 3/4 type-checks it and"
+echo "     service/test/worker-alarm.test.ts runs its alarm(), but no run here"
+echo "     exercises the router, and nothing in this file executes workerd."
 echo "   · anything about the deployment itself. This script cannot deploy: its"
 echo "     only wrangler call is a --dry-run, and SPEC-0008 case A-006 fails if"
 echo "     that ever stops being true."

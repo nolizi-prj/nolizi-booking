@@ -7,8 +7,9 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "build:test": "tsc -p tsconfig.test.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build:test": "tsc -p tsconfig.test.json && tsc -p tsconfig.worker.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && npm run typecheck:worker",
+    "typecheck:worker": "tsc -p tsconfig.worker.json --noEmit",
     "test": "npm run build:test && node --test .build/test/*.test.js",
     "conformance": "npm run build:test && node --test --test-reporter=./scripts/summary-reporter.mjs --test-reporter-destination=stdout .build/test/*.test.js",
     "dev": "SEED_DEMO=true npm run build && node dist/server.js",

@@ -41,28 +41,19 @@ import { microsoftSsoExchange, microsoftSsoUrl } from './sso-microsoft.ts';
 import { errorPage, FAVICON_SVG, homePage, legalPage, loginPage, signupPage } from './pages.ts';
 import { submitFeedback, type FeedbackPayload } from './feedback.ts';
 import { LEGAL_DOCS } from './legal.ts';
-// Bundled as text via the `rules` entry in wrangler.jsonc.
-// @ts-expect-error — .sql imports exist only under wrangler's bundler
+import { processDueJobs } from './automation.ts';
+// Bundled as text via the `rules` entry in wrangler.jsonc; typed by
+// types/sql-modules.d.ts, which tsconfig.worker.json includes.
 import schema001 from '../migrations-sqlite/001_schema.sql';
-// @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema002 from '../migrations-sqlite/002_calendar.sql';
-// @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema003 from '../migrations-sqlite/003_availability_sets.sql';
-// @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema004 from '../migrations-sqlite/004_meetings.sql';
-// @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema005 from '../migrations-sqlite/005_profile.sql';
-// @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema006 from '../migrations-sqlite/006_teams.sql';
-// @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema007 from '../migrations-sqlite/007_routing_polls.sql';
-// @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema008 from '../migrations-sqlite/008_automation.sql';
-// @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema009 from '../migrations-sqlite/009_enterprise.sql';
-// @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema010 from '../migrations-sqlite/010_limits.sql';
-// @ts-expect-error — .sql imports exist only under wrangler's bundler
 import schema011 from '../migrations-sqlite/011_recurrence.sql';
 import schema012 from '../migrations-sqlite/012_blocked_sources.sql';
 import schema013 from '../migrations-sqlite/013_email_verification.sql';
@@ -76,6 +67,15 @@ const MAX_BODY_BYTES = 5 * 1024 * 1024;
 interface DoStub { fetch(r: Request): Promise<Response> }
 interface DoNamespace { idFromName(name: string): unknown; get(id: unknown): DoStub }
 
+/**
+ * The env as this file uses it: a string bag, because most of what it reads —
+ * GMAIL_SA_KEY, BOOTSTRAP_INVITE, GIT_COMMIT and everything loadConfig() takes
+ * — arrives through `wrangler secret put` and so never appears in
+ * wrangler.jsonc. `wrangler types` only sees wrangler.jsonc, so the generated
+ * `Env` carries the three plaintext vars and the two bindings and nothing
+ * else; the widening cast at each use site says that in one place rather than
+ * pretending the two views are the same shape.
+ */
 type WorkerEnv = Record<string, string | undefined> & {
   PUMASI: DoNamespace;
   DIRECTORY: DoNamespace;
@@ -116,7 +116,7 @@ export class PumasiDirectory extends DurableObject {
 
   async #init(): Promise<Directory> {
     if (this.#dir) return this.#dir;
-    const env = this.env as WorkerEnv;
+    const env = this.env as unknown as WorkerEnv;
     const storage = this.ctx.storage as unknown as DoStorage;
     const config = loadConfig(env as never);
     const dir = new Directory(sqlClientOver(storage), config.maxOwnerAccounts);
@@ -184,7 +184,7 @@ export class PumasiService extends DurableObject {
       transaction: (fn) => this.#serial.run(() => storage.transaction(() => fn(client))),
     };
 
-    const env = this.env as WorkerEnv;
+    const env = this.env as unknown as WorkerEnv;
     const config = loadConfig(env as never);
 
     // Atomic per run: a migration file that fails midway must leave nothing
@@ -293,7 +293,7 @@ export class PumasiService extends DurableObject {
     this.#tag = tag;
     // deps captured an undefined directory before the first tagged request.
     if (this.#deps && !this.#deps.directory) {
-      this.#deps.directory = directoryPort(this.env as WorkerEnv, tag);
+      this.#deps.directory = directoryPort(this.env as unknown as WorkerEnv, tag);
     }
   }
 

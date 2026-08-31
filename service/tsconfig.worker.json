@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "rootDir": ".",
+    "outDir": ".build",
+    "declaration": false,
+    "noEmit": false
+  },
+  "include": ["src/worker.ts", "types/sql-modules.d.ts", "worker-configuration.d.ts"],
+  "exclude": []
+}
