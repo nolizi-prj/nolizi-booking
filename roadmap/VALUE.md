@@ -88,7 +88,12 @@ feature appearing in a paid or hosted-only tier, ever.
 DPA are served by the running service, state operator, basis, deletion reach
 and subprocessors, and are **tested against the product**: a test extracts
 every field the live booking form posts and fails unless the notice discloses
-it (`8f77d66`). Mail through an undisclosed host is refused on the Node path;
+it (`8f77d66`). *Scope of that word, tightened 2026-08-31:* the test binds the
+code in `main`, and `main` is not automatically what
+`booking.pumasi.ai` is serving — on 2026-08-31 the deployment was found to be
+a day behind ([`STAGE.md`](STAGE.md), "the deployed build is not `main`"). The
+enforcement is real; "against the product" means against the branch the
+product is built from, until a merged build reliably reaches users. Mail through an undisclosed host is refused on the Node path;
 the deployed Workers path has a weaker, disclosed control
 ([`SUBPROCESSORS.md`](../SUBPROCESSORS.md)). Deletion is verified by absence
 across every table.

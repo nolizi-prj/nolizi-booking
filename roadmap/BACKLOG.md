@@ -6,8 +6,11 @@ First pass 2026-08-29, steward-directed.
 One list, features and bugs together — a priority that cannot compare them is
 not a priority. Every entry points at its source and carries one line of
 why-here. **The top of this file is what the project manager's next coder
-packet builds.** Reordering is a commit with the reasoning in the message; the
-steward vetoes by reverting.
+packet builds** — except where an entry says in its own text that it is
+operator action rather than a build, as item 1 does today; the packet then
+takes the highest entry that *is* a build, and the operator item keeps its
+rank rather than being demoted for being unbuildable. Reordering is a commit
+with the reasoning in the message; the steward vetoes by reverting.
 
 Context the ordering assumes: the feature-parity sequence in
 [`0004-feature-parity.md` §3](0004-feature-parity.md) is substantially
@@ -21,41 +24,68 @@ and polish, and the list reflects that.
 
 ## The order
 
-**1 · Zoom connect tells the truth, and the PMI stops leaking** — source:
-steward's Zoom E2E test 2026-08-30 (`ecdd60b`), plus independent user
-evidence the same day: [issue #26](https://github.com/pumasi-ai/pumasi-booking/issues/26)
-(connect error) and [issue #30](https://github.com/pumasi-ai/pumasi-booking/issues/30)
-(expected a Zoom login screen — appended to Q-007 as evidence). Re-verified
-against the tree at `4f56df4`, 2026-08-30: (a) of the original entry is
-mostly **fixed** — the integrations page now stores connect state and shows
-`Connected ✓` with a disconnect button (`e9eb9fe`). Still live: **(b)** the
-OAuth connect flow stamps the owner's *personal meeting URL* into every Zoom
-schedule (`app.ts` zoom_connect handler), and the public booking page prints
-it before anyone books — anyone who loads the page can join the PMI. **(c)**
-the card promises "unique Zoom meeting rooms for every booked session," and
-per-booking creation now exists (`createZoomMeeting` at booking time) but is
-*bypassed whenever `location_value` is set* — which the connect flow always
-sets. Fix: stop stamping the PMI (store the connection, mint per booking),
-or say what it does; never print a joinable room to strangers pre-booking.
-Why here: a persistent personal meeting room printed to anyone who loads a
-public page is the only live defect that can hurt a user today, and it is
-correctness of *shipped* surface — no new provider scope, so it does not run
-ahead of Q-007's open window (closes 2026-09-01).
+**1 · Deploy the reviewed Zoom fix to `booking.pumasi.ai` — the leak is closed
+in `main` and is still live in production** — source: this evaluation
+(2026-08-31), checking the deployment rather than the merge. The code half of
+the old item 1 is genuinely done and was re-verified here against the tree, not
+taken on the coder's word: the connect callback stores a sealed connection and
+writes nothing to `schedules` (`app.ts` ~1195), `locationText(schedule, …,
+'public')` returns "link arrives with the confirmation" for every conferencing
+kind (`schedules.ts` §Z2a), the `!schedule.location_value` suppressor is gone
+from the booking path, and the only remaining `UPDATE schedules SET
+location_value` writes are disconnect (to `NULL`) and a link the owner typed
+themselves. 290 service + 19 engine tests and `GATE: PASS` re-run at `3d313d2`.
+**But `wrangler deployments list` for the `pumasi-booking` worker
+(`service/wrangler.jsonc`, custom domain `booking.pumasi.ai`) shows its most
+recent deployment at 2026-08-30 16:55 UTC, and the fix commit `16c3fd4` is
+2026-08-31 05:27 UTC.** The live build is the pre-fix one, so a personal
+meeting room stamped by the old flow — the steward's own 2026-08-30 end-to-end
+test connected Zoom against this deployment (`ecdd60b`, 16:13 UTC) — is still
+being printed to anyone who loads that owner's booking page. Fix: deploy the
+reviewed build, then re-check a real public page.
+Why here: nothing else on this list can hurt a user today and this still can.
+It is the same defect that topped the list yesterday; merging closed it in the
+repository and not in the product, and this file ranks what users meet, not
+what `main` contains. *Operator action, not a build — see `DECISIONS.md`
+**Q-012**, which asks whose duty this is and names the coder as its default.
+The next **coder** packet takes item 2; this one must not be displaced by it.*
 
-**2 · PR-1 compliance: a version that moves and is visible** — source:
+**2 · `/oauth/*/callback` 404s without a calendar hub, and the dead branch it
+creates builds an unsigned state** — source: found by the spec/0005 coder run
+and deliberately not fixed under a frozen spec (ops digest job `0010`; release
+note "Also found, not fixed here"). Confirmed here: the callback is gated by
+`if (!hub) return html(404, …)` (`app.ts` ~999) *before* the `zoom` branch, so
+on a deployment with no calendar integration configured the Zoom connect flow
+can never complete — while `/oauth/zoom/authorize` and the integrations POST
+happily start it. The same absent hub makes the connect handler fall back to
+`Buffer.from(JSON.stringify({purpose, owner_id, tag})).toString('base64url')`
+instead of `hub.sealState(…)`. That state is unreachable today, which is the
+whole of its safety: **the two halves must be fixed together**, because
+removing the 404 on its own would leave a callback that accepts an
+attacker-chosen `owner_id` in an unsigned string.
+Why here: [`VALUE.md` §1](VALUE.md) sells this to "the operator who wants to
+run it themselves", and for the operator who wants conferencing without
+surrendering a calendar it is a shipped button that cannot work at all. No live
+user is hurt today (this deployment has a hub), which is why it sits below
+item 1 — and it is correctness of already-shipped surface, so like item 1 it
+does not run ahead of Q-007.
+
+**3 · PR-1 compliance: a version that moves and is visible** — source:
 [`PRODUCT-RULES.md` PR-1](https://github.com/pumasi-ai/pumasi/blob/worktree-product-rules/PRODUCT-RULES.md)
-(v1.0, 2026-08-30; binds always). Checked at this evaluation, per that
-file's own mechanism: the root `package.json` says `0.1.0` and has never
-moved since the first service commit (`b8ee0ba`) — through public sign-up,
-calendar sync, and the reporting path. No footer, about view, or `/version`
-endpoint exposes it; feedback issues and release notes state no version; the
-held report carries a commit hash but not the version. Fix: bump on release,
-expose it (footer or `/version`), and carry it in feedback diagnostics,
-reports, and release notes.
-Why here: small, binds now not at a stage, and every bug report filed until
-it lands is a request to guess.
+(v1.0, 2026-08-30; binds always — read fresh this evaluation, and still only on
+the unmerged `worktree-product-rules` branch, `0115758`). Re-checked: the root,
+`core/` and `service/` `package.json` all still say `0.1.0` and have never
+moved; there is no footer, about view or `/version` route in the code, and
+`https://booking.pumasi.ai/version` returns 404 live; the release notes state
+no version.
+Why here: it earned weight this evaluation. Establishing item 1 — *which build
+is actually serving users* — was not possible from the repository, the live
+site, or the release note, and took Cloudflare API credentials to answer. A
+product whose own evaluation cannot tell what is deployed without querying its
+host is exactly the failure PR-1's "user-visible" and "in the diagnostics"
+clauses describe. Below item 2 because a broken button beats a hard diagnosis.
 
-**3 · Submit the Google OAuth app for verification** — source:
+**4 · Submit the Google OAuth app for verification** — source:
 [`0002-calendar-integration.md` §4](0002-calendar-integration.md);
 [`service/spec/0003/GOOGLE-SETUP.md`](../service/spec/0003/GOOGLE-SETUP.md)
 ("Not yet — deliberately").
@@ -64,7 +94,7 @@ nominated test accounts can connect; the blockers the setup doc waited on — a
 deployed homepage and a live privacy URL — now exist. *Mostly operator/steward
 action, not code; queue it in parallel, since it is calendar time, not work.*
 
-**4 · The reporting intake, and the Workers-path decision** — source:
+**5 · The reporting intake, and the Workers-path decision** — source:
 [`service/spec/0004/SPEC.md`](../service/spec/0004/SPEC.md) R5c;
 [`DEBT.md` D-107](https://github.com/pumasi-ai/pumasi/blob/main/governance/DEBT.md)
 (open half); surfaced by the job-0008 run (ops digest, 2026-08-30). The
@@ -72,23 +102,38 @@ mechanism shipped (`4f56df4`) but nothing receives reports — daily sends
 fail and are dropped — and R5c forbids the intake to accept held reports
 before its deletion path is implemented and tested. The Workers deployment
 deliberately sends nothing; that decision is revisited no later than the
-`launched` promotion (Q-008 default). *The intake is foundation
+`launched` promotion (Q-008 default). *Note, from item 1's evidence: `4f56df4`
+(2026-08-30 17:26 UTC) also postdates the last deployment, so the mechanism is
+not on the live build either — which changes nothing here, since the Workers
+path is configured silent regardless.* *The intake is foundation
 infrastructure and may land in another repo — the project manager routes it;
 it sits here because this product's `launched` claim waits on it.*
 Why here: both halves gate `launched` (STAGE.md), but neither hurts a user
 today, so shipped-surface correctness outranks them.
 
-**5 · A runtime subprocessor guard for the deployed mail path, or a recorded
+**6 · A runtime subprocessor guard for the deployed mail path, or a recorded
 why-not** — source: [`SUBPROCESSORS.md`](../SUBPROCESSORS.md), which names the
 Workers path's control as weaker than the Node path's.
 Why here: [`VALUE.md`](VALUE.md) C4 claims enforcement, and the deployed path
 is the one real bookers' mail actually crosses.
 
-**6 · O2 — secrets posture, completed** — source:
+**7 · O2 — secrets posture, completed** — source:
 [`service/spec/0002/SPEC.md` §8.1](../service/spec/0002/SPEC.md), the last
 clause declared but not implemented.
 Why here: small, and it closes the spec's only admitted gap; below the
 user-facing items because no user can currently be hurt by it.
+
+## Completed (2026-08-31)
+
+- **The Zoom PMI leak, in the code** — old item 1 parts (b) and (c), delivered
+  in full charter flow: intent `8093dc7` (Q-010), frozen acceptance cases
+  `40712d9`, build `16c3fd4`, cross-family code review `3d313d2`; release note
+  pumasi `a3415ff`, veto window Q-011 closes 2026-09-07. Ten acceptance cases,
+  two of them confirmed failing against the pre-fix tree. Part (a) — the
+  connect state and `Connected ✓` — was already closed at `e9eb9fe`.
+  **Listed as completed for the repository only.** Shipping it to the people
+  it protects is item 1 above, and this entry is not evidence that the defect
+  is closed for a user.
 
 ## Completed (2026-08-30)
 
