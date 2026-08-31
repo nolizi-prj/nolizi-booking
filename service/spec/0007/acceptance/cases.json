@@ -1,0 +1,309 @@
+{
+  "suite": "SPEC-0007 sign-in-does-not-need-a-calendar acceptance",
+  "version": "1.0.0",
+  "frozen_at_approval": true,
+  "note": "Runner: service/test/auth-reachability.test.ts. Runners are ordinary risk; this file is the truth. A-001, A-002 and A-003 must FAIL against the tree at 0036c74 -- a defect spec proves itself by failing before (lessons/L-006). The remaining four are green on both sides on purpose: they are the claim that nothing else moved, and a claim that cannot fail is decoration, so each names the deliberate mutation that turns it red and the implementation report records that mutation being run. 'hub-less deps' throughout means AppDeps built with calendars: undefined, which is what server.ts:114 and worker.ts:244 produce when GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET is unset. Error sentences are asserted as the rendered <p class=\"err\"> text, not the whole document: every page ships the same stylesheet and that stylesheet contains the comment '/* slots and calendar */' (spec/0006 S2b). A-003's redness before the fix is of a different kind from A-001's and A-002's and is spelt out on the case: nothing is unguarded today, but the calendar gate answers first, so the guards underneath it are unobservable until it is gone.",
+  "deployments": {
+    "MS_ONLY": "hub-less; TOKEN_KEY=$KEY, MS_OAUTH_CLIENT_ID=ms-cid, MS_OAUTH_CLIENT_SECRET=ms-csec; no GOOGLE_OAUTH_* at all",
+    "IDP_ONLY": "hub-less; TOKEN_KEY=$KEY; no GOOGLE_OAUTH_*, no MS_OAUTH_*",
+    "NO_KEY": "hub-less; no TOKEN_KEY, no GOOGLE_OAUTH_*, MS_OAUTH_CLIENT_ID=ms-cid, MS_OAUTH_CLIENT_SECRET=ms-csec",
+    "GOOGLE_ID_ONLY": "hub-less; TOKEN_KEY=$KEY, GOOGLE_OAUTH_CLIENT_ID=cid and NO GOOGLE_OAUTH_CLIENT_SECRET -- so no hub is built",
+    "HUB_OTHER_KEY": "calendars: new CalendarHub({}, $OTHER_KEY); config TOKEN_KEY=$KEY, MS_OAUTH_CLIENT_ID=ms-cid, MS_OAUTH_CLIENT_SECRET=ms-csec -- the hub's seal key is NOT config.tokenKey"
+  },
+  "cases": [
+    {
+      "id": "A-001",
+      "clause": "S2a, S2d, S4c",
+      "description": "Microsoft sign-in works end to end on a deployment with Microsoft credentials and no Google Calendar. FAILS before the fix.",
+      "must_fail_before": true,
+      "deployment": "MS_ONLY",
+      "steps": [
+        {
+          "call": "POST /auth/microsoft/start",
+          "args": {
+            "form": {}
+          },
+          "capture": "start"
+        },
+        {
+          "assert": "$start.status == 303 -- before the fix this is 404 'Microsoft sign-in is not configured.'"
+        },
+        {
+          "assert": "$start.location host is login.microsoftonline.com and carries a non-empty 'state' query parameter (S2d: same microsoftSsoUrl as today)"
+        },
+        {
+          "assert": "$start.location scope parameter is unchanged from today's: openid, email, profile -- no scope is enlarged"
+        },
+        {
+          "call": "new OAuthState($KEY).open($start.state)",
+          "capture": "p"
+        },
+        {
+          "assert": "$p is defined and $p.purpose == 'sso_ms' (S4c: the state is sealed under the deployment's own key, not emitted unsigned)"
+        },
+        {
+          "assert": "$start.state does not decode as plain base64 or base64url JSON"
+        },
+        {
+          "assert": "new OAuthState($OTHER_KEY).open($start.state) is undefined"
+        },
+        {
+          "call": "create an owner ms-user@example.com by invite on this same deployment"
+        },
+        {
+          "call": "GET /oauth/microsoft/callback?code=c&state=$start.state",
+          "with": "Microsoft token endpoint stubbed to return an id_token for ms-user@example.com",
+          "capture": "cb"
+        },
+        {
+          "assert": "$cb.status == 303 and $cb.location == '/app'"
+        },
+        {
+          "assert": "the set-cookie session from $cb loads GET /app with status 200 -- the whole round trip completes, not just the redirect"
+        }
+      ],
+      "turns_red_if": "the entry point is reverted to gating on deps.calendars"
+    },
+    {
+      "id": "A-002",
+      "clause": "S3a, S3d, S4c, S4e",
+      "description": "Per-org OIDC SSO works end to end on a deployment with no Google Calendar. FAILS before the fix. Fixes both paths, because the Workers build reaches this route by forwarding into the Durable Object that runs this same handle().",
+      "must_fail_before": true,
+      "deployment": "IDP_ONLY",
+      "steps": [
+        {
+          "call": "sign up an org admin by invite, create org 'Corp', configure OIDC SSO for issuer https://idp.corp.example and email domain corp.example",
+          "capture": "orgId"
+        },
+        {
+          "call": "POST /login",
+          "args": {
+            "form": {
+              "email": "worker@corp.example"
+            }
+          },
+          "capture": "steer"
+        },
+        {
+          "assert": "$steer.status == 303 and $steer.location == '/login/sso/$orgId' -- domain steering is unchanged and it points at the route under test"
+        },
+        {
+          "call": "GET /login/sso/$orgId",
+          "with": "the IdP's discovery document stubbed",
+          "capture": "start"
+        },
+        {
+          "assert": "$start.status == 303 -- before the fix this is 404 'SSO is not configured on this deployment.'"
+        },
+        {
+          "assert": "$start.location starts with https://idp.corp.example/authorize and carries a non-empty 'state' (S3d: discovery and redirect unchanged)"
+        },
+        {
+          "call": "new OAuthState($KEY).open($start.state)",
+          "capture": "p"
+        },
+        {
+          "assert": "$p is defined, $p.purpose == 'oidc', $p.org == $orgId (S4c)"
+        },
+        {
+          "assert": "$start.state does not decode as plain base64 or base64url JSON, and does not open under $OTHER_KEY"
+        },
+        {
+          "call": "GET /oauth/oidc/callback?code=c&state=$start.state",
+          "with": "the IdP token endpoint stubbed to mint an id_token for worker@corp.example",
+          "capture": "cb"
+        },
+        {
+          "assert": "$cb.status == 303 and the session it sets loads GET /app with status 200"
+        },
+        {
+          "assert": "owners.provisioned_by for worker@corp.example == 'sso:$orgId' -- JIT provisioning inside the org still happens"
+        },
+        {
+          "call": "GET /login/sso/main",
+          "with": "the IdP's discovery document stubbed",
+          "capture": "aliasStart"
+        },
+        {
+          "assert": "$aliasStart.status == 303 -- the 'main' tenant alias, which is the path the Workers router forwards as (worker.ts:805), works on this deployment too (S4e)"
+        }
+      ],
+      "turns_red_if": "the entry point is reverted to gating on deps.calendars"
+    },
+    {
+      "id": "A-003",
+      "clause": "S2a, S3a, S3b, S4b",
+      "description": "Each door still refuses when its own configuration is missing, and the refusals stay distinguishable. Partly RED before the fix -- not because a guard is missing today, but because on a hub-less deployment the calendar gate pre-empts the org-level refusals entirely, so they cannot be observed at all until it is gone. This case is the assertion that removing that gate did not remove them with it.",
+      "must_fail_before": true,
+      "steps": [
+        {
+          "deployment": "IDP_ONLY",
+          "call": "POST /auth/microsoft/start",
+          "capture": "r1"
+        },
+        {
+          "assert": "$r1.status == 404 and its error sentence is exactly 'Microsoft sign-in is not configured.' -- TOKEN_KEY alone does not open the Microsoft door"
+        },
+        {
+          "deployment": "MS_ONLY",
+          "call": "GET /login/sso/no-such-org",
+          "capture": "r2"
+        },
+        {
+          "assert": "$r2.status == 404 and its error sentence is exactly 'This organization has no SSO configured.'"
+        },
+        {
+          "deployment": "MS_ONLY",
+          "call": "GET /login/sso/main with no orgs in the database",
+          "capture": "r3"
+        },
+        {
+          "assert": "$r3.status == 404 and its error sentence is exactly 'This organization has no SSO configured.'"
+        },
+        {
+          "deployment": "MS_ONLY",
+          "call": "create an org with NO org_sso row, then GET /login/sso/<that orgId>",
+          "capture": "r4"
+        },
+        {
+          "assert": "$r4.status == 404 and its error sentence is exactly 'This organization has no SSO configured.' -- an org that exists but has not configured SSO is still refused"
+        },
+        {
+          "deployment": "NO_KEY",
+          "call": "POST /auth/microsoft/start",
+          "capture": "r5"
+        },
+        {
+          "assert": "$r5.status == 404 and its error sentence is exactly 'Microsoft sign-in is not configured.' (S2b: identical to worker.ts:614's answer)"
+        },
+        {
+          "deployment": "NO_KEY",
+          "call": "create an org AND configure its OIDC SSO, then GET /login/sso/<that orgId>",
+          "capture": "r6"
+        },
+        {
+          "assert": "$r6.status == 404 and its error sentence is exactly 'SSO is not configured on this deployment.' (S3b, S3c: the deployment check stays above the org lookup and keeps its wording)"
+        },
+        {
+          "assert": "$r6 emits no Location header and no state at all -- with no seal key nothing unsigned is produced as a fallback"
+        }
+      ],
+      "turns_red_if": "the msClientId term is dropped from the Microsoft guard, or the org_sso row check is dropped, or the deployment check is moved below the org lookup",
+      "red_before_because": "on MS_ONLY and NO_KEY (hub-less) every /login/sso/<orgId> answer today is 'SSO is not configured on this deployment.', so the steps expecting 'This organization has no SSO configured.' are red before the fix"
+    },
+    {
+      "id": "A-004",
+      "clause": "S4b",
+      "description": "Google sign-in, calendar connect and the calendar callback keep exactly the reachability they have today. Nothing outside this spec's two doors moves.",
+      "must_fail_before": false,
+      "steps": [
+        {
+          "deployment": "GOOGLE_ID_ONLY",
+          "call": "POST /auth/google/start",
+          "capture": "g1"
+        },
+        {
+          "assert": "$g1.status == 404 and its error sentence is exactly 'Google sign-in is not configured.' -- a client id without a secret is not a configured Google sign-in, and this spec does not change that"
+        },
+        {
+          "deployment": "MS_ONLY",
+          "call": "POST /auth/google/start",
+          "capture": "g2"
+        },
+        {
+          "assert": "$g2.status == 404 and its error sentence is exactly 'Google sign-in is not configured.'"
+        },
+        {
+          "deployment": "HUB_OTHER_KEY",
+          "call": "POST /auth/google/start with GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET set",
+          "capture": "g3"
+        },
+        {
+          "assert": "$g3.status == 303 to accounts.google.com -- with a hub it still works, unchanged"
+        },
+        {
+          "deployment": "MS_ONLY",
+          "call": "sign in an owner, then POST /app/calendar/google/connect with that session",
+          "capture": "c1"
+        },
+        {
+          "assert": "$c1 is byte-for-byte today's answer: status 200 rendering the owner's own dashboard ('Your schedules'), no Location header, and no occurrence of accounts.google.com anywhere in the body. The route is guarded by `&& deps.calendars` in its own condition (app.ts:2661), so on a hub-less deployment it does not match and the request falls through to the /app view -- verified against the tree at 0036c74, not assumed. This spec does not touch it."
+        },
+        {
+          "deployment": "MS_ONLY",
+          "call": "GET /oauth/google/callback?code=c&state=<a state sealed by this deployment with purpose 'calendar-ish' payload {owner_id, level}>",
+          "capture": "c2"
+        },
+        {
+          "assert": "$c2.status == 404 and its error sentence is exactly 'Calendar integration is not configured.' -- spec/0006 S2d's message and placement are untouched"
+        }
+      ],
+      "turns_red_if": "the /auth/google/start guard is changed to !states || !config.googleClientId, or the calendar route's deps.calendars guard is loosened, or spec/0006 S2d's calendar 404 is moved or reworded"
+    },
+    {
+      "id": "A-005",
+      "clause": "S1b, S4a",
+      "description": "A deployment with a hub is unchanged, including one whose hub holds a key that did not come from config.tokenKey -- the state must be sealed by the sealer that will be asked to open it.",
+      "must_fail_before": false,
+      "deployment": "HUB_OTHER_KEY",
+      "steps": [
+        {
+          "call": "POST /auth/microsoft/start",
+          "capture": "start"
+        },
+        {
+          "assert": "$start.status == 303 with a non-empty state"
+        },
+        {
+          "assert": "the hub's own state facility opens $start.state and yields purpose == 'sso_ms'"
+        },
+        {
+          "assert": "new OAuthState($KEY).open($start.state) is undefined -- config.tokenKey did NOT seal it (S1b)"
+        },
+        {
+          "call": "GET /oauth/microsoft/callback?code=c&state=$start.state",
+          "with": "Microsoft stubbed",
+          "capture": "cb"
+        },
+        {
+          "assert": "$cb.status == 303 to /app -- the state opens on the way back, which is the regression this case exists for"
+        },
+        {
+          "call": "the same round trip for /login/sso/<orgId> on this deployment",
+          "capture": "sso"
+        },
+        {
+          "assert": "it completes exactly as it does today"
+        },
+        {
+          "assert": "the full existing suites pass unchanged and unedited: test/frontdoor.test.ts, test/enterprise.test.ts, test/video.test.ts, test/oauth-state.test.ts and every other runner, with no edit to any frozen acceptance file"
+        }
+      ],
+      "turns_red_if": "the sealer is built as oauthState(config) instead of deps.calendars?.state ?? oauthState(config)"
+    },
+    {
+      "id": "A-006",
+      "clause": "S4d",
+      "description": "The Workers router is not modified. Its Microsoft door was never Google-gated and is already explicitly right; editing it and calling this item done closes nothing.",
+      "must_fail_before": false,
+      "steps": [
+        {
+          "assert": "src/worker.ts contains the exact guard 'if (!states || !config.msClientId) {' for /auth/microsoft/start"
+        },
+        {
+          "assert": "src/worker.ts contains the exact guard 'if (!states || !config.googleClientId) {' for /auth/google/start"
+        },
+        {
+          "assert": "src/worker.ts contains no occurrence of the identifier 'CalendarHub' in its router-level state handling, and no router guard reads deps.calendars"
+        },
+        {
+          "assert": "src/worker.ts still forwards /login/sso/<tag> into the Durable Object as '/login/sso/main' -- the route is not reimplemented at the router (S4e)"
+        },
+        {
+          "assert": "git diff of this change touches src/worker.ts zero times"
+        }
+      ],
+      "turns_red_if": "worker.ts's Microsoft or Google guard is edited, or the sso route is reimplemented at the router"
+    }
+  ]
+}
