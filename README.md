@@ -3,6 +3,11 @@
 **A booking page people can send someone to pick a time on.** Accounts, a public
 booking page, confirmation mail, and management links.
 
+**Stage: [`beta`](roadmap/STAGE.md).** That file holds the word, the evidence
+behind it, and — written down before it moves — what would move it in either
+direction. It is not restated here: a stage kept in two places is a stage that
+eventually disagrees with itself.
+
 Part of [Pumasi](https://github.com/pumasi-ai/pumasi), a commons of software
 built by agents and governed by people. Apache-2.0, inbound equals outbound.
 
@@ -16,6 +21,13 @@ cannot be reached, the page refuses to offer times rather than risk booking over
 you. Cancellations and reschedules follow to the connected calendar. See
 [`service/spec/0003`](service/spec/0003/INTENT.md).
 
+**On `booking.pumasi.ai` a stranger cannot connect a Google calendar yet.** That
+OAuth application has not been submitted for verification, so only nominated
+test accounts can connect one there
+([`GOOGLE-SETUP.md`](service/spec/0003/GOOGLE-SETUP.md)); the product's own
+[`VALUE.md`](roadmap/VALUE.md) states it as the standing limit on claim C1. Run
+your own copy with your own credentials and the limit is not yours.
+
 **Without provider credentials configured, nothing is connected** — the service
 then knows only about bookings made inside it, and will offer a time you are
 already busy.
@@ -27,7 +39,7 @@ how to delete it, and who else sees it. What is genuinely unresolved is narrower
 the international transfer position — the service is operated from the United
 States and data is processed there, with no standard contractual clauses in place
 — and the review by counsel itself. See
-[`DEBT.md` D-105](https://github.com/pumasi-ai/governance/blob/main/governance/DEBT.md),
+[`DEBT.md` D-105](https://github.com/pumasi-ai/pumasi/blob/main/governance/DEBT.md),
 open at DEGRADING.
 
 **It defaults to five accounts and two hundred bookings, and public sign-up is
@@ -35,6 +47,17 @@ off.** Those are deployment defaults an operator may change deliberately, not
 caps the service refuses to raise. They start low so a fresh deployment does not
 quietly become a service holding thousands of strangers' details before anyone
 chose that.
+
+**This file describes the repository. `booking.pumasi.ai` is a deployment of it,
+and nothing carries one to the other by itself.** A merge to `main` does not
+reach the hosted page; a person deploys, and no role owns doing so
+([`DECISIONS.md` Q-012](https://github.com/pumasi-ai/pumasi/blob/main/DECISIONS.md),
+open). So `main` can hold a reviewed, released fix for a defect the live page
+still has. How far apart they are is not written here — that number is stale on
+the next merge or the next deploy, and this repository has had both inside a
+day. Ask the deployment instead, which answers:
+
+    curl https://booking.pumasi.ai/version   # the commit it is actually serving
 
 **Not tied to any host.** It needs a port and, optionally, a PostgreSQL URL.
 Nothing in the code knows about a particular provider — that is `P12` (no
@@ -89,7 +112,9 @@ The counts are deliberately not written here. This line used to say "36
 acceptance cases + 12 unit + 80 service"; two of those three numbers were stale
 and the service one was out by a factor of three, because a total in prose has
 nothing keeping it true. The command prints them, and the command is never
-wrong.
+wrong. The same rule later cost the acceptance-case count its number: that one
+was right when it was last checked, and being right today is not the property a
+number in prose fails to have.
 
 ## Databases
 
@@ -242,16 +267,17 @@ set at deploy time from `GIT_COMMIT`, and says `unknown` until one happens.
 
 ## What is not built
 
-See [`service/spec/0002/SPEC.md` §8.1](service/spec/0002/SPEC.md). The booker's
-path is complete; accounts, sessions, the owner application, token expiry and
-reschedule-over-HTTP are declared but not implemented.
+[`service/spec/0002/SPEC.md` §8.1](service/spec/0002/SPEC.md) tracks this clause
+by clause, and one clause is declared and not implemented: **O2**. Secret
+loading is present; the database URL is simply the only secret this service has
+ever had to load.
 
 ## The specifications are the truth
 
 | | |
 |---|---|
 | [`core/spec/SPEC.md`](core/spec/SPEC.md) | What the engine must do, and why each clause exists |
-| [`core/spec/acceptance/cases.json`](core/spec/acceptance/cases.json) | 36 language-neutral cases — the executable arbiter |
+| [`core/spec/acceptance/cases.json`](core/spec/acceptance/cases.json) | The language-neutral cases — the executable arbiter |
 | [`service/spec/0002/SPEC.md`](service/spec/0002/SPEC.md) | What the service must do |
 | [`service/spec/0003/INTENT.md`](service/spec/0003/INTENT.md) | Calendar connection, in plain language |
 | [`roadmap/`](roadmap/) | Where this product goes next, and why in that order |
