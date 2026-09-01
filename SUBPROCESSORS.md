@@ -8,7 +8,10 @@ The published register — the one people are actually pointed at, from the
 privacy notice and from every public page — is served by the running service at
 **`/subprocessors`**, and its text lives in
 [`service/src/legal.ts`](service/src/legal.ts) so that there is exactly one copy
-of it. This file explains the part that is *code*: how the list is enforced.
+of it. This file explains the part that is *code* — how the list is enforced —
+and restates the list below, so that a reader of the repository does not have to
+run the service to find out. **The two are meant to say the same thing and, as of
+this revision, do not: see the corrections at the foot of the next section.**
 
 ---
 
@@ -41,16 +44,28 @@ and no regime requires.
 |---|---|
 | `localhost`, `127.0.0.1` | Development only — a local SMTP server or capture tool. |
 | `smtp.ethereal.email` | Testing. Ethereal **captures and never delivers**, so nothing reaches a real inbox. |
-| `smtp.gmail.com` | Production mail for pumasi.ai. |
 
-`smtp.gmail.com` is listed for a self-hosted deployment that chooses it. The
-deployed service does not use SMTP at all — see the scope note above — and sends
-through the **Gmail API** (`service/src/mail-gmail.ts`).
+**That is the whole list**, and it is
+[`PERMITTED_MAIL_HOSTS`](service/src/subprocessors.ts) read back into prose. **No
+production mail host is on it.** A self-hosted Node deployment that points its
+SMTP URL at a provider absent from that constant — Gmail's SMTP endpoint
+included — gets the loud startup refusal and the queued confirmations described
+above. An earlier version of this table said otherwise; see the correction at the
+foot of the next section.
 
-## In use by the deployed service, as of 2026-08-29
+The deployed service does not use SMTP at all — see the scope note above — and
+sends through the **Gmail API** (`service/src/mail-gmail.ts`), which is not an
+SMTP host and is not what this allowlist checks. It is disclosed as a
+subprocessor in the table below instead, which is the only control on that path.
 
-Stated here as well as in the served register, because a reader of the
-repository should not have to run the service to find out.
+## In use by the deployed service, as of 2026-09-01
+
+Every row below was re-read against the source in this tree on that date, not
+carried forward from the previous revision. Which build `booking.pumasi.ai` is
+actually serving is answered by `curl https://booking.pumasi.ai/version`, and
+this table describes that build's source rather than a claim about the
+deployment; the repository is not the deployment, and nothing in this project
+carries one to the other automatically.
 
 | Provider | Sees | Why |
 |---|---|---|
@@ -58,13 +73,69 @@ repository should not have to run the service to find out.
 | **Google (Gmail API)** | Recipient address, name, meeting time, and the text of any workflow message. | Sending confirmations, sign-in links and reminders. |
 | **Google Calendar** | Busy start/end times; with the separate write grant, the events it creates (title carries the booker's name, description their address). | Only when an account holder connects a Google calendar. |
 | **Microsoft Graph** | The same, for Microsoft 365 / Outlook. | Only when an account holder connects one. |
+| **Zoom** | On a booking for an event type whose location is set to Zoom: the meeting title, which carries the booker's name; the agenda line, which carries the booker's name **and email address**; and the start time, duration and the account holder's timezone. | Minting a fresh meeting room for each booking instead of publishing a standing personal room. Nothing is sent for an event type with any other location. |
 | *date.nager.at* | **No personal data** — a country code and a year. | Public-holiday dates, on request. |
+
+**Whose authorisation the Zoom call is made on, and when nothing is sent at
+all.** There are two routes and they are not the same disclosure, so both are
+named. The first is the **account holder's own connection**: they press "Connect
+with Zoom", the grant is exchanged and sealed before it touches a row
+([`service/src/video.ts`](service/src/video.ts)), and the meeting is created with
+that account holder's token, on their authority, for a booking on their own event
+type. The second is a **server-to-server credential belonging to whoever runs the
+deployment**. It is tried only after the first route produces nothing, and it
+fires **on the operator's authorisation rather than the account holder's** — so
+on an event type set to Zoom, a booking can reach Zoom even though that account
+holder never connected anything. If neither route has a credential configured, no
+request leaves the service: the server-to-server helper returns before it opens a
+connection.
+
+At connect time Zoom receives no booker's data. The service asks Zoom for the
+connecting account's own profile and stores the address, display name and
+personal meeting room it returns; the booker's details go to Zoom only when a
+meeting is created, and only in the two fields named in the row above.
 
 > **Superseded:** an earlier version of this file said *"Currently in use: None.
 > No deployment holds anyone's data yet."* That stopped being true when the
 > service went live on 2026-08-28. It is recorded here rather than quietly
 > replaced, because a register that silently rewrites its own past is not
 > evidence of anything.
+
+> **Superseded, 2026-09-01 — Zoom was in the deployed build and in neither copy
+> of this register.** The table above did not name Zoom until this revision, and
+> **the served register at `/subprocessors` still does not.** The commit that
+> stores a Zoom connection is an ancestor of the build `booking.pumasi.ai` is
+> serving — `curl https://booking.pumasi.ai/version` names that build, and
+> `git log` will place the commit against it — so this was a provider in
+> production that the published list did not disclose. The served page's text is
+> in [`service/src/legal.ts`](service/src/legal.ts), which is application code and
+> is not this file's to change; that repair is queued as separate work and has not
+> landed. **Until it does, the register a customer is actually pointed at omits a
+> provider that this file names, and this file is ahead of the published one
+> rather than a record of it.** Recording that is the point: a register that
+> silently rewrites its own past is not evidence of anything, and a register that
+> corrects only the copy nobody is sent to is not a disclosure.
+>
+> Two further gaps between the two copies were measured the same day and are
+> equally not repairable from here. The served page states that the allowlist is
+> enforced by the software without the scope note this file carries — on the
+> deployed Cloudflare build nothing checks it, because that path sends through the
+> Gmail API and never constructs the SMTP transport the check guards. And the
+> served page's "Adding one" section says account holders are told before an
+> addition takes effect. Whether that clause was owed for this addition, and what
+> is owed now, is the steward's question and this file does not answer it.
+
+> **Superseded, 2026-09-01 — the permitted mail host table listed a host the
+> code refuses.** It carried a third row, `smtp.gmail.com`, described as
+> *"Production mail for pumasi.ai"*, against a
+> [`PERMITTED_MAIL_HOSTS`](service/src/subprocessors.ts) that does not contain it.
+> That file's own header says it "is the same list as SUBPROCESSORS.md in
+> machine-readable form" and that "the two must be edited together"; they were not
+> the same list. The row is struck from this table rather than added to that
+> constant, because the enforced list is the behaviour and this table is only the
+> description of it — and because a self-hoster who followed the description got
+> the startup refusal and the queued mail that this document told them they would
+> not get.
 
 ## Retention, and how far deletion reaches
 
