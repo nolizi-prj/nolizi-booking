@@ -2664,7 +2664,10 @@ export function eventTypeEditor(
     s.title,
     `<!--nav:scheduling-->
 <h1>${esc(s.title)}</h1>
-<p class="muted"><a href="${esc(url)}">${esc(url)}</a></p>
+<p class="muted" style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin:.5rem 0 1rem">
+  <span><strong>Public Booking Link:</strong> <a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></span>
+  <a href="${esc(url)}" target="_blank" rel="noopener" class="preset-pill" style="text-decoration:none;padding:.3rem .6rem;background:var(--accent,#1a56db);color:#fff;font-weight:600;display:inline-flex;align-items:center;gap:.3rem">Preview Public Booking Page (View Times) ↗</a>
+</p>
 <form method="post" action="/app/event/${esc(s.schedule_id)}">
 <div class="card"><h2>What</h2>
   <label for="t">Title</label><input id="t" name="title" value="${esc(s.title || '30 Minute Meeting')}" placeholder="30 Minute Meeting" required>
