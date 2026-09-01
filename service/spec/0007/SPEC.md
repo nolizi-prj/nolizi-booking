@@ -1,7 +1,7 @@
 # SPEC-0007 · Two sign-in doors gate on the state seal, not on the calendar hub
 
 **Status:** approved 2026-08-31 (gemini, `reviews/20260831-110333-spec-gemini.md`);
-acceptance cases frozen ·
+acceptance cases frozen · **amended 2026-09-01 (v1.2.0) by SPEC-0009 — see Amendment 2 at the end of §6** ·
 **Intent:** [`INTENT.md`](INTENT.md) (veto window in `pumasi/DECISIONS.md`) ·
 **Source:** `roadmap/BACKLOG.md` item 2, ranked there by the product-manager
 evaluation of 2026-08-31 (`1a01b1c`) against its own reading of the tree at
@@ -283,3 +283,45 @@ report records those mutations being run.
 > lookup that is right until a second row exists, and that would have decided
 > A-003 on row order rather than on the behaviour A-003 names. Re-reviewed
 > cross-family before the code review was re-taken.
+
+> **Amendment 2 — 2026-09-01 (`cases.json` v1.2.0), in the open, BEFORE the
+> implementation it makes room for, and taken under `pumasi/DECISIONS.md`
+> Q-030's stated default**, which is open: CHARTER Part 3 requirement 2's
+> remedy is available to the builder, on a numbered amendment in the open with
+> a fresh cross-family spec review before building, and the family reviewing
+> the amendment is not the family reviewing the code (rider (b); `families.sh`
+> reported 6 of 6 at this job, so the breadth rule binds). The amendment is
+> made for [`../0009/SPEC.md`](../0009/SPEC.md) §5, which takes §5's two
+> found-not-fixed bullets below and cannot do so without changing what three
+> cases here assert.
+>
+> **Rider (a): this is an ASSERTION change, in all three cases, and is
+> claimed as one.** Unlike amendment 1, which touched a runner helper and no
+> assertion, this changes the standard three cases enforce. A reviewer is asked
+> to weigh it as a change to the standard.
+>
+> | Case · step | v1.1.0 asserted | v1.2.0 asserts |
+> |---|---|---|
+> | A-003 · r5 (`NO_KEY`, Microsoft start) | `Microsoft sign-in is not configured.` | `Microsoft sign-in cannot start on this deployment: TOKEN_KEY is not configured.` |
+> | A-003 · r6 (`NO_KEY`, org SSO with SSO configured) | `SSO is not configured on this deployment.` | `SSO cannot start on this deployment: TOKEN_KEY is not configured.` — still no `Location`, still above the org lookup |
+> | A-004 · g1 (`GOOGLE_ID_ONLY`, Google start) | `Google sign-in is not configured.` | `Google sign-in cannot start on this deployment: GOOGLE_OAUTH_CLIENT_SECRET is not configured.` |
+> | A-004 · `turns_red_if` | "the guard is changed to `!states \|\| !config.googleClientId`" | "the guard stops requiring `GOOGLE_OAUTH_CLIENT_SECRET`" — the property, not the expression, because SPEC-0009 S2a installs a `states`-based guard that still requires the secret |
+> | A-006 · steps 1, 2, 5 (S4d) | two exact guard strings in `worker.ts`; "the diff touches `worker.ts` zero times" | one parity assertion: both builds import `signInRefusal` from `config.ts` and neither carries a literal refusal sentence of its own |
+>
+> **Why S4d cannot survive as written, and what it becomes.** S4d froze a fact
+> about *this spec's* diff — that it did not edit the Workers router, which was
+> never broken by the defect this spec fixed — as a guard against a coder
+> editing the wrong half and calling item 2 delivered. That was true of
+> `6b597dd` and remains true of it. It cannot be true of a change whose whole
+> point is the line S4d names (§5, second bullet). The property S4d protected
+> is that one build is not edited without the other; v1.2.0 asserts that
+> property directly, as one implementation both builds must import. A-006's
+> two other steps — no `CalendarHub` at the router, `/login/sso/<tag>`
+> forwarded into the Durable Object — stand unchanged. **S4d's prose above is
+> left as the dated record it is; this note is where a reader learns it is
+> superseded.**
+>
+> **What is not touched:** A-001, A-002, A-005; A-003's r1–r4; A-004's g2, g3,
+> c1 and c2 — the calendar guard and SPEC-0006 S2d's sentence are exactly as
+> frozen. The runner `auth-reachability.test.ts` is edited only where these
+> assertions are.

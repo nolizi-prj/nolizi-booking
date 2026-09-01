@@ -1,0 +1,254 @@
+{
+  "suite": "SPEC-0009 a-half-configured-deployment-is-told-what-is-missing acceptance",
+  "version": "1.0.0",
+  "frozen_at_approval": true,
+  "note": "Runner: service/test/auth-refusals.test.ts. Runners are ordinary risk; this file is the truth. R-001..R-005 and R-007 must FAIL against the tree at 7c511a4 -- a defect spec proves itself by failing before (lessons/L-006). R-006 is green on both sides on purpose: it is the claim that nothing else moved, and it names the deliberate mutation that turns it red; the implementation report records that mutation being run. 'Node' means handle() from src/app.ts with AppDeps built by loadConfig() over the named environment and calendars: undefined unless the shape says HUB; 'Workers' means the router's default.fetch from src/worker.ts loaded through test/support/worker-runtime.mjs with DIRECTORY and PUMASI stubbed the way version.test.ts stubs them, and the same environment given to loadConfig(). Error sentences are asserted as the rendered <p class=\"err\"> text, not the whole document (spec/0006 S2b). Every configured value in every shape is a distinctive token (e.g. 'gid-VALUE-7f3a') so that 'the body contains none of the deployment's values' is a real assertion and not one a CSS comment could satisfy or defeat. 'names X' means the error sentence contains the exact variable name X and the sentence is exactly the one SPEC-0009 S1b tabulates for that shape.",
+  "deployments": {
+    "NO_KEY": "no TOKEN_KEY; MS_OAUTH_CLIENT_ID=mid-VALUE-2c8e, MS_OAUTH_CLIENT_SECRET=msec-VALUE-5d1f; no GOOGLE_OAUTH_*",
+    "MS_ID_ONLY": "TOKEN_KEY=$KEY; MS_OAUTH_CLIENT_ID=mid-VALUE-2c8e; no MS_OAUTH_CLIENT_SECRET; no GOOGLE_OAUTH_*",
+    "MS_ONLY": "TOKEN_KEY=$KEY; MS_OAUTH_CLIENT_ID=mid-VALUE-2c8e, MS_OAUTH_CLIENT_SECRET=msec-VALUE-5d1f; no GOOGLE_OAUTH_*",
+    "IDP_ONLY": "TOKEN_KEY=$KEY; no MS_OAUTH_*, no GOOGLE_OAUTH_*",
+    "GOOGLE_ID_ONLY": "TOKEN_KEY=$KEY; GOOGLE_OAUTH_CLIENT_ID=gid-VALUE-7f3a; no GOOGLE_OAUTH_CLIENT_SECRET; no MS_OAUTH_*",
+    "GOOGLE_NO_KEY": "no TOKEN_KEY; GOOGLE_OAUTH_CLIENT_ID=gid-VALUE-7f3a, GOOGLE_OAUTH_CLIENT_SECRET=gsec-VALUE-9b1c",
+    "GOOGLE_ID_NO_KEY": "no TOKEN_KEY; GOOGLE_OAUTH_CLIENT_ID=gid-VALUE-7f3a; no GOOGLE_OAUTH_CLIENT_SECRET",
+    "GOOGLE_FULL": "TOKEN_KEY=$KEY; GOOGLE_OAUTH_CLIENT_ID=gid-VALUE-7f3a, GOOGLE_OAUTH_CLIENT_SECRET=gsec-VALUE-9b1c -- on the Node path this shape is built WITH a CalendarHub under $KEY, because server.ts:113 builds one whenever all three are set",
+    "GOOGLE_FULL_HUB_OTHER_KEY": "Node only: GOOGLE_FULL's environment, with calendars: new CalendarHub({}, $OTHER_KEY) -- the hub's seal key is NOT config.tokenKey (SPEC-0007 S1b)",
+    "NOTHING": "TOKEN_KEY=$KEY and no OAuth variable at all"
+  },
+  "cases": [
+    {
+      "id": "R-001",
+      "clause": "S1b, S1d, S2c, S2d, S4b",
+      "description": "Node: an operator who configured Microsoft or an org IdP and forgot TOKEN_KEY is told, at the button, that TOKEN_KEY is what is missing.",
+      "must_fail_before": true,
+      "steps": [
+        {
+          "deployment": "NO_KEY",
+          "call": "POST /auth/microsoft/start",
+          "capture": "r1"
+        },
+        {
+          "assert": "$r1.status == 404 and its error sentence is exactly 'Microsoft sign-in cannot start on this deployment: TOKEN_KEY is not configured.'"
+        },
+        {
+          "assert": "$r1 has no Location header, and its body contains neither 'mid-VALUE-2c8e' nor 'msec-VALUE-5d1f'"
+        },
+        {
+          "deployment": "NO_KEY",
+          "call": "create an org AND configure its OIDC SSO (issuer https://idp.corp.example, client_id/secret distinctive tokens), then GET /login/sso/<that orgId>",
+          "capture": "r2"
+        },
+        {
+          "assert": "$r2.status == 404 and its error sentence is exactly 'SSO cannot start on this deployment: TOKEN_KEY is not configured.'"
+        },
+        {
+          "assert": "$r2 has no Location header and no state anywhere in the body; the body contains none of the org's SSO values (S4b: nothing unsigned is produced as a fallback)"
+        },
+        {
+          "deployment": "NO_KEY",
+          "call": "GET /login/sso/main",
+          "capture": "r3"
+        },
+        {
+          "assert": "$r3.status == 404 and its error sentence is exactly 'SSO cannot start on this deployment: TOKEN_KEY is not configured.' -- the deployment check stays above the org lookup (SPEC-0007 S3b)"
+        }
+      ],
+      "red_before_because": "at 7c511a4 r1 says 'Microsoft sign-in is not configured.' and r2/r3 say 'SSO is not configured on this deployment.' -- neither names TOKEN_KEY"
+    },
+    {
+      "id": "R-002",
+      "clause": "S1b, S1c, S1d, S2a, S4b",
+      "description": "Node: a Google client id without its secret, or Google credentials without TOKEN_KEY, is refused at the button with the missing variable named -- and both named together when both are missing.",
+      "must_fail_before": true,
+      "steps": [
+        {
+          "deployment": "GOOGLE_ID_ONLY",
+          "call": "POST /auth/google/start",
+          "capture": "g1"
+        },
+        {
+          "assert": "$g1.status == 404 and its error sentence is exactly 'Google sign-in cannot start on this deployment: GOOGLE_OAUTH_CLIENT_SECRET is not configured.'"
+        },
+        {
+          "deployment": "GOOGLE_NO_KEY",
+          "call": "POST /auth/google/start",
+          "capture": "g2"
+        },
+        {
+          "assert": "$g2.status == 404 and its error sentence is exactly 'Google sign-in cannot start on this deployment: TOKEN_KEY is not configured.'"
+        },
+        {
+          "deployment": "GOOGLE_ID_NO_KEY",
+          "call": "POST /auth/google/start",
+          "capture": "g3"
+        },
+        {
+          "assert": "$g3.status == 404 and its error sentence is exactly 'Google sign-in cannot start on this deployment: GOOGLE_OAUTH_CLIENT_SECRET and TOKEN_KEY are not configured.' (S1c: the secret before the key, both in one sentence)"
+        },
+        {
+          "assert": "none of $g1, $g2, $g3 has a Location header, and none of their bodies contains 'gid-VALUE-7f3a', 'gsec-VALUE-9b1c' or the value of $KEY"
+        }
+      ],
+      "red_before_because": "at 7c511a4 every one of g1, g2, g3 says 'Google sign-in is not configured.'"
+    },
+    {
+      "id": "R-003",
+      "clause": "S1b, S1d, S2b, S2c, S4b",
+      "description": "Workers: the router refuses at the button, naming the missing variable, instead of sending a half-configured deployment to the provider.",
+      "must_fail_before": true,
+      "steps": [
+        {
+          "deployment": "GOOGLE_ID_ONLY",
+          "call": "Workers POST /auth/google/start (form body: invite=, timezone=UTC)",
+          "capture": "w1"
+        },
+        {
+          "assert": "$w1.status == 404 and its error sentence is exactly 'Google sign-in cannot start on this deployment: GOOGLE_OAUTH_CLIENT_SECRET is not configured.'"
+        },
+        {
+          "assert": "$w1 has no Location header -- nobody is sent to accounts.google.com"
+        },
+        {
+          "deployment": "NO_KEY",
+          "call": "Workers POST /auth/microsoft/start",
+          "capture": "w2"
+        },
+        {
+          "assert": "$w2.status == 404 and its error sentence is exactly 'Microsoft sign-in cannot start on this deployment: TOKEN_KEY is not configured.'"
+        },
+        {
+          "deployment": "GOOGLE_ID_NO_KEY",
+          "call": "Workers POST /auth/google/start",
+          "capture": "w3"
+        },
+        {
+          "assert": "$w3.status == 404 and its error sentence is exactly 'Google sign-in cannot start on this deployment: GOOGLE_OAUTH_CLIENT_SECRET and TOKEN_KEY are not configured.'"
+        },
+        {
+          "assert": "none of $w1, $w2, $w3 has a Location header, and none of their bodies contains any configured value of its shape"
+        }
+      ],
+      "red_before_because": "at 7c511a4 w1 is a 303 to accounts.google.com (worker.ts:610 checks the id alone) and w2 says 'Microsoft sign-in is not configured.'"
+    },
+    {
+      "id": "R-004",
+      "clause": "S2e",
+      "description": "Workers: a callback that arrives at a deployment with no TOKEN_KEY is told so, in the Node path's exact sentence.",
+      "must_fail_before": true,
+      "steps": [
+        {
+          "deployment": "GOOGLE_NO_KEY",
+          "call": "Workers GET /oauth/google/callback?code=c&state=anything",
+          "capture": "c1"
+        },
+        {
+          "assert": "$c1.status == 404 and its error sentence is exactly 'This deployment cannot complete an OAuth connection: TOKEN_KEY is not configured.'"
+        },
+        {
+          "deployment": "GOOGLE_NO_KEY",
+          "call": "Node GET /oauth/google/callback?code=c&state=anything",
+          "capture": "c2"
+        },
+        {
+          "assert": "$c2's error sentence is byte-identical to $c1's (app.ts:1083 is unchanged and the router now matches it)"
+        }
+      ],
+      "red_before_because": "at 7c511a4 c1 says 'Not configured.'"
+    },
+    {
+      "id": "R-005",
+      "clause": "S3b",
+      "description": "Parity, asserted by running both builds: for every half-configured shape, the Node answer and the Workers answer to the same request carry the same status and the byte-identical error sentence.",
+      "must_fail_before": true,
+      "steps": [
+        {
+          "deployment": "each of NO_KEY, MS_ID_ONLY, GOOGLE_ID_ONLY, GOOGLE_NO_KEY, GOOGLE_ID_NO_KEY, IDP_ONLY, NOTHING",
+          "call": "POST /auth/google/start and POST /auth/microsoft/start on the Node handle() and on the Workers router",
+          "capture": "pairs"
+        },
+        {
+          "assert": "for every pair: same status, and same error sentence when the status is 404 (compared string to string, not each against the table)"
+        },
+        {
+          "assert": "at least one of the pairs is a refusal that names TOKEN_KEY and at least one names a *_CLIENT_SECRET -- so the parity claim is not satisfied vacuously by two builds that both say nothing"
+        }
+      ],
+      "turns_red_if": "either build's copy of a sentence is edited on its own, or one build's guard drops a term the other keeps",
+      "red_before_because": "at 7c511a4 GOOGLE_ID_ONLY is 404 on Node and 303 on Workers, and MS_ID_ONLY is 303 on both while the spec requires 404 -- the pairs do not agree"
+    },
+    {
+      "id": "R-006",
+      "clause": "S4a, S4c, S4d, S1e",
+      "description": "Nothing outside the refusals moves: fully configured doors still redirect on both builds, the door with no client id still says 'not configured', the button rule is unchanged, and the calendar routes keep their guards and their words.",
+      "must_fail_before": false,
+      "steps": [
+        {
+          "deployment": "GOOGLE_FULL",
+          "call": "POST /auth/google/start on Node (with the hub) and on Workers",
+          "capture": "f1"
+        },
+        {
+          "assert": "both $f1 answers are 303 to a URL on accounts.google.com whose state opens under $KEY with purpose 'sso'"
+        },
+        {
+          "deployment": "GOOGLE_FULL_HUB_OTHER_KEY",
+          "call": "Node POST /auth/google/start",
+          "capture": "f2"
+        },
+        {
+          "assert": "$f2 is 303 and its state opens under $OTHER_KEY and NOT under $KEY -- the hub's own sealer still seals (SPEC-0007 S1b)"
+        },
+        {
+          "deployment": "MS_ONLY",
+          "call": "POST /auth/microsoft/start on Node and on Workers",
+          "capture": "f3"
+        },
+        {
+          "assert": "both $f3 answers are 303 to login.microsoftonline.com with scope containing openid, email and profile and nothing containing 'Calendars'"
+        },
+        {
+          "deployment": "NOTHING",
+          "call": "POST /auth/google/start and POST /auth/microsoft/start on Node and on Workers",
+          "capture": "n1"
+        },
+        {
+          "assert": "all four are 404 with the error sentence exactly 'Google sign-in is not configured.' / 'Microsoft sign-in is not configured.' -- the unchanged sentence for a door with no client id (S1e)"
+        },
+        {
+          "deployment": "GOOGLE_ID_ONLY and MS_ID_ONLY",
+          "call": "GET /login on Node",
+          "capture": "b1"
+        },
+        {
+          "assert": "the Google button is present on GOOGLE_ID_ONLY and the Microsoft button on MS_ID_ONLY -- a button is drawn on the client id alone, as today (S4d)"
+        },
+        {
+          "deployment": "MS_ONLY",
+          "call": "sign in an owner, then POST /app/calendar/google/connect; and GET /oauth/google/callback?code=c&state=<a state sealed under $KEY with payload {owner_id, level}>",
+          "capture": "c1, c2"
+        },
+        {
+          "assert": "$c1 is status 200 rendering the owner's dashboard with no Location and no accounts.google.com in the body; $c2 is 404 with the error sentence exactly 'Calendar integration is not configured.' (S4c; SPEC-0006 S2d)"
+        }
+      ],
+      "turns_red_if": "the client-id term is dropped from either build's guard (NOTHING would then name a secret instead of 'not configured'), or the calendar callback's 404 is reworded, or a fully configured door stops redirecting"
+    },
+    {
+      "id": "R-007",
+      "clause": "S1b, S2c",
+      "description": "A Microsoft client id without its secret is refused at the button on both builds, naming MS_OAUTH_CLIENT_SECRET (INTENT question 2).",
+      "must_fail_before": true,
+      "steps": [
+        {
+          "deployment": "MS_ID_ONLY",
+          "call": "POST /auth/microsoft/start on Node and on Workers",
+          "capture": "m1"
+        },
+        {
+          "assert": "both are 404 with the error sentence exactly 'Microsoft sign-in cannot start on this deployment: MS_OAUTH_CLIENT_SECRET is not configured.', no Location header, and no 'mid-VALUE-2c8e' in either body"
+        }
+      ],
+      "red_before_because": "at 7c511a4 both builds answer 303 to login.microsoftonline.com and refuse only at the callback"
+    }
+  ]
+}

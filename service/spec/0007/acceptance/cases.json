@@ -1,8 +1,8 @@
 {
   "suite": "SPEC-0007 sign-in-does-not-need-a-calendar acceptance",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "frozen_at_approval": true,
-  "note": "Runner: service/test/auth-reachability.test.ts. Runners are ordinary risk; this file is the truth. A-001, A-002 and A-003 must FAIL against the tree at 0036c74 -- a defect spec proves itself by failing before (lessons/L-006). The remaining four are green on both sides on purpose: they are the claim that nothing else moved, and a claim that cannot fail is decoration, so each names the deliberate mutation that turns it red and the implementation report records that mutation being run. 'hub-less deps' throughout means AppDeps built with calendars: undefined, which is what server.ts:114 and worker.ts:244 produce when GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET is unset. Error sentences are asserted as the rendered <p class=\"err\"> text, not the whole document: every page ships the same stylesheet and that stylesheet contains the comment '/* slots and calendar */' (spec/0006 S2b). A-003's redness before the fix is of a different kind from A-001's and A-002's and is spelt out on the case: nothing is unguarded today, but the calendar gate answers first, so the guards underneath it are unobservable until it is gone. AMENDED 2026-08-31 (v1.1.0), in the open, after the freeze and after a cited code-review objection (reviews/20260831-111314-code-gemini.md, citing CHARTER Part 3 requirement 2). No case, clause, step or assertion changed; the amendment is to the RUNNER's setup helper and is recorded here because the charter's freeze covers the runner too and this file is where a reader meets it. What changed: makeOrg() resolved the org it had just created with `SELECT org_id FROM orgs ORDER BY created_at DESC`. These deps freeze now(), so two orgs created inside one test carry the same created_at and the ordering is not a tiebreak -- the helper returned the FIRST org, whose admin is a different owner, and A-003's frozen step 'create an org AND configure its OIDC SSO' then failed at 404 'No such team.' before it could assert anything. It now resolves through the creating owner's own admin membership in org_members. This is exactly the L-006 shape the suite exists to respect: a lookup that is right until a second row exists, and that would have made A-003 pass or fail on row order rather than on the behaviour it names. Re-reviewed cross-family before the code review was re-taken.",
+  "note": "Runner: service/test/auth-reachability.test.ts. Runners are ordinary risk; this file is the truth. A-001, A-002 and A-003 must FAIL against the tree at 0036c74 -- a defect spec proves itself by failing before (lessons/L-006). The remaining four are green on both sides on purpose: they are the claim that nothing else moved, and a claim that cannot fail is decoration, so each names the deliberate mutation that turns it red and the implementation report records that mutation being run. 'hub-less deps' throughout means AppDeps built with calendars: undefined, which is what server.ts:114 and worker.ts:244 produce when GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET is unset. Error sentences are asserted as the rendered <p class=\"err\"> text, not the whole document: every page ships the same stylesheet and that stylesheet contains the comment '/* slots and calendar */' (spec/0006 S2b). A-003's redness before the fix is of a different kind from A-001's and A-002's and is spelt out on the case: nothing is unguarded today, but the calendar gate answers first, so the guards underneath it are unobservable until it is gone. AMENDED 2026-08-31 (v1.1.0), in the open, after the freeze and after a cited code-review objection (reviews/20260831-111314-code-gemini.md, citing CHARTER Part 3 requirement 2). No case, clause, step or assertion changed; the amendment is to the RUNNER's setup helper and is recorded here because the charter's freeze covers the runner too and this file is where a reader meets it. What changed: makeOrg() resolved the org it had just created with `SELECT org_id FROM orgs ORDER BY created_at DESC`. These deps freeze now(), so two orgs created inside one test carry the same created_at and the ordering is not a tiebreak -- the helper returned the FIRST org, whose admin is a different owner, and A-003's frozen step 'create an org AND configure its OIDC SSO' then failed at 404 'No such team.' before it could assert anything. It now resolves through the creating owner's own admin membership in org_members. This is exactly the L-006 shape the suite exists to respect: a lookup that is right until a second row exists, and that would have made A-003 pass or fail on row order rather than on the behaviour it names. Re-reviewed cross-family before the code review was re-taken. AMENDED 2026-09-01 (v1.2.0), in the open, BEFORE the implementation it makes room for, under pumasi/DECISIONS.md Q-030's stated default and with a fresh cross-family spec review: SPEC-0009 changes what three of these cases ASSERT (Q-030 rider (a): an assertion change, not a fixture change, and weighed as one). A-003 r5 and r6 now expect the sentences that name TOKEN_KEY; A-004 g1 now expects the sentence that names GOOGLE_OAUTH_CLIENT_SECRET, and its turns_red_if no longer names the guard SPEC-0009 installs; A-006's two exact-string guard assertions and its 'diff touches worker.ts zero times' step -- S4d, a claim about SPEC-0007's own diff -- are replaced by the parity property they were protecting: neither build carries its own copy of a refusal sentence; both take it from one implementation. The old text of every changed step is preserved in SPEC-0007 SPEC.md Amendment 2. A-001, A-002, A-005 and the rest of A-003 and A-004 are untouched.",
   "deployments": {
     "MS_ONLY": "hub-less; TOKEN_KEY=$KEY, MS_OAUTH_CLIENT_ID=ms-cid, MS_OAUTH_CLIENT_SECRET=ms-csec; no GOOGLE_OAUTH_* at all",
     "IDP_ONLY": "hub-less; TOKEN_KEY=$KEY; no GOOGLE_OAUTH_*, no MS_OAUTH_*",
@@ -174,7 +174,7 @@
           "capture": "r5"
         },
         {
-          "assert": "$r5.status == 404 and its error sentence is exactly 'Microsoft sign-in is not configured.' (S2b: identical to worker.ts:614's answer)"
+          "assert": "$r5.status == 404 and its error sentence is exactly 'Microsoft sign-in cannot start on this deployment: TOKEN_KEY is not configured.' (S2b as amended by SPEC-0009 S1b/S2c: the Node path and the Workers router take this sentence from the same signInRefusal(); v1.1.0 expected 'Microsoft sign-in is not configured.')"
         },
         {
           "deployment": "NO_KEY",
@@ -182,7 +182,7 @@
           "capture": "r6"
         },
         {
-          "assert": "$r6.status == 404 and its error sentence is exactly 'SSO is not configured on this deployment.' (S3b, S3c: the deployment check stays above the org lookup and keeps its wording)"
+          "assert": "$r6.status == 404 and its error sentence is exactly 'SSO cannot start on this deployment: TOKEN_KEY is not configured.' (S3b, S3c: the deployment check stays above the org lookup; its wording is SPEC-0009 S2d's since v1.2.0 -- v1.1.0 expected 'SSO is not configured on this deployment.')"
         },
         {
           "assert": "$r6 emits no Location header and no state at all -- with no seal key nothing unsigned is produced as a fallback"
@@ -203,7 +203,7 @@
           "capture": "g1"
         },
         {
-          "assert": "$g1.status == 404 and its error sentence is exactly 'Google sign-in is not configured.' -- a client id without a secret is not a configured Google sign-in, and this spec does not change that"
+          "assert": "$g1.status == 404 and its error sentence is exactly 'Google sign-in cannot start on this deployment: GOOGLE_OAUTH_CLIENT_SECRET is not configured.' -- a client id without a secret is not a configured Google sign-in; since SPEC-0009 (v1.2.0) the refusal names the secret. v1.1.0 expected 'Google sign-in is not configured.'"
         },
         {
           "deployment": "MS_ONLY",
@@ -238,7 +238,7 @@
           "assert": "$c2.status == 404 and its error sentence is exactly 'Calendar integration is not configured.' -- spec/0006 S2d's message and placement are untouched"
         }
       ],
-      "turns_red_if": "the /auth/google/start guard is changed to !states || !config.googleClientId, or the calendar route's deps.calendars guard is loosened, or spec/0006 S2d's calendar 404 is moved or reworded"
+      "turns_red_if": "the /auth/google/start guard stops requiring GOOGLE_OAUTH_CLIENT_SECRET, or the calendar route's deps.calendars guard is loosened, or spec/0006 S2d's calendar 404 is moved or reworded (v1.1.0 read: 'the /auth/google/start guard is changed to !states || !config.googleClientId, or ...' -- SPEC-0009 S2a installs a states-based guard that still requires the secret, so the first clause is restated as the property rather than the expression)"
     },
     {
       "id": "A-005",
@@ -284,26 +284,20 @@
     {
       "id": "A-006",
       "clause": "S4d",
-      "description": "The Workers router is not modified. Its Microsoft door was never Google-gated and is already explicitly right; editing it and calling this item done closes nothing.",
+      "description": "The Workers router and the Node path answer a half-configured door from ONE implementation. Until v1.2.0 this case froze SPEC-0007's own diff (S4d: worker.ts not modified by that change); SPEC-0009 edits both builds' guards in one commit, so the case now asserts the property S4d was protecting -- that one build cannot be edited without the other -- in a form that survives this change and the next.",
       "must_fail_before": false,
       "steps": [
         {
-          "assert": "src/worker.ts contains the exact guard 'if (!states || !config.msClientId) {' for /auth/microsoft/start"
-        },
-        {
-          "assert": "src/worker.ts contains the exact guard 'if (!states || !config.googleClientId) {' for /auth/google/start"
+          "assert": "src/worker.ts and src/app.ts both import signInRefusal from ./config.ts, and neither contains a literal 'sign-in is not configured.' or 'cannot start on this deployment' sentence of its own (v1.1.0: 'src/worker.ts contains the exact guard 'if (!states || !config.msClientId) {' for /auth/microsoft/start' and 'src/worker.ts contains the exact guard 'if (!states || !config.googleClientId) {' for /auth/google/start')"
         },
         {
           "assert": "src/worker.ts contains no occurrence of the identifier 'CalendarHub' in its router-level state handling, and no router guard reads deps.calendars"
         },
         {
           "assert": "src/worker.ts still forwards /login/sso/<tag> into the Durable Object as '/login/sso/main' -- the route is not reimplemented at the router (S4e)"
-        },
-        {
-          "assert": "git diff of this change touches src/worker.ts zero times"
         }
       ],
-      "turns_red_if": "worker.ts's Microsoft or Google guard is edited, or the sso route is reimplemented at the router"
+      "turns_red_if": "either build grows its own copy of a refusal sentence, or the sso route is reimplemented at the router (v1.1.0: 'worker.ts's Microsoft or Google guard is edited, or the sso route is reimplemented at the router'; v1.1.0 also carried a fifth step, 'git diff of this change touches src/worker.ts zero times', which described SPEC-0007's diff and is retired)"
     }
   ]
 }
