@@ -12,7 +12,7 @@
 
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import EmbeddedPostgres from 'embedded-postgres';
+import { startPostgres, type TestPostgres } from './support/pg.ts';
 import { migrate } from '../src/db.ts';
 import { createPostgresDriver, type Database } from '../src/driver.ts';
 import { handle, type AppDeps } from '../src/app.ts';
@@ -22,10 +22,9 @@ import { CalendarHub, type BookingEvent, type CalendarProvider, type ProviderCal
 import { importSealKey, open, seal } from '../src/seal.ts';
 import type { Interval } from '@pumasi/booking-core';
 
-const PORT = 55439;
 const KEY = Buffer.alloc(32, 7).toString('base64');
 const NOW = '2026-06-01T08:00:00Z'; // a Monday
-let pg: EmbeddedPostgres;
+let pg: TestPostgres;
 let db: Database;
 let deps: AppDeps;
 let fake: FakeProvider;
@@ -83,13 +82,8 @@ class FakeProvider implements CalendarProvider {
 }
 
 before(async () => {
-  pg = new EmbeddedPostgres({
-    databaseDir: '/tmp/pumasi-pg-calendar', user: 'pumasi', password: 'pumasi',
-    port: PORT, persistent: false,
-  });
-  await pg.initialise();
-  await pg.start();
-  db = await createPostgresDriver(`postgres://pumasi:pumasi@localhost:${PORT}/postgres`);
+  pg = await startPostgres('calendar');
+  db = await createPostgresDriver(pg.url);
   await migrate(db);
 });
 after(async () => { await db?.close(); await pg?.stop(); });

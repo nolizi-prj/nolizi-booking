@@ -7,24 +7,18 @@
 
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import EmbeddedPostgres from 'embedded-postgres';
+import { startPostgres, type TestPostgres } from './support/pg.ts';
 import { migrate } from '../src/db.ts';
 import { createPostgresDriver, type Database } from '../src/driver.ts';
 import { bootstrapInvite, createInvite } from '../src/bootstrap.ts';
 import { redeemInvite } from '../src/identity.ts';
 
-const PORT = 55436;
-let pg: EmbeddedPostgres;
+let pg: TestPostgres;
 let db: Database;
 
 before(async () => {
-  pg = new EmbeddedPostgres({
-    databaseDir: '/tmp/pumasi-pg-bootstrap', user: 'pumasi', password: 'pumasi',
-    port: PORT, persistent: false,
-  });
-  await pg.initialise();
-  await pg.start();
-  db = await createPostgresDriver(`postgres://pumasi:pumasi@localhost:${PORT}/postgres`);
+  pg = await startPostgres('bootstrap');
+  db = await createPostgresDriver(pg.url);
   await migrate(db);
 });
 after(async () => { await db?.close(); await pg?.stop(); });

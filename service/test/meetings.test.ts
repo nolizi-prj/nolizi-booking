@@ -9,7 +9,7 @@
 
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import EmbeddedPostgres from 'embedded-postgres';
+import { startPostgres, type TestPostgres } from './support/pg.ts';
 import { migrate } from '../src/db.ts';
 import { createPostgresDriver, type Database } from '../src/driver.ts';
 import { handle, type AppDeps } from '../src/app.ts';
@@ -17,21 +17,15 @@ import { loadConfig } from '../src/config.ts';
 import { RecordingMail, RetryingMail } from '../src/mail.ts';
 import { icsFor } from '../src/ics.ts';
 
-const PORT = 55441;
 const NOW = '2026-06-01T08:00:00Z'; // a Monday
-let pg: EmbeddedPostgres;
+let pg: TestPostgres;
 let db: Database;
 let deps: AppDeps;
 let mail: RecordingMail;
 
 before(async () => {
-  pg = new EmbeddedPostgres({
-    databaseDir: '/tmp/pumasi-pg-meetings', user: 'pumasi', password: 'pumasi',
-    port: PORT, persistent: false,
-  });
-  await pg.initialise();
-  await pg.start();
-  db = await createPostgresDriver(`postgres://pumasi:pumasi@localhost:${PORT}/postgres`);
+  pg = await startPostgres('meetings');
+  db = await createPostgresDriver(pg.url);
   await migrate(db);
 });
 after(async () => { await db?.close(); await pg?.stop(); });
