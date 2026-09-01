@@ -10,8 +10,11 @@ privacy notice and from every public page — is served by the running service a
 [`service/src/legal.ts`](service/src/legal.ts) so that there is exactly one copy
 of it. This file explains the part that is *code* — how the list is enforced —
 and restates the list below, so that a reader of the repository does not have to
-run the service to find out. **The two are meant to say the same thing and, as of
-this revision, do not: see the corrections at the foot of the next section.**
+run the service to find out. **The two are meant to say the same thing.** They
+did not at the 2026-09-01 revision of this file; the served text was repaired in
+`main` later the same day, and **`main` is not the deployment** — see the
+corrections at the foot of the next section for what is published and what is
+merely merged.
 
 ---
 
@@ -74,6 +77,7 @@ carries one to the other automatically.
 | **Google Calendar** | Busy start/end times; with the separate write grant, the events it creates (title carries the booker's name, description their address). | Only when an account holder connects a Google calendar. |
 | **Microsoft Graph** | The same, for Microsoft 365 / Outlook. | Only when an account holder connects one. |
 | **Zoom** | On a booking for an event type whose location is set to Zoom: the meeting title, which carries the booker's name; the agenda line, which carries the booker's name **and email address**; and the start time, duration and the account holder's timezone. | Minting a fresh meeting room for each booking instead of publishing a standing personal room. Nothing is sent for an event type with any other location. |
+| **Google / Microsoft (sign-in)** | That a given **email address signed in here**, and the address itself, returned to us. Sign-in scopes only (`openid email` for Google; `openid email profile offline_access` for Microsoft) — no calendar, no mailbox. | Only if an account holder chooses "Continue with Google" or "Continue with Microsoft" rather than an emailed sign-in link. An organisation may instead point the service at **its own OIDC provider**, which is a party that organisation chooses and runs, not one this service picks. |
 | *date.nager.at* | **No personal data** — a country code and a year. | Public-holiday dates, on request. |
 
 **Whose authorisation the Zoom call is made on, and when nothing is sent at
@@ -124,6 +128,20 @@ meeting is created, and only in the two fields named in the row above.
 > served page's "Adding one" section says account holders are told before an
 > addition takes effect. Whether that clause was owed for this addition, and what
 > is owed now, is the steward's question and this file does not answer it.
+>
+> **Follow-up, 2026-09-01, and read it as narrowing the block above rather than
+> retiring it.** The repair landed in `main`: `service/src/legal.ts` now names
+> **Zoom Video Communications, Inc.** in "In use now", carries the two
+> authorisation routes, and states the mail-list scope per build instead of
+> claiming enforcement unqualified. **Nothing above about the *published* page has
+> changed.** `curl https://booking.pumasi.ai/version` still answers `2453adc`, and
+> a `curl https://booking.pumasi.ai/subprocessors` piped through `grep -io "zoom
+> video"` still returns nothing — case-insensitively grepping for `zoom` alone
+> returns four hits that are all the `pf-shot-zoom-hint` CSS class, so that is not
+> the check to run. **Until someone deploys, the register a customer is pointed at
+> still omits the provider, and merged is not shipped** (`pumasi/DECISIONS.md`
+> **Q-012**, open). The third gap, the "Adding one" clause, is untouched here and
+> is **Q-036**; publishing the corrected register does not on its own answer it.
 
 > **Superseded, 2026-09-01 — the permitted mail host table listed a host the
 > code refuses.** It carried a third row, `smtp.gmail.com`, described as
@@ -136,6 +154,18 @@ meeting is created, and only in the two fields named in the row above.
 > description of it — and because a self-hoster who followed the description got
 > the startup refusal and the queued mail that this document told them they would
 > not get.
+>
+> **Affirmed by a coder seat, 2026-09-01**, which is where the choice of side
+> properly sat. `smtp.gmail.com` stays **out** of
+> [`PERMITTED_MAIL_HOSTS`](service/src/subprocessors.ts): nothing in this project
+> sends through Gmail's SMTP endpoint, so the struck row described no behaviour;
+> and pre-permitting a host is a widening of who may receive people's names and
+> addresses, taken in a register, for a route nobody uses. A self-hoster who wants
+> it adds it themselves, to both places, which is what "Adding one" already says.
+> The constant's header was rewritten in the same change: what was false in it was
+> never the list, which has agreed with this table since the row was struck — it
+> was the unqualified claim that "the service" enforces it, when only the Node
+> build does ([L-009](https://github.com/pumasi-ai/pumasi/blob/main/lessons/L-009-two-paths-one-claim.md)).
 
 ## Retention, and how far deletion reaches
 

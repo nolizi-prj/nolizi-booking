@@ -26,7 +26,8 @@
  * it and there must be exactly one copy. Cross-references that must stay true:
  *   src/app.ts          what is stored on booking, and the deletion paths
  *   the migration files the columns that exist at all
- *   SUBPROCESSORS.md    who else sees data (enforced by src/subprocessors.ts)
+ *   SUBPROCESSORS.md    who else sees data; src/subprocessors.ts is the mail
+ *                       allowlist it restates, enforced on the Node build only
  */
 
 export const LEGAL_VERSION = '1.0';
@@ -435,9 +436,20 @@ export const SUBPROCESSORS: LegalDoc = {
   body: `
 Every third party that can see personal data held by this service, what they see,
 and why. An unnamed subprocessor is data shared without disclosure, whatever the
-intention — so this list is published, and it is **enforced by the software**:
-the service **will not send mail** through a provider that is not on it. The
-service keeps running and the booking still completes; only the message waits.
+intention, so this list is published.
+
+**What enforces the mail list, and on which build — because this page is served by
+both.** On the **self-hosted Node build**, the list is a runtime control: the
+service **will not send mail** through an SMTP host that is not on it, and says so
+loudly at startup. It keeps running and the booking still completes; only the
+message waits. On the **Cloudflare Workers build, which is what runs the hosted
+service at booking.pumasi.ai**, nothing checks that list at runtime — Workers
+cannot open SMTP connections at all, so that build sends through the Gmail API and
+never constructs the transport the check guards. What controls the Workers path is
+which transport the build itself constructs, a code change visible in review and
+in history, together with the disclosure below. That is a **weaker control** than
+the self-hosted build has, and it is named as weaker here rather than described in
+words that borrow the stronger one's credit.
 
 ## In use now
 
@@ -461,6 +473,35 @@ service keeps running and the booking still completes; only the message waits.
   already look.
 - **Microsoft Corporation (Microsoft Graph)** — the same, for an account holder
   who connects Microsoft 365 or Outlook instead.
+- **Zoom Video Communications, Inc.** — **only on a booking for an event type
+  whose location is set to Zoom.** Receives the meeting title, which carries the
+  **booker's name**; the agenda line, which carries the **booker's name and their
+  email address**; and the start time, the duration and the account holder's
+  timezone. Why: to mint a fresh meeting room for each booking rather than
+  publish a standing personal room. Nothing is sent for an event type with any
+  other location.
+- **Google LLC and Microsoft Corporation (sign-in)** — **only if an account
+  holder chooses "Continue with Google" or "Continue with Microsoft"** rather
+  than an emailed sign-in link. The provider learns that **that address signed in
+  here**, and returns the address to us. The request asks for the sign-in scopes
+  only: it reads no calendar and no mailbox, and it is separate from the calendar
+  grants above. Why: so that signing in does not need another account. An
+  organisation may instead point the service at **its own OIDC provider**, which
+  is a party that organisation chooses and runs, not one this service picks.
+
+**Whose authorisation the Zoom call is made on, and when nothing is sent at all.**
+There are two routes and they are not the same disclosure. The first is the
+**account holder's own connection**: they press "Connect with Zoom", and the
+meeting is created with that account holder's token, on their authority, for a
+booking on their own event type. The second is a **server-to-server credential
+belonging to whoever runs the deployment**; it is tried only when the first route
+produces nothing, and it fires on the **operator's authorisation rather than the
+account holder's** — so on an event type set to Zoom, a booking can reach Zoom
+even though that account holder never connected anything. If neither route has a
+credential configured, **no request leaves the service**. At connect time Zoom
+receives no booker's data: the service asks Zoom only for the connecting
+account's own profile, and stores the address, display name and personal meeting
+room it returns.
 
 ## Contacted, but sent no personal data
 
