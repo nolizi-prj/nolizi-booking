@@ -982,6 +982,11 @@ ${FOOTER}
         document.getElementById('f').classList.add('on');
         document.getElementById('name').focus();
       };
+      // Without this the button is built, wired, and dropped: the heading names
+      // the day and the list under it stays empty, silently and without
+      // throwing. That is issue #32, and it is why B-001..B-004 run the page in
+      // a browser rather than reading this string.
+      times.appendChild(b);
     });
     try {
       var savedName = localStorage.getItem('pumasi_booker_name');

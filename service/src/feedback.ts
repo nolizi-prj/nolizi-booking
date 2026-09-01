@@ -120,7 +120,7 @@ ${payload.description}
 | Key | Value |
 | :--- | :--- |
 | **Product Version** | \`${reportedVersion(payload.version)}\` |
-| **Page URL** | \`${sanitizeUrl(payload.url)}\` |
+| **Reported From** | \`${sanitizeUrl(payload.url)}\` |
 | **User Agent** | \`${payload.userAgent || 'Unknown'}\` |
 | **Viewport** | \`${payload.viewport || 'Unknown'}\` |
 | **Timezone** | \`${payload.timezone || 'UTC'}\` |
@@ -133,6 +133,14 @@ ${payload.description}
   }
 
   if (screenshotUrl) {
+    // The screenshot and "Reported From" can legitimately disagree, and issue
+    // #32 is the worked example: the field said `/app/event/<id>` while the
+    // image showed `/yunyoungmok/abc`. Neither was wrong. `Reported From` is
+    // `location.href` of the page the widget ran on, and the image comes from
+    // `getDisplayMedia`, where the browser lets the person choose which tab,
+    // window or screen to share — `preferCurrentTab` is a hint, not a
+    // constraint. A reader who assumes they must match goes to the wrong page,
+    // so the report says so rather than leaving it to be rediscovered.
     body += `\n---
 ### Attached Screenshot
 <details open>
@@ -140,6 +148,9 @@ ${payload.description}
 
 ![User Feedback Screenshot](${screenshotUrl})
 </details>
+
+> The image is a screen capture and may show a different tab or window from
+> **Reported From** above, which is the page the feedback widget itself ran on.
 `;
   }
 

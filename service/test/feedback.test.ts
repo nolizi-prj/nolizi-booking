@@ -51,3 +51,43 @@ test('submitFeedback succeeds in local mode without GitHub token', async () => {
   assert.equal(res.ok, true);
   assert.ok(res.issueUrl?.includes('github.com/pumasi-ai/pumasi-booking/issues'));
 });
+
+/**
+ * SPEC-0008 §S3 — the report does not invite a reader to conflate two
+ * surfaces. Issue #32 is the worked example: `Reported From` read
+ * `/app/event/<id>` while the attached image showed `/yunyoungmok/abc`.
+ * Neither value was wrong — the widget reports `location.href` of the page it
+ * ran on, and the image comes from `getDisplayMedia`, where the person chooses
+ * which tab or window to share. The defect was that nothing said so.
+ */
+test('the report names the page the widget ran on, and says the image may differ', () => {
+  const withShot = formatFeedbackMarkdown({
+    type: 'bug',
+    description: 'i cannot see specific times',
+    url: 'https://booking.pumasi.ai/app/event/06f1bfbc-46f0-407f-ba64-47bca20f0dba',
+  }, 'https://raw.githubusercontent.com/pumasi-ai/pumasi-booking/main/x.png');
+
+  assert.ok(
+    withShot.body.includes('**Reported From**'),
+    'the field is named for what it actually holds — the page the widget ran on',
+  );
+  assert.ok(
+    !withShot.body.includes('**Page URL**'),
+    'and not for what a reader would take as the page in the screenshot',
+  );
+  assert.ok(
+    withShot.body.includes('may show a different tab or window'),
+    'the disagreement issue #32 produced is stated where the image is',
+  );
+
+  const noShot = formatFeedbackMarkdown({
+    type: 'bug',
+    description: 'i cannot see specific times',
+    url: 'https://booking.pumasi.ai/app/event/06f1bfbc-46f0-407f-ba64-47bca20f0dba',
+  }, null);
+  assert.ok(noShot.body.includes('**Reported From**'), 'the field is there either way');
+  assert.ok(
+    !noShot.body.includes('may show a different tab or window'),
+    'the caveat appears only where there is an image to caveat',
+  );
+});

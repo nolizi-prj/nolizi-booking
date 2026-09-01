@@ -1,0 +1,103 @@
+{
+  "suite": "SPEC-0008 a-day-that-shows-times-shows-times acceptance",
+  "version": "1.0.1",
+  "frozen_at_approval": true,
+  "note": "AMENDED 2026-09-01 (v1.0.1), in the open, after the code review (reviews/20260831-224335-code-glm.md) noted that the environment gloss overstated its own provenance. NO case, clause, step or assertion changed -- only the environment.fixture description, which said the fixture MIRRORED the live payload when it is modelled on its shape and differs in count (25 vs 24). The runner comments were wrong in the same direction and are corrected in the same commit. Recorded rather than quietly rewritten. Runner: service/test/booking-slots.test.ts (B-001..B-006) and service/test/feedback.test.ts (S3-001). Runners are ordinary risk; this file is the truth. B-001, B-002, B-003 and B-004 must FAIL against the tree at c000feb -- a defect spec proves itself by failing before (lessons/L-006); measured there as '# pass 2 / # fail 4', B-001 expected 12 actual 0 and B-002 expected 13 actual 0, with no thrown error, which is the live symptom exactly. B-005 and B-006 are green on both sides on purpose: they are the claim that nothing else moved, and a claim that cannot fail is decoration, so each names the deliberate mutation that turns it red and the implementation report records that mutation being run. The subject is this tree's own bookingPage() output, served over loopback and driven in Chrome with emulateTimezone('America/Chicago') -- the reporter's zone from issue #32's client diagnostics. It is NOT an extracted copy of the renderer: the extracted renderer was byte-identical on both sides of the deployment (job 0061, 5151 characters), so any assertion over that string would have passed at c000feb too. Only running it distinguishes the two states. No network and no deployment is involved in any case here; the live-deployment measurements are recorded in SPEC.md S6 and are evidence, not cases. NO case in any other spec's acceptance/ directory is amended by this work -- Q-030 is not reached in either direction.",
+  "environment": {
+    "browser": "Google Chrome 150.0.7871.186 at /usr/bin/google-chrome, headless",
+    "driver": "puppeteer 25.9.0, already a devDependency of service/package.json",
+    "booker_timezone": "America/Chicago",
+    "fixture": "25 slots -- 12 dated 2026-09-01 (14:00Z-19:30Z) and 13 dated 2026-09-02 (14:00Z-20:00Z), half-hourly. MODELLED ON the live payload measured at 2026-09-01 03:21:28 UTC -- two consecutive days from 14:00Z, half-hourly, second day the longer -- and not a copy of it: the live page carried 24 at that instant, this fixture carries 25, and the counts here are chosen so the two days differ and B-002 can tell them apart. In America/Chicago (CDT, UTC-5) that is 09:00-14:30 local on the 1st and 09:00-15:00 on the 2nd, so each UTC day is also one local day and the grid marks exactly 1 and 2."
+  },
+  "cases": [
+    {
+      "id": "B-001",
+      "title": "the day the page opens on shows that day's times",
+      "red_at": "c000feb",
+      "given": "a public booking page with 12 slots on 2026-09-01 and 13 on 2026-09-02, opened in America/Chicago",
+      "when": "the page loads and render() picks the first day that has slots",
+      "then": [
+        "#picked-day reads 'Tuesday, September 1'",
+        "#times contains exactly 12 .slot buttons",
+        "no pageerror and no console error is emitted"
+      ],
+      "why_it_matters": "The heading naming a day while the list beneath it is empty is the reported symptom. The third assertion is the reporter's '0 error(s) captured' turned into a check: it fixes that this is not an exception partway through a render."
+    },
+    {
+      "id": "B-002",
+      "title": "clicking an available day shows that day's times -- issue #32 as reported",
+      "red_at": "c000feb",
+      "given": "the loaded page, with 1 and 2 marked available in the month grid",
+      "when": "the booker clicks the day cell for the 2nd, as the reporter did",
+      "then": [
+        "#picked-day reads 'Wednesday, September 2'",
+        "#times contains exactly 13 .slot buttons",
+        "no pageerror and no console error is emitted"
+      ],
+      "why_it_matters": "This is the reporter's exact path: the screenshot shows the 2nd selected with aria-pressed=true, the heading 'Wednesday, September 2', and an empty list. It is the packet's acceptance sentence -- a booker who selects a day rendered as available must see that day's times."
+    },
+    {
+      "id": "B-003",
+      "title": "the times shown are the booker's own local times, in order",
+      "red_at": "c000feb",
+      "given": "the loaded page in America/Chicago",
+      "when": "the times for 2026-09-01 are read from the DOM in document order",
+      "then": [
+        "they equal each slot's start formatted with hour/minute in America/Chicago",
+        "the first reads '9:00 AM' -- 14:00Z in CDT",
+        "each slot appears exactly once"
+      ],
+      "why_it_matters": "Guards the repair against the two wrong ways to make B-001 pass: appending a placeholder, or appending in the wrong order or more than once. It also pins the conversion, which is the page's F2 invariant."
+    },
+    {
+      "id": "B-004",
+      "title": "a shown time is bookable -- it submits the server's own UTC instant (F2)",
+      "red_at": "c000feb",
+      "given": "the loaded page with its times listed",
+      "when": "the booker clicks the first time button",
+      "then": [
+        "#start holds the slot's start exactly as the server sent it, unconverted",
+        "#end holds the slot's end exactly as the server sent it, unconverted",
+        "the clicked button carries aria-pressed=true",
+        "the booking form gains the 'on' class and is revealed"
+      ],
+      "why_it_matters": "A button that is visible but not wired is a second, quieter form of the same defect. F2 is the page's own stated rule -- conversion happens in the renderer and nowhere else, and the values submitted are the UTC instants the server sent, untouched. This is the assertion that a booking made from this list is made at the right time."
+    },
+    {
+      "id": "B-005",
+      "title": "the month grid marks exactly the days that have slots",
+      "green_both_sides": true,
+      "reddening_mutation": "change `if (byDay[key])` in pages.ts render() to `if (true)`",
+      "given": "the loaded page in America/Chicago",
+      "when": "the day cells carrying class 'has' are read",
+      "then": ["they are exactly ['1', '2'] and no other day"],
+      "why_it_matters": "The precondition the whole report rests on -- the page did mark those days available. Holding it fixed is what makes B-001 and B-002 statements about the times list rather than about the grid."
+    },
+    {
+      "id": "B-006",
+      "title": "the booker's timezone is named on the page and travels with the booking",
+      "green_both_sides": true,
+      "reddening_mutation": "delete `document.getElementById('btz').value = tz` from pages.ts render()",
+      "given": "the loaded page in America/Chicago",
+      "when": "#tzname and the hidden #btz input are read",
+      "then": [
+        "#tzname reads 'America/Chicago'",
+        "#btz holds 'America/Chicago'"
+      ],
+      "why_it_matters": "render() does more than one job. This is the claim that the repair moved the times list and left the rest of that function alone."
+    },
+    {
+      "id": "S3-001",
+      "title": "the report names the page the widget ran on, and says the image may differ",
+      "runner": "service/test/feedback.test.ts",
+      "given": "a feedback payload whose url is an owner event editor, formatted with and without a screenshot",
+      "when": "formatFeedbackMarkdown renders the issue body",
+      "then": [
+        "the diagnostics table names the field 'Reported From', not 'Page URL'",
+        "with a screenshot, the body says the image may show a different tab or window",
+        "without a screenshot, that caveat is absent"
+      ],
+      "why_it_matters": "SPEC.md S3. Neither value in issue #32 was wrong -- the widget reports location.href faithfully and the image comes from getDisplayMedia, where the browser lets the person choose the surface. The defect was a field name that invited a reader to assume they must match. The last assertion keeps the caveat from appearing where there is no image to caveat."
+    }
+  ]
+}
