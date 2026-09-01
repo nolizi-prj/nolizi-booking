@@ -11,6 +11,15 @@ written so the competitor could read it without objecting to a fact. Pricing
 figures below were read from the cited public pricing pages on 2026-08-29 and
 will drift; the date travels with the number.
 
+**Re-read at the 2026-09-01 evaluation (job `0082`) and unchanged, deliberately.**
+The release that triggered that evaluation — `d7bd490`, restoring a public
+booking page's time list — moves no claim in this file: it is a defect repair on
+our own product and says nothing about anyone else's. **No competitor page was
+re-read at that evaluation and no figure here was re-taken**, so every price and
+feature below still carries its 2026-08-29 date and should be read as that
+old. Re-reading them is worth its own pass; inventing a fresher date for them
+would be exactly the drift this file's citation rule exists to stop.
+
 ---
 
 ## 1 · Cal.com

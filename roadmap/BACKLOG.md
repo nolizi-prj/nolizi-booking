@@ -12,54 +12,92 @@ takes the highest entry that *is* a build, and the operator item keeps its
 rank rather than being demoted for being unbuildable. Reordering is a commit
 with the reasoning in the message; the steward vetoes by reverting.
 
-**The highest *build* entry today is item 2 — and it did not exist when this
-packet was written.** Issue **#32** was filed on the live product at 2026-09-01
-00:36:56 UTC, **21 minutes into this evaluation**: a public booking page showing
-a day that has times and then showing no times. It was triaged `accepted` ·
-`priority: high` at this pass's duty-1 intake and it goes straight to the top of
-the buildable list, because it is the only entry here with a named user who met
-it today and — checked, not assumed — the only one near the top that a commit
-can close. Item 2 of the previous order (**PR-1 compliance: a version that moves
-and is visible**) is delivered in the half a commit can deliver, at
-**`2453adc`**, and is struck from the order into Completed below — verified at
-this evaluation against the tree, not read off the commit message.
-**Its residuals did not vanish with it and are not quietly dropped.** PR-1's
-*user-visible* clause is now met in `main` and **still unmet in the product**,
-because `booking.pumasi.ai` serves a build that predates it; that half is
-recorded against **item 1**, where every other undeployed thing already sits,
-and it does not get a rank of its own because it has no separate remedy. The
-`GIT_COMMIT` half was never closable by a commit and is recorded in the same
-place. The report payload's missing `version` field is a **`pumasi-report/2`**
-schema bump plus a fresh cross-family spec review, which is a build, and it is
-ranked on its own merits as **item 8**. Item 1 still outranks everything and is
-still operator action blocked on `DECISIONS.md` **Q-012**, so **the next coder
-packet takes item 2**. Stated here in as many words, as the previous two orders
-stated it, because this file should not need reading twice to answer the one
-question it exists to answer.
+**The highest *build* entry today is item 2 — the service suite's red latch —
+and it reached the top by being the only entry on this list whose cost is being
+paid by somebody who actually exists.** Item 2 of the previous order, **issue
+#32**, is **delivered at `d7bd490`** and is struck into Completed below, on this
+seat's own verification of the tree: `service/src/pages.ts:989` carries
+`times.appendChild(b)` again, `service/test/booking-slots.test.ts` drives the
+real page in a real browser, and the root suite is **19 core + 338 service, 357
+of 357 green**, re-run here rather than quoted. **Its user-visible half is not
+delivered and is not quietly dropped**: the repair is not on
+`booking.pumasi.ai`, the reporter still meets the defect, and that residual sits
+with item 1 where every other undeployed thing already sits — measured, not
+assumed, and the measurement is in item 1.
+
+**A deployment happened, and this file has never had to say that before.**
+Every previous order was written against a production build frozen at
+2026-08-30 16:55:37 UTC. Three deployments landed at **2026-09-01
+00:38:41.738Z · 00:39:03.300Z · 00:40:44.505Z**, re-measured here by
+`npx wrangler deployments list` at **05:15 UTC**, and they carried
+`booking.pumasi.ai` to **`2453adc`**. **Five of the six merged builds this file
+has ranked behind item 1 for five consecutive evaluations are now serving
+users** — checked one at a time with `git merge-base --is-ancestor <sha>
+2453adc`, not inferred from the timestamp: `4f56df4` (reporting), `16c3fd4`
+(the Zoom PMI leak), `7ea730a` (the OAuth callback), `3f2947c` (the sign-in
+doors) and `0a35ddc` (the alarm import) are **all ancestors of the deployed
+commit**. The Zoom leak is closed for the people it exposed. Workflows and
+webhooks are alive on the deployment for the first time. Item 1 did not become
+smaller because anything was re-read; it became smaller because somebody ran a
+deploy, and this file measured it rather than carrying its own previous figure.
+
+**What is left behind item 1 is three commits, and only one of them has a person
+waiting.** `git log 2453adc..HEAD -- service/src/` returns exactly
+`36f286c`, `c000feb` and `d7bd490`. **`d7bd490` is issue #32's repair and its
+reporter is still meeting the defect** — re-measured by this seat in headless
+Chrome at **2026-09-01 05:12:11 UTC**, after the merge and after the deploy, at
+`America/Chicago`: `booking.pumasi.ai/yunyoungmok/abc` → 200, `#slots-data`
+carries **24 slots**, day cells **1** and **2** are marked `.has`, and clicking
+each gives `#picked-day` *"Tuesday, September 1"* / *"Wednesday, September 2"*
+with `#times.children.length` **0** and **0 errors captured**. Item 1 is
+therefore no longer a list of six invisible repairs. It is one named user, one
+legal register, and one commit nobody reviewed.
 
 **The reorder, before → after, so the change is readable rather than inferred.**
 
-| | Before (`0a35ddc`, job `0052`) | After (`2453adc`, this pass) |
+| | Before (`2453adc`, job `0061`) | After (`d7bd490`, this pass) |
 |---|---|---|
-| 1 | Deploy the reviewed build to `booking.pumasi.ai` (Q-012) · *operator action* | Deploy the reviewed build to `booking.pumasi.ai` (Q-012) · *operator action* — **unchanged in rank, widened in content**: PR-1's user-visible clause now waits here too |
-| 2 | PR-1 compliance: a version that moves and is visible | **A public booking page shows a day that has times and then shows no times — issue #32** *(new, filed during this pass)* · **top build entry** |
-| 3 | A half-configured deployment gets an answer it cannot act on | A half-configured deployment gets an answer it cannot act on — both refusals, on both builds |
-| 4 | The service suite latches red | The service suite latches red |
-| 5 | Submit the Google OAuth app for verification | Submit the Google OAuth app for verification |
-| 6 | The reporting intake, and the Workers-path decision | The reporting intake, and the Workers-path decision |
-| 7 | A runtime subprocessor guard for the deployed mail path | A runtime subprocessor guard for the deployed mail path |
-| 8 | `worker.ts` models its environment as a string bag | **`pumasi-report/2` — PR-1's diagnostics clause in the report payload** *(new, from item 2's residual)* |
-| 9 | O2 — secrets posture, completed | `worker.ts` models its environment as a string bag |
-| 10 | — | O2 — secrets posture, completed |
+| 1 | Deploy the reviewed build to `booking.pumasi.ai` (Q-012) · *operator action* | Deploy the reviewed build to `booking.pumasi.ai` (Q-012) · *operator action* — **unchanged in rank, five-sixths emptied by a deploy that happened**, and what remains has a named user in it |
+| 2 | A public booking page shows a day that has times and then shows no times — issue #32 | **The service suite latches red** *(was item 4)* · **top build entry** — promoted on a re-verified mechanism and a demonstrated, recurring cost |
+| 3 | A half-configured deployment gets an answer it cannot act on | A half-configured deployment gets an answer it cannot act on — *unchanged in severity, displaced by an entry whose sufferers exist* |
+| 4 | The service suite latches red | Submit the Google OAuth app for verification *(was 5)* |
+| 5 | Submit the Google OAuth app for verification | The reporting intake, and the Workers-path decision *(was 6)* |
+| 6 | The reporting intake, and the Workers-path decision | A runtime subprocessor guard for the deployed mail path *(was 7)* |
+| 7 | A runtime subprocessor guard for the deployed mail path | `pumasi-report/2` — PR-1's last open clause *(was 8)* |
+| 8 | `pumasi-report/2` — PR-1's diagnostics clause | `worker.ts` models its environment as a string bag *(was 9)* |
+| 9 | `worker.ts` models its environment as a string bag | O2 — secrets posture, completed *(was 10)* |
+| 10 | O2 — secrets posture, completed | — |
 
-Two entries entered the order this pass and one left it. **Nothing was demoted
-for getting better or worse** — item 3 and everything below it moved down one
-place because a new entry was ranked above them, and the entry that was item 2
-left because it was delivered; the file says so at each entry rather than
-letting a change of position read as a change of severity.
+**One entry left the order and one moved up two places; everything else moved
+because of those two and not because of its own merits.** Issue #32 left because
+it was built. The latch moved from 4 to 2 for a reason stated at the entry and
+in the commit message. Items 3 and 4 of the old order swapped; items 5 through
+10 each moved down one and then up one and are exactly where they were relative
+to each other. **Nothing was demoted for getting better or worse.**
+
+**Why the latch outranks the half-configured refusal, since this reverses five
+passes of ordering and should not pass as bookkeeping.** This file ranks by
+**who meets the defect**, and it has always meant a real person rather than a
+possible one. Item 3's own text says, and this seat re-read it rather than
+taking it: *"No live user on `booking.pumasi.ai` is affected"* — the operator it
+protects is one who configured a Google client id, omitted the secret, and has
+never been observed. Item 2's sufferers are named and counted: job `0049` paid
+it mid-packet on 45 tests, job `0077` paid it during the very run that produced
+this packet, and **this evaluation paid it deliberately to re-verify the
+mechanism**. A rule that prefers an unobserved operator to three named jobs is
+being applied to the wrong noun. Item 2's remedy is also one line where item 3's
+is a two-path user-visible copy change on L-009 ground with a can-hurt review
+cycle behind it — so the cheaper fix closes the larger demonstrated cost, and
+that is the ordering.
+**There is a second reason, and it is about this file rather than about a
+user.** The latch corrupts the evidence every other entry rests on. `GATE:
+PASS`, the determinism figures in [`STAGE.md`](STAGE.md), and the suite counts
+in this file are all measured on a harness that can latch red and has. Fixing it
+makes every later measurement in this repository cheaper and more trustworthy.
+No other entry has that property.
 
 Every entry below carries one of two labels and none is unlabelled:
-**re-verified at `2453adc`** means this seat re-ran or re-read the thing the
+**re-verified at `d7bd490`** means this seat re-ran or re-read the thing the
 entry rests on at this tree; **carried, not confirmed** means it did not, and
 says why. The label is `0055`'s, adopted here because an unlabelled entry is
 indistinguishable from a re-measured one.
@@ -76,189 +114,196 @@ and polish, and the list reflects that.
 
 ## The order
 
-**1 · Deploy the reviewed build to `booking.pumasi.ai` — the Zoom leak is closed
-in `main` and is still live in production, workflows and webhooks are repaired
-in `main` and still dead in production, PR-1's version is now visible in `main`
-and invisible in production, and six merged changes to the deployed source now
-wait behind it** — source: this evaluation (2026-09-01, job `0061`), checking the
-deployment rather than the merge, for the **sixth** consecutive evaluation.
-**Re-verified at `2453adc`, re-measured rather than carried, for the second
-consecutive pass.** Run here at **2026-09-01 00:27:49 UTC**, `npx wrangler
-deployments list` from `service/` for the `pumasi-booking` worker
-(`wrangler.jsonc:5`, `name: "pumasi-booking"`; `:9`, custom domain
-`booking.pumasi.ai`) puts the newest deployment at **2026-08-30 16:55:37.479
-UTC** — version `d73c05b5-81b6-41a4-933a-4a94acbaa45a`, `Source: Secret Change`,
-author `atxapplellc@gmail.com`, no tag and no message. That is the same
-deployment the last two evaluations found, taken again rather than repeated:
-**nothing has been deployed in 31 h 32 m.**
-**Curled by this seat at 2026-09-01 00:27:29–30 UTC**, and the answers now
-carry their own proof of age:
-`https://booking.pumasi.ai/` → **200**;
-`/healthz` → `{"status":"ok","commit":"unknown","sharded":true}`;
-`/version` → **404**;
-`/readyz` → `{"status":"ready","owners":11}`.
-**Read those against `2453adc` and they date themselves.** At this tree
-`worker.ts:448` answers `/healthz` with a `version` field, `:452` answers
-`/version` at all, and `:461` adds `version` to `/readyz`. The live `/healthz`
-has no `version` key, the live `/readyz` has no `version` key, and `/version`
-is a 404 page. The deployment is not merely older than the merge — it is
-observably older, from outside, without credentials. That is the first time
-this entry has been able to say so, and it is a side effect of item 2 of the
-previous order landing.
-**What is behind it, counted precisely, because the previous count was loose.**
-Earlier passes said "six merged builds" and reached that number by counting
-commits on `main` — which included review-transcript and roadmap commits that
-change nothing a worker would serve. Counted at this tree instead as *commits
-that change `service/src/`*, the set is **six**: `4f56df4` (the §5.1 reporting
+**1 · Deploy the reviewed build to `booking.pumasi.ai` — a named user's reported
+defect is repaired in `main` and is still on the page they reported it from; the
+served subprocessor register still omits a provider the deployed build calls;
+and one commit on the deployed path was never reviewed** — source: this
+evaluation (2026-09-01, job `0082`), checking the deployment rather than the
+merge, for the **seventh** consecutive evaluation.
+**Re-verified at `d7bd490`, re-measured rather than carried, and this is the
+pass on which carrying would have been badly wrong.**
+**The deployment moved, for the first time since this entry was written.** Run
+here at **2026-09-01 05:15:44 UTC**, `npx wrangler deployments list` from
+`service/` for the `pumasi-booking` worker (`wrangler.jsonc:5`, `name:
+"pumasi-booking"`; `:9`, custom domain `booking.pumasi.ai`) returns **three new
+deployments** above the `d73c05b5` *Secret Change* that six evaluations found
+unmoved: **2026-09-01 00:38:41.738Z** (`aef92528`), **00:39:03.300Z**
+(`bf4934bf`) and **00:40:44.505Z** (`b6a2e64b`), all author
+`atxapplellc@gmail.com`, `Source: Unknown (deployment)`, no tag and no message.
+**Curled by this seat at 2026-09-01 05:11:40 UTC**, and the answers now name
+their own build:
+`/version` → **200** `{"version":"0.2.0","commit":"2453adc"}`;
+`/healthz` → **200** `{"status":"ok","version":"0.2.0","commit":"2453adc","sharded":true}`;
+`/readyz` → **200** `{"status":"ready","version":"0.2.0","commit":"2453adc","owners":11}`.
+The three surfaces that were `404`, `commit:"unknown"` and version-less at the
+last evaluation all answer, and they answer with a commit. **The deployed build
+is `2453adc` and it says so itself, without credentials.**
+**Five of the six builds this entry has ranked for five passes are delivered,
+checked one at a time rather than inferred from a date.** `git merge-base
+--is-ancestor <sha> 2453adc` answers **yes** for `4f56df4` (the §5.1 reporting
 mechanism), `16c3fd4` (the Zoom PMI fix), `7ea730a` (the OAuth-state fix),
-`3f2947c` (the two sign-in doors), `0a35ddc` (the alarm import) and now
-**`2453adc`** (the version). Thirty-six commits in total sit on `main` behind
-the deployment. The corrected basis is not a smaller problem, it is a countable
-one; the previous figure is not withdrawn as wrong about the product, only as
-imprecise about what it was counting.
-**What changed about this entry's cost, and it is a change in kind rather than
-in count.** Job `0049`'s handover put it in words two evaluations have now
-re-measured and agreed with: *"Every previous entry behind Q-012 was a defect
-that merging at least stopped making worse. This one is a delivery that does not
-happen, and it will not start happening until someone runs a deploy."*
-Reminders, follow-ups and every webhook on `booking.pumasi.ai` have been
-undelivered since `de4abbe` (2026-08-28); the repair is merged, gate-passed,
-released and reviewed, and delivers nothing. **The wait is no longer a delay in
-closing a defect — it is the defect, for as long as it lasts.**
-**New at this pass, and it is why this entry's title grew a clause.** `2453adc`
-closed three of PR-1's four clauses in code, and one of the three — *"a person
-using the product can find the version without reading source"* — is a claim
-about the **product**, not the branch. A footer, a `/version` route and a
-diagnostics row that exist only where no user goes do not satisfy a clause
-written about users. So PR-1's user-visible clause is now in exactly the
-position the Zoom fix and the alarm import are already in: complete, reviewed,
-merged, and unreachable. It has no remedy of its own — the only thing that
-closes it is this entry — which is why it is recorded here and is not given a
-rank of its own. The `GIT_COMMIT` half sits here for the older reason: that
-value is set by `npx wrangler deploy --var GIT_COMMIT:…` and no commit can set
-it. `config.ts:96` reads `RAILWAY_GIT_COMMIT_SHA ?? GIT_COMMIT ?? 'unknown'`,
-and `'unknown'` is what the live endpoint says.
-**Recorded against `DECISIONS.md` Q-012 as evidence and nothing more.** This
-seat added an evidence row there at this pass and did not touch the date, the
-default, or the status. **Nothing here closes, extends, softens or dates that
-window.**
-Deploying does close the Zoom half even for rows the old flow already stamped,
-which was checked rather than assumed by two earlier passes and is **carried,
-not confirmed** here: `locationText(schedule, …, 'public')` returns
-`"<venue> — link arrives with the confirmation"` for every conferencing kind
-*before* it ever consults `schedule.location_value` (`schedules.ts:371`), so a
-stale PMI in the column stops printing the moment the new build serves. This
-seat did not re-run that reading; it is unchanged by `2453adc`, which touched
-neither file.
-**What could not be confirmed from outside, and is not claimed:** no public
-booking-page slug for the affected owner is recorded anywhere in these
-repositories, and this seat will not guess at one; and no workflow was exercised
-against the live deployment, which would mean booking against a real owner's
-page. The liveness of both defects rests on the deployment measurement, the
-source, and now on the shape of the live endpoints' own JSON — not on a page
-this evaluation loaded.
-Why here: three things on the deployment can hurt a user today — the Zoom leak,
-the dead workflows, and now issue #32 at item 2 — and this is the only entry
-that closes two of them at once. *(The previous four passes wrote "nothing else
-on this list can hurt a user today"; that sentence stopped being true at
-2026-09-01 00:36 UTC when issue #32 was filed, and it is corrected here rather
-than carried.)* It is the same entry that topped the list at the last five
-evaluations; merging closed three defects in the repository and none in the
-product, and this file ranks what users meet, not what `main` contains. Note the
-asymmetry that item 2 establishes and this entry must not absorb: **deploying
-does not fix issue #32**, whose renderer is byte-identical on both sides. This
-entry is not a superset of the list below it.
+`3f2947c` (the two sign-in doors) and `0a35ddc` (the alarm import), and for
+`2453adc` itself. **The Zoom personal-meeting-URL leak is closed for the people
+it exposed. Reminders, follow-ups and webhooks are alive on the deployment for
+the first time in this product's history.** Both were this entry's sharpest
+content for five evaluations and both are struck from it here, on measurement.
+*One thing this seat measured and one thing it did not:* the code is deployed,
+and **whether the Durable-Object alarm actually re-armed on the hosted build
+after the deploy is not established** — answering it means booking against a
+real owner's page, which this seat did not do. Shipping fixed code is not the
+same as the feature running. That gap is named rather than glossed and is
+**carried, not confirmed**.
+**What is left behind this entry, counted at this tree rather than carried.**
+`git log 2453adc..HEAD -- service/src/` returns exactly **three** commits, and
+they are three different kinds of thing:
+- **`d7bd490` — issue #32's repair, and the only one with a person waiting.**
+  Re-measured by this seat in headless Chrome (`/usr/bin/google-chrome`
+  150.0.7871.186) at **2026-09-01 05:12:11 UTC**, timezone `America/Chicago`:
+  `GET https://booking.pumasi.ai/yunyoungmok/abc` → **200**; `#slots-data`
+  carries **24 slots**, first `2026-09-01T14:00:00Z`, last
+  `2026-09-02T21:30:00Z`; day cells **1** and **2** are marked `.has`; clicking
+  each gives `#picked-day` *"Tuesday, September 1"* and *"Wednesday, September
+  2"* with **`#times.children.length` 0** both times, and **0 errors captured**.
+  `git merge-base --is-ancestor d7bd490 2453adc` answers **no**. **The person
+  who reported this on 2026-09-01 00:36:56 UTC still meets it**, four and a half
+  hours after the deploy that could have carried it and did not.
+- **`c000feb` — the served subprocessor register still omits Zoom.**
+  Re-measured here at **05:19 UTC**: `curl
+  https://booking.pumasi.ai/subprocessors` returns 34663 bytes containing four
+  case-insensitive matches for *zoom*, and **all four are CSS and UI strings**
+  (`cursor:zoom-in`, `pf-shot-zoom-hint`). No subprocessor row names Zoom. The
+  repair is merged and the published register a customer reads is unchanged.
+- **`36f286c` — a commit on the deployed path that nothing in the flow
+  produced.** Authored **2026-09-01 00:40:51 UTC**, *seven seconds after the
+  00:40:44 deploy* and four minutes after issue #32 was filed, by
+  `Pumasi <admin@pumasi.ai>`, message *"fix(ui): add prominent Preview Public
+  Booking Page CTA to event settings view (addresses #32)"*. It has **no trailer
+  block, no spec, no intent, no `DECISIONS.md` entry and no review transcript**,
+  and it edits `service/src/pages.ts` — the file every hosted user meets. Read
+  at this tree: four inserted lines replacing the event editor's plain link with
+  a styled CTA (`pages.ts` `eventTypeEditor`). It does not touch the booking
+  page's renderer and it does not address issue #32, whose defect was on the
+  public page. **This is not ranked as a defect** — the suite is green at this
+  tree and this seat found nothing wrong with the four lines. It is recorded
+  here because it will ship on the next deploy, because nobody reviewed it, and
+  because a reader counting what a deploy carries should not have to discover it.
+  Reviewing or reverting it is not this seat's; it is handed up in this
+  evaluation's digest entry.
+**PR-1's user-visible clause is met — in the product, not the branch — and this
+entry loses it.** [`PRODUCT-RULES.md` PR-1](https://github.com/pumasi-ai/pumasi/blob/worktree-product-rules/PRODUCT-RULES.md)
+asks that *"a person using the product can find the version without reading
+source"*. Measured at **05:20:06 UTC**: `https://booking.pumasi.ai/` serves
+`<span class="foot-v">v0.2.0</span>`, and `/version` answers. That clause was
+this entry's newest content one pass ago and it is closed by the deploy. **The
+`GIT_COMMIT` half is closed too, and it closed the way it always could:** the
+live endpoints report `commit: "2453adc"`, which no commit could have set and a
+deploy did.
+**What could not be confirmed from outside, and is not claimed:** no workflow
+was exercised against the live deployment, so the alarm's re-arming is
+unestablished as above; and no owner's calendar connection was exercised.
+Why here: one named person is waiting on a page that does not work, and this is
+the only entry that reaches them. It has been item 1 at six consecutive
+evaluations and it stays item 1 — but for the first time the reason is a single
+identified user rather than a queue of invisible repairs, and this file says so
+rather than reusing last pass's sentence. Note the asymmetry item 2 of the
+previous order established and this entry still must not absorb: **deploying is
+now the *only* thing that closes issue #32**, because the repair exists and
+nothing else stands between it and the reporter.
 *Operator action, not a build — see `DECISIONS.md` **Q-012**, which asks whose
 duty this is and names the coder as its default. It keeps rank 1 rather than
 being demoted for being unbuildable. The next **coder** packet takes item 2;
 this entry must not be displaced by it.*
+**Recorded against `DECISIONS.md` Q-012 as evidence and nothing more.** This
+seat added an evidence row there at this pass and did not touch the date, the
+default, or the status. **Nothing here closes, extends, softens or dates that
+window, and no deployer is named.** That a deploy happened is reported; who ran
+it, and whether that is the answer to Q-012, is not this seat's to say.
 
-**2 · A public booking page shows a day that has times and then shows no times —
-issue #32, filed by a real user on the live product during this evaluation, and
-it is *not* one of the undeployed fixes** — source:
-[issue #32](https://github.com/pumasi-ai/pumasi-booking/issues/32),
-`accepted` · `priority: high` at this evaluation's duty-1 intake, 2026-09-01
-00:36:56 UTC — **21 minutes after this packet began**. **Measured at
-`2453adc`, and against the live deployment, by this seat.**
-**The report.** *"in the calendar booking page, i cannot see specific times."*
-A screenshot is attached. It shows `booking.pumasi.ai/yunyoungmok/abc` — a
-public booking page, not an owner's view — with **September 2026** displayed,
-the 1st and 2nd rendered as available (`.has`), the **2nd selected**
-(`aria-pressed=true`), the heading **"Wednesday, September 2"** present, and the
-times list beneath it **empty**. Client diagnostics: `America/Chicago`,
-1920×945, Chrome 151, network online, **`0 error(s) captured`**.
-**What this seat measured, rather than took from the report.** At **2026-09-01
-00:37:43 UTC**, `GET https://booking.pumasi.ai/yunyoungmok/abc` → **200**, and
-the page's server-rendered `<script type="application/json" id="slots-data">`
-carries **25 slots — 12 dated 2026-09-01 and 13 dated 2026-09-02** (UTC), first
-`2026-09-01T14:00:00Z`, last `2026-09-02T21:30:00Z`. In `America/Chicago` the
-13 slots for the 2nd fall at 09:00–17:00 local. **The data for the day the user
-picked was on the page the user was looking at.** The slot list is built
-entirely client-side, by the single `render()` in that page, from exactly that
-JSON.
-**Why this outranks the entry it displaces, which is the ranking judgement and
-not a severity claim.** This file's test is who meets the defect. The entry that
-was item 2 before this pass — the two sign-in refusals — records in its own text
-that **no live user on `booking.pumasi.ai` is affected**, because that
-deployment holds both Google credentials; it is an operator meeting a wrong
-answer on a configuration nobody is running. Here a booker met an empty slot
-list on the product's central surface, on the live deployment, today. On the
-rule this list has applied at every evaluation, that outranks it.
-**Why it is a build and not another instance of item 1 — checked rather than
-assumed, and this is the load-bearing measurement.** Almost everything else near
-the top of this list is a repair that exists in `main` and not in production.
-This is not. The booking page's slot renderer was extracted from the live HTML
-and from `service/src/pages.ts` at `2453adc` and diffed: **byte-identical, 5151
-characters, zero differences.** Deploying would not close this. A coder packet
-would.
-**What is NOT established, stated rather than glossed, because an accepted
-report is not a diagnosis.** This seat did **not** reproduce the empty list: the
-failure is client-side and there is no browser on this machine. So the
-precondition is confirmed and the mechanism is unknown. Reading the renderer
-narrows it without settling it — `#picked-day` and `#times` are siblings inside
-a visible `#cal` (`pages.ts:854`–`:855`), `times.textContent=''` is followed
-immediately by a `forEach` over `byDay[pickedDay]`, and nothing between them can
-throw on a non-empty array — so a partial render is hard to construct from the
-source alone. Two loose threads for whoever takes it: the report's `0 error(s)
-captured` makes a thrown exception *less* likely, though it is not established
-what that widget captures from before it loads; and the screenshot's own layout
-is anomalous (the card sits right-of-centre in a 1303 px capture), which may be
-an artefact of client-side screenshot capture rather than of the page — in which
-case the *capture* is unreliable and the user's sentence is still the evidence.
-**The first step of the packet is reproduction, not a patch.**
-**A second, smaller finding inside the same report, handed up rather than
-ranked.** The report's **Page URL** diagnostic reads
-`https://booking.pumasi.ai/app/event/06f1bfbc-46f0-407f-ba64-47bca20f0dba`
-while its screenshot's address bar reads `booking.pumasi.ai/yunyoungmok/abc` —
-an owner's event editor and a public booking page, and the defect is on the
-second. A reader who trusts the field goes to the wrong page. `feedback.ts` is
-`PRODUCT-RULES.md` PR-2's **reference implementation**, so a fidelity defect
-there is one other products copy. Not ranked separately at this pass because it
-was found inside another entry and this file does not pad; it is named in the
-digest and belongs with whoever takes this item.
-Why here: below item 1 for the reason item 1 is item 1 — nothing here has been
-undelivered to every user of this product for four days. Above everything else
-because it is the only entry on this list with a named user who met it today,
-and the only one at the top that a commit can actually close.
+**2 · The service suite latches red: one interrupted run leaves a data directory
+behind, and every later run of that file fails on it until a human deletes it**
+— source: job `0034` handed this on itself and declined to rank it; job `0077`
+reproduced it on demand during the issue-#32 build and named the mechanism; **it
+is re-verified from scratch here, and this pass establishes one thing the
+previous accounts did not.**
+**Re-verified at `d7bd490`, by reproducing it deliberately rather than by
+reading anyone's report.** `/tmp` held **0** `pumasi-pg-*` directories at the
+start of this evaluation.
+- **Baseline.** `node --test .build/test/bootstrap.test.js` from a clean `/tmp`:
+  **7 tests, 7 pass, 0 fail**, 817 ms.
+- **The interruption.** The same command was started and the node process
+  `SIGKILL`ed 0.8 s in — the shape of any run that dies mid-suite. `ls -A
+  /tmp/pumasi-pg-bootstrap` afterwards: **24 entries** (`PG_VERSION`, `base`,
+  `global`, `pg_hba.conf`, …).
+- **The latch.** The identical command, re-run: **7 tests, 0 pass, 7 fail**,
+  every one of them `Postgres init script failed (code: 1, signal: null). ERROR
+  OUTPUT: initdb: error: directory "/tmp/pumasi-pg-bootstrap" exists but is not
+  empty`. The directory still held **24 entries** afterwards, so it latches
+  rather than self-clearing.
+- **The remedy, checked.** `rm -rf /tmp/pumasi-pg-bootstrap`, then the identical
+  command: **7 pass, 0 fail**. `/tmp` held **0** `pumasi-pg-*` directories at
+  the end of this evaluation, and the root suite ran **357/357** afterwards.
+**New here, and it narrows the fix rather than the finding: the leftover
+directory alone is sufficient, and an orphaned server process is not part of the
+mechanism.** The `SIGKILL` leaves a `postgres -D /tmp/pumasi-pg-bootstrap -p
+55436` orphan behind, which is the obvious suspect — a held port would explain
+the same symptom. It was killed on its own, **leaving the directory in place**,
+and the re-run **still failed 7 of 7 with the same `initdb` message**. So the
+cause is the directory and nothing else, and a repair that only reaps stray
+processes would not close this. `initialise()` in `embedded-postgres` runs
+`initdb` unconditionally — there is no "already initialised" branch to fall
+through to (`node_modules/embedded-postgres/dist/index.js:106`ff), which is why
+a *complete* leftover cluster is as fatal as a partial one.
+**The scope, counted at this tree rather than carried:** `grep -l "databaseDir:
+'/tmp/pumasi-pg-" service/test/*.test.ts` returns **19** files, each hard-coding
+both its data directory and its port — `analytics`, `automation`, `bootstrap`,
+`branding`, `calendar`, `concurrency`, `directory`, `enterprise`, `frontdoor`,
+`gate`, `identity`, `legal`, `meetings`, `owner`, `parity`, `questions`,
+`recur`, `routing`, `teams`.
+*What the entry asks for, and the one thing it must not do.* Give each run its
+own data directory and let the OS allocate the port, and remove the directory
+when a start fails. **It must not lower `--test-concurrency`.** Every run
+recorded above was a single test file, alone, with nothing else in flight —
+there was no concurrency to lower, and that knob would make the latch less
+likely to be sprung while leaving both fixed resources exactly where they are.
+**What is carried, not confirmed, and named so the entry is not read as more
+settled than it is.** The **19 consecutive failures out of 40 runs** measured
+two evaluations ago, and the **15-of-15 green load sweep** across loads
+2.56–10.99 measured at the last one, were not re-run here. Neither is withdrawn;
+this pass did not need them, because it reproduced the mechanism directly in
+four commands instead of inferring it from a failure rate. What they establish
+and this pass does not is that **load is not the cause** — eleven of those
+fifteen green runs sat inside the 9.0–12.4 band in which the nineteen failures
+occurred.
+Why here, and this is the promotion: **it is the highest entry on this list
+whose cost is being paid by somebody who exists.** No user can be hurt by it —
+it produces false **reds**, never a false green, and a fresh CI runner cannot
+carry it between runs, so today's advisory CI is unaffected. But
+`pumasi/tools/gate.sh` is run by hand on this shared machine by every agent that
+needs to pass it, and after one interrupted run the gate reports failures to
+every agent afterwards, on a clean tree, until someone knows to delete a
+directory in `/tmp`. Job `0049` paid it on 45 tests. Job `0077` paid it during
+the run that produced this packet. **This evaluation paid it on purpose, to
+re-verify it.** Item 3 below protects an operator who has never been observed;
+this one has three named jobs behind it and a one-line remedy. **And it is the
+only entry that corrupts the evidence the rest of this list rests on** —
+`GATE: PASS`, the determinism figures in [`STAGE.md`](STAGE.md) and the suite
+counts in this file are all taken on a harness that can latch red and has.
 
 **3 · A half-configured deployment gets an answer it cannot act on — both
 refusals, on both builds** — source: the job `0023` run recorded both halves as
 found-not-fixed (`service/spec/0007/SPEC.md` §5) and handed the ranking here.
-**Re-verified at `2453adc`, and every line number in this entry MOVED — which is
-exactly why they are re-taken rather than repeated. `2453adc` touched
-`worker.ts` and `app.ts` again, and a stale number is how a finding stops being
-evidence:**
+**Re-verified at `d7bd490`, and this time the line numbers did NOT move — which
+is worth one sentence, because the last two passes had to re-take them and a
+reader should be able to tell a stable coordinate from an unchecked one:**
 - **(b) `worker.ts:610` opens `/auth/google/start` on `config.googleClientId`
-  alone.** *It was `596` at `0a35ddc` and it is `610` now*:
-  `grep -n "if (!states || !config.googleClientId)" service/src/worker.ts` →
-  **`610`**. The Node-path guard was `app.ts:985` and is **`app.ts:992`**
-  (`grep -n "!hub || !config.googleClientId" service/src/app.ts`) — the same
-  guard, displaced by the three `/healthz`, `/version` and `/readyz` surfaces
-  `2453adc` inserted above it on each build. The finding is unchanged; only its
-  coordinates moved. Since
-  `deps.calendars` exists only when `googleClientId && googleClientSecret &&
-  tokenKey` are all set (`server.ts:113`–`115`, `worker.ts:243`–`245`), the Node
-  path effectively requires the secret and the Workers router does not. A
+  alone.** `grep -n "if (!states || !config.googleClientId)"
+  service/src/worker.ts` → **`610`**, unchanged from `2453adc`. The Node-path
+  guard is **`app.ts:992`** (`grep -n "!hub || !config.googleClientId"
+  service/src/app.ts`), also unchanged. `d7bd490` and `c000feb` touched
+  `pages.ts`, `feedback.ts` and the legal texts, and neither displaced these.
+  Since `deps.calendars` exists only when `googleClientId && googleClientSecret
+  && tokenKey` are all set (`server.ts:113`–`115`, `worker.ts:243`–`245`), the
+  Node path effectively requires the secret and the Workers router does not. A
   Workers deployment holding an id and no secret is sent out to Google and
   refused on the way back instead of refusing at the button.
 - **(a) Neither sign-in refusal names a missing `TOKEN_KEY`.** An operator who
@@ -271,84 +316,16 @@ class, both span the same two builds, and splitting them into two `can_hurt`
 cycles buys nothing but a second review round on the same files. A coder packet
 takes both or neither.
 Why here: an operator who meets a wrong answer is a user meeting a defect, which
-is the test this file ranks by, and no entry below it has a user on the other
-end. **No live user on `booking.pumasi.ai` is affected**: that deployment holds
-both Google credentials — **and that sentence is why it is no longer the top
-build entry.** It rose to the head of the buildable list when PR-1's version
-half was delivered at `2453adc`, and it was displaced within the same pass by
-issue #32, which has a live user where this has none. Nothing about this entry
-got better or worse; it is ranked by who meets it, as everything here is.
-Nothing here is unguarded — on a
-deployment with no `googleClientSecret`, Google sign-in cannot complete on
-either build, and (b) only decides whether the refusal arrives before or after a
-round trip.
+is the test this file ranks by. **Nothing about this entry got better or worse
+and it was not demoted** — it is displaced by item 2, whose sufferers are named
+and counted where this entry's are hypothetical. **No live user on
+`booking.pumasi.ai` is affected**: that deployment holds both Google
+credentials, and its own text has said so since it was written. Nothing here is
+unguarded — on a deployment with no `googleClientSecret`, Google sign-in cannot
+complete on either build, and (b) only decides whether the refusal arrives
+before or after a round trip.
 
-**4 · The service suite latches red: one contention failure leaves a data
-directory behind, and every later run of that file fails on it** — source: job
-`0034` handed this on itself and declined to rank it; the mechanism was
-established by measurement at the last evaluation and is **re-tested here at a
-load regime that pins down what does *not* cause it.**
-**Re-verified at `2453adc`, at a regime the previous pass did not try.**
-Measured at `0a35ddc` by the previous evaluation: `/tmp` was clean at the start of the
-pass (`ls -d /tmp/pumasi-pg-* | wc -l` → **0**), and `npm test` was then run
-**15 consecutive times**, strictly sequentially, recording the one-minute load
-average before each. **15 of 15 green, 339/339 every time** (19 core + 320
-service), at loads of **2.56, 4.04, 6.45, 7.73, 9.81, 9.82, 9.60, 7.65, 9.02,
-8.59, 8.10, 9.08, 9.98, 10.99, 9.70**. `/tmp` held **0** `pumasi-pg-*`
-directories afterwards.
-**What that adds, and what it deliberately does not.** It does not reproduce the
-latch, and 15 runs is not 40 — the last pass's 19 consecutive failures are not
-withdrawn and are not re-run here, for a stated reason: three other repositories
-had live writers on this machine during this pass, and deliberately poisoning
-`/tmp` for them to re-demonstrate a mechanism already demonstrated would be
-paid for by seats that did not choose it. What it *does* add is the load
-control the finding was missing. **Eleven of these fifteen green runs sit inside
-the 9.0–12.4 band in which the previous pass recorded nineteen consecutive
-failures.** So load is not the cause and was never the cause; the leftover data
-directory is, and once it exists load stops mattering in the other direction
-too. That is the same conclusion the `rm -rf` check reached from the opposite
-side, now reached without breaking anything.
-**The mechanism, unchanged:** each of the 19 PostgreSQL files hard-codes both
-its port and its data directory (`databaseDir: '/tmp/pumasi-pg-<name>'`,
-`persistent: false`), so a start that fails leaves that directory non-empty, and
-every subsequent run of that file fails deterministically until a human deletes
-it. Job `0049` hit exactly this mid-packet — its commit records deleting
-leftover `/tmp/pumasi-pg-*` directories that had failed 45 tests — which is the
-first time this entry's cost has been paid by a job other than an evaluation.
-*What the entry asks for, and the one thing it must not do.* Give each run its
-own data directory and let the OS allocate the port, and remove the directory
-when a start fails. **It must not lower `--test-concurrency`.** These runs, like
-the last pass's, were strictly sequential — one `npm test` at a time — so there
-was no test concurrency to lower; that knob would make the latch less likely to
-be sprung and leave both fixed resources exactly where they are.
-Why here: **no user can be hurt by this**, which is why it sits below every
-entry above it. It is above item 5 and everything below because of what it costs
-*this project* today — `pumasi/tools/gate.sh` is run by hand, on this shared
-machine, by every agent that needs to pass it, and after one contention event
-the gate reports five failing enterprise-identity tests to every agent
-afterwards, on a clean tree, until someone knows to delete a directory in
-`/tmp`. Today's advisory CI is unaffected: a GitHub runner is a fresh container,
-so the latch cannot survive into a second run there.
-**What this pass adds, and it is small and honest about being small.**
-`/tmp` held **0** `pumasi-pg-*` directories at the start of this evaluation and
-**0** at the end. `npm test` was run at the repository root **4 times
-sequentially, 4 of 4 green, 347/347 each** (19 core + 328 service), plus one
-service-only run and one `pumasi/tools/gate.sh` run — six suite executions, zero
-failures. **One of those overlapped another by accident**, the gate's `npm test`
-running while a background root run was still going, and that is the first time
-two `npm test` invocations have been in flight at once on this pod: a snapshot
-taken mid-overlap found **8** `pumasi-pg-*` directories present, and both runs
-passed and both cleaned up after themselves. So a single concurrency event did
-**not** spring the latch. That is one trial, not a result — it is recorded
-because concurrency is the mechanism this entry names and nobody had tried it,
-and it is explicitly not offered as evidence that the latch needs more than
-one overlap. The previous pass's 19 consecutive failures stand and are not
-withdrawn. **The 15-run load sweep and the 19-failure observation are carried,
-not confirmed**; they were not re-run here, for the reason the previous pass
-gave and this one inherits — three other repositories had live writers on this
-machine during this pass.
-
-**5 · Submit the Google OAuth app for verification** — source:
+**4 · Submit the Google OAuth app for verification** — source:
 [`0002-calendar-integration.md` §4](0002-calendar-integration.md);
 [`service/spec/0003/GOOGLE-SETUP.md`](../service/spec/0003/GOOGLE-SETUP.md)
 ("Not yet — deliberately").
@@ -356,10 +333,15 @@ Why here: calendar truth is the product's central promise and today only
 nominated test accounts can connect; the blockers the setup doc waited on — a
 deployed homepage and a live privacy URL — now exist. *Mostly operator/steward
 action, not code; queue it in parallel, since it is calendar time, not work.*
-*Carried, not confirmed:* this seat re-read the entry and did not re-check the
-Google console state, which it cannot see.
+*Carried, not confirmed at `d7bd490`:* this seat re-read the entry and did not
+re-check the Google console state, which it cannot see. *One thing that did
+change and is measured here rather than assumed:* the setup doc waited on a
+deployed homepage and a live privacy URL, and both are now not merely deployed
+but **current** — `booking.pumasi.ai` serves `2453adc` as of 2026-09-01
+00:40:44 UTC, re-measured at 05:11 UTC. Nothing about the submission itself is
+this seat's to do or to date.
 
-**6 · The reporting intake, and the Workers-path decision** — source:
+**5 · The reporting intake, and the Workers-path decision** — source:
 [`service/spec/0004/SPEC.md`](../service/spec/0004/SPEC.md) R5c;
 [`DEBT.md` D-107](https://github.com/pumasi-ai/pumasi/blob/main/governance/DEBT.md)
 (open half); surfaced by the job-0008 run (ops digest, 2026-08-30). The
@@ -367,37 +349,52 @@ mechanism shipped (`4f56df4`) but nothing receives reports — daily sends
 fail and are dropped — and R5c forbids the intake to accept held reports
 before its deletion path is implemented and tested. The Workers deployment
 deliberately sends nothing; that decision is revisited no later than the
-`launched` promotion (Q-008 default). *Note, from item 1's evidence: `4f56df4`
-also postdates the last deployment, so the mechanism is not on the live build
-either — which changes nothing here, since the Workers path is configured silent
-regardless.* *The intake is foundation infrastructure and may land in another
+`launched` promotion (Q-008 default). ***Corrected from item 1's evidence at this pass, because the previous note is
+now false.*** Four passes recorded that `4f56df4` postdates the deployment and
+so was not on the live build. **It is on the live build now** — `git merge-base
+--is-ancestor 4f56df4 2453adc` answers yes, measured here. That changes nothing
+about this entry, for the reason it always gave: the Workers path is configured
+to send nothing (R8), so a deployed mechanism that deliberately stays quiet is
+the same silence as an undeployed one. The correction is recorded rather than
+dropped, because the sentence it replaces was evidence and is not true. *The intake is foundation infrastructure and may land in another
 repo — the project manager routes it; it sits here because this product's
 `launched` claim waits on it.*
 Why here: both halves gate `launched` (STAGE.md), but neither hurts a user
 today, so shipped-surface correctness outranks them. **Re-verified at
-`2453adc`:** `reporting.ts` is unchanged by the version work except for the
-docblock it gained, and the Workers path still sends nothing (R8). **If a coder
-packet takes this, it takes item 8 in the same R1b cycle** — same schema, same
+`d7bd490`:** `reporting.ts` is untouched by `c000feb` and `d7bd490`
+(`git log 2453adc..HEAD -- service/src/reporting.ts` is empty), and the Workers
+path still sends nothing (R8). **If a coder
+packet takes this, it takes item 7 in the same R1b cycle** — same schema, same
 review, and two spec reviews on one file weeks apart is pure waste.
 
-**7 · A runtime subprocessor guard for the deployed mail path, or a recorded
+**6 · A runtime subprocessor guard for the deployed mail path, or a recorded
 why-not** — source: [`SUBPROCESSORS.md`](../SUBPROCESSORS.md), which names the
 Workers path's control as weaker than the Node path's.
 Why here: [`VALUE.md`](VALUE.md) C4 claims enforcement, and the deployed path
 is the one real bookers' mail actually crosses — which puts a user on the other
-end of it, and is why it outranks items 8 and 9 despite all three being
+end of it, and is why it outranks items 7 and 8 despite all three being
 invisible today.
-*Carried, not confirmed:* `SUBPROCESSORS.md` was re-read and is unchanged at
-`2453adc`; no new measurement of the mail path was taken.
+**Re-verified at `d7bd490`, and the "unchanged" label the last pass used would
+have been wrong here.** `SUBPROCESSORS.md` **did** change — `c4b1159` added the
+Zoom row and `c000feb` rewrote the enforcement language — so this seat re-read
+it rather than carrying the label. The finding stands at this tree: the register
+still names the deployed Workers mail path's control as *"a weaker control than
+the Node path has"* (`SUBPROCESSORS.md:31`–`:36`), and it is named as weaker
+rather than dressed up, which is why this is a build and not a correction.
+*Carried, not confirmed:* no new measurement of the mail path itself was taken.
+*And one thing measured that belongs to item 1 rather than here:* the register a
+customer actually reads is still the pre-`c000feb` one — `curl
+https://booking.pumasi.ai/subprocessors` at 05:19 UTC names no Zoom row.
 
-**8 · `pumasi-report/2` — PR-1's diagnostics clause in the report payload** —
+**7 · `pumasi-report/2` — PR-1's diagnostics clause in the report payload** —
 source: item 2 of the previous order, **ranked here rather than closed with it**;
 [`PRODUCT-RULES.md` PR-1](https://github.com/pumasi-ai/pumasi/blob/worktree-product-rules/PRODUCT-RULES.md)
 *"In the diagnostics"*; [`service/spec/0004/SPEC.md`](../service/spec/0004/SPEC.md)
-R1b. **Re-verified at `2453adc` by reading the module, not the commit message.**
+R1b. **Re-verified at `d7bd490` by reading the module, not the commit message.**
 `service/src/reporting.ts:20` still declares `REPORT_SCHEMA = 'pumasi-report/1'`,
-and neither `HeldReport` (`:59`–`:78`) nor `PublishedReport` (`:80`ff) carries a
-`version` field; both carry `commit`. The docblock at `:22`–`:31`, added by
+and neither `HeldReport` (`:59`) nor `PublishedReport` (`:80`) carries a
+`version` field; both carry `commit`. All three coordinates are unchanged from
+the last pass, checked rather than assumed. The docblock at `:22`–`:31`, added by
 `2453adc`, names the gap where the decision lives and states the reason it was
 not closed in that commit: by that module's own rule a field not in these
 interfaces is a field a report may not carry, so adding one is a **schema
@@ -406,35 +403,40 @@ silent field on a schema a receiver validates is worse than a missing one."*
 This file agrees with that reasoning and is recording it as a ranked item rather
 than as a comment, because a gap that lives only in a docblock is a gap nobody
 schedules.
-**Why it is ranked here and not higher, given PR-1 binds always.** The clause is
-real and the entry cites it, but the ranking test this file uses is who meets
+**Why it is ranked here and not higher, given PR-1 binds always. Re-asked at
+this pass rather than carried, because PR-1's other clauses closed underneath
+it.** With `booking.pumasi.ai` now serving `2453adc`, PR-1's *one source of
+truth*, *the number moves* and *user-visible* clauses are all met **in the
+product** — the live footer reads `v0.2.0` and `/version` answers, both measured
+here. **This is the last open clause of PR-1**, which raises its salience and
+does not change its rank, because the ranking test this file uses is who meets
 the defect, and today **nobody reads these payloads at all**. Item 5 records
 that nothing receives reports — daily sends fail and are dropped — and that the
 Workers deployment, which is the build every real user meets, deliberately sends
 none (R8). So a missing `version` on a payload with no receiver and no emitter
 in production costs a full R1b spec-review cycle to close and buys no reader
-anything today. It ranks below item 7, which has a real booker's mail on the
-other end of it. It ranks **above** item 9 because it cites a rule that binds
+anything today. It ranks below item 6, which has a real booker's mail on the
+other end of it. It ranks **above** item 8 because it cites a rule that binds
 always and closes the last open clause of a rule this product otherwise now
-meets, where item 9 cites a coder's own `priority: medium` handover and no rule.
+meets, where item 8 cites a coder's own `priority: medium` handover and no rule.
 **How it should be built, which is a different question from where it ranks.**
-If a coder packet takes **item 6**, it takes this in the same cycle. Both change
+If a coder packet takes **item 5**, it takes this in the same cycle. Both change
 the same schema and both need the same fresh cross-family spec review; two R1b
 reviews on one file, weeks apart, is the waste. The rank says what to do first
 when they are taken separately; this line says not to take them separately if
 the choice is available.
-**What moves it up:** a receiver existing (item 6 landing on its own), or a
+**What moves it up:** a receiver existing (item 5 landing on its own), or a
 released report being filed against a build nobody can identify — at which point
 the clause acquires the reader it currently lacks.
 
-**9 · `worker.ts` models its environment as a string bag, and the generated
+**8 · `worker.ts` models its environment as a string bag, and the generated
 `Env` could type the bindings** — source: job `0049` handed this on itself at
 `priority: medium` and deliberately did not do it in that packet. *"Medium" in a
 coder's return block is that coder's read; this is the ranking, and it is made
 on this seat's own measurement rather than on the handover.*
-**Re-verified at `2453adc`, and the three cast sites moved with the file.**
-`npx wrangler types` still generates `service/worker-configuration.d.ts` —
-**588612 bytes, byte-identical to the previous pass's measurement**, workerd
+**Re-verified at `d7bd490`, and this pass every coordinate held still.**
+`service/worker-configuration.d.ts` is **588612 bytes**, unchanged and
+re-measured here with `wc -c` rather than regenerated, workerd
 `1.20260828.1` — whose `__BaseEnv_Env` types `PUMASI` and `DIRECTORY` as
 `DurableObjectNamespace<import("./src/worker").PumasiService>` and
 `…PumasiDirectory`, and the three `wrangler.jsonc` vars as string *literals*.
@@ -443,18 +445,21 @@ neither that prefix with `sha256sum` (`6d2e00a0…`) nor with `git hash-object`
 (`25aa0e24…`), and does not know which algorithm produced it. The size is
 re-measured and identical, so the file is unchanged; the hash is **carried, not
 confirmed**, and is not repeated as if it were.)*
-**Every line number in this entry moved too.** `worker.ts:80` — was `79` —
-keeps its own `type WorkerEnv = Record<string, string | undefined> & { PUMASI:
+**Every line number in this entry held, and they are re-taken rather than
+repeated — the last two passes had to move all of them, so a stable coordinate
+is worth distinguishing from an unchecked one.** `worker.ts:80` keeps its own `type WorkerEnv = Record<string, string | undefined> & { PUMASI:
 DoNamespace; DIRECTORY: DoNamespace }` over the hand-written `interface
-DoNamespace` at `worker.ts:69` (was `68`), and **three casts are widened through
-`unknown`** to bridge them — `worker.ts:120`, `:188`, `:297`, which were `119`,
-`:187`, `:296` at `0a35ddc` (`grep -n "as unknown as WorkerEnv"
-service/src/worker.ts`). Three further sites pass `env as never` into
+DoNamespace` at `worker.ts:69`, and **three casts are widened through
+`unknown`** to bridge them — `worker.ts:120`, `:188`, `:297`, all three
+re-measured here with `grep -n "as unknown as WorkerEnv" service/src/worker.ts`
+and all three unchanged from `2453adc`. Three further sites pass `env as never` into
 `loadConfig` — `worker.ts:122`, `:189`, `:381` — whose parameter is
 `NodeJS.ProcessEnv` (`config.ts:82`).
 *The scratch-tree compile below is **carried, not confirmed** — it was measured
-by the previous pass at `0a35ddc` and not re-run here; `worker.ts` has changed
-since, so the "0 errors" figure is that pass's, not this one's.*
+two passes ago at `0a35ddc` and not re-run here. `worker.ts` has changed since,
+so the "0 errors" figure is that pass's and not this one's; what this pass can
+say is that `npm test` at `d7bd490` compiles `tsconfig.worker.json` as part of
+`build:test` and the root suite is 357/357 green.*
 **The cost was measured, not estimated, and it is in two halves that are very
 different sizes.** The **previous** seat copied `service/` to a scratch tree
 outside the repository (no product code was written there either), replaced the
@@ -488,46 +493,171 @@ for: the alarm's missing import — item 2 of the order before the last one,
 delivered at `0a35ddc` — was silent for three days precisely because nothing
 throws when a timer dies. This file's rule is that a finding with no
 live user consequence does not belong near the top, and it holds here even
-though the file in question is the deployed router. It ranks **above** item 10
+though the file in question is the deployed router. It ranks **above** item 9
 because the cheap half is one proven line and it hardens the entry point that
-just cost this product three days of a dead feature, where item 10 closes a spec
-clause with no demonstrated hole. It ranks **below** items 7 and 8: item 7 has a
-real booker's mail on the other end of it, and item 8 cites a rule that binds
+just cost this product three days of a dead feature, where item 9 closes a spec
+clause with no demonstrated hole. It ranks **below** items 6 and 7: item 6 has a
+real booker's mail on the other end of it, and item 7 cites a rule that binds
 always where this entry cites a coder's own `priority: medium` handover. **What moves it up:** a demonstrated
 *silent* failure mode, or a second binding being added — the risk here is
 proportional to how often `wrangler.jsonc`'s binding list changes, and it has
 not changed since the shard migration.
 
-**10 · O2 — secrets posture, completed** — source:
+**9 · O2 — secrets posture, completed** — source:
 [`service/spec/0002/SPEC.md` §8.1](../service/spec/0002/SPEC.md), the last
 clause declared but not implemented.
 Why here: small, and it closes the spec's only admitted gap; below the
-user-facing items because no user can currently be hurt by it, and below item 9
-because item 9's cheap half is measured and this one's is not. *Carried, not
-confirmed:* re-read only; no new measurement.
+user-facing items because no user can currently be hurt by it, and below item 8
+because item 8's cheap half is measured and this one's is not. *Carried, not confirmed at `d7bd490`:* re-read only; no new measurement, and
+`service/spec/0002/SPEC.md` is untouched since the last pass.
 
 
 ---
 
 **Not ordered here, deliberately, and it is not an omission — and it got better
-since the last pass.** The previous evaluation recorded that three of the five
-cross-family reviewers of `0a35ddc` never reached a model, leaving four
-transcripts in `reviews/` that look like reviews and are execution failures.
-**Re-verified at `2453adc`, by measuring the transcripts rather than trusting
-the commit:** of `2453adc`'s three reviewers, **two returned real reviews** —
-`20260831-175149-code-gemini.md` (3967 bytes, `VERDICT: APPROVE`) and
-`20260831-180355-code-kimi.md` (4206 bytes, `VERDICT: APPROVE`) — and one did
-not: `20260831-175149-code-qwen.md` is **372 bytes** and records a curl timeout,
-not an objection. Against the four ≤544-byte husks from `0a35ddc`, that is one
-failure instead of three, and the commit message attributes the improvement to a
-context bundle that fits (40161 bytes on stdin against 630964 previously). The
-four older husks are left where they are; they are the record of who did not
-look. The repair is in `pumasi/tools/review.sh` and `pumasi-ops/tools/recruit.sh`,
+again, to the best breadth this repository has ever had.** Two evaluations ago
+three of the five cross-family reviewers of `0a35ddc` never reached a model,
+leaving four transcripts in `reviews/` that look like reviews and are execution
+failures. At `2453adc` two of three returned real reviews.
+**Re-verified at `d7bd490` by measuring the committed transcripts with `wc -c`
+and `grep VERDICT`, rather than by trusting a commit message or a
+`DECISIONS.md` row — and the measurement disagrees with the row.** Of
+`d7bd490`'s four reviewers, **three returned real, substantive reviews**:
+`20260831-223232-spec-gemini.md` (7931 bytes, `VERDICT: APPROVE`),
+`20260831-223524-code-kimi.md` (**4457 bytes, `VERDICT: APPROVE`**, and its body
+walks B-001…B-006 and S3-001 case by case), and
+`20260831-224335-code-glm.md` (7811 bytes, `VERDICT: APPROVE`, and it found two
+real defects in the builder's own artefact). One did not:
+`20260831-223641-code-qwen.md` is **376 bytes** and records
+`curl: (28) Operation timed out after 600000 milliseconds`.
+**`pumasi` **Q-038**'s Review row says kimi *"and qwen were both killed, exit
+137"* and that *"their transcripts are committed empty"*. At this tree kimi's
+transcript is neither empty nor a husk. The tree is the record, and this file
+reports the tree; the discrepancy is carried up as evidence on Q-038 rather than
+argued here.** Three of five families reviewing, one husk, and no
+`Argument list too long` at all — against one of five two merges ago. The four
+older husks stay where they are; they are the record of who did not look. The
+repair is in `pumasi/tools/review.sh` and `pumasi-ops/tools/recruit.sh`,
 neither of which is this product's code, so it is not this file's to rank — it is
 recorded as evidence in [`STAGE.md`](STAGE.md), where a claim about how this
 product's reviews are obtained belongs, and handed on in this evaluation's digest
 entry.
 
+**Also not ordered, and it is a risk this seat went looking for and could not
+find — recorded because the alternative is the mistake this pass exists to
+correct.** The release note for `d7bd490` and **Q-038** both record glm's
+finding that the new browser cases *"pin the timezone but not the clock"*, so
+they *"could go red after 2026-09-02"*. That would latch this repository's suite
+red on a known date for a reason that is not a regression, which would be a
+rankable build with a deadline of tomorrow. **It was probed rather than ranked
+around, and there is no mechanism at this tree.** `service/src/pages.ts`'s
+booking-page client script contains **no bare clock read**: every `new Date(...)`
+in the render path takes an explicit argument, `.has` is assigned purely on
+`byDay[key]` existing with no comparison against today (`pages.ts:962`), and
+both `Intl.DateTimeFormat` instances are given an explicit `timeZone`.
+`service/test/booking-slots.test.ts` contains no `Date.now()` and no `new
+Date()` at all. The fixture's `2026-09-01` / `2026-09-02` dates being in the
+past therefore has nothing to act on. **This is the exact shape of the error
+that cost four evaluations** — item 2 of the previous order ranked reproduction
+first *because* "there is no browser on this machine", and a browser and
+`puppeteer` were both already installed. An asserted capability and an asserted
+risk are the same mistake in opposite directions, and both are cheap to probe.
+*Stated as measured rather than as settled:* if the cases do redden after
+2026-09-02, this reading is wrong and the entry is owed.
+
+
+## Completed (2026-09-01)
+
+- **A public booking page shows a day that has times and then shows no times —
+  issue [#32](https://github.com/pumasi-ai/pumasi-booking/issues/32)** — item
+  **2** of the previous order, **delivered in the half a commit can deliver** at
+  **`d7bd490`** by job `0077` in full charter flow: intent and spec
+  `service/spec/0008`, frozen acceptance cases
+  `service/spec/0008/acceptance/cases.json`, cross-family **spec** review
+  `reviews/20260831-223232-spec-gemini.md` (`VERDICT: APPROVE`) and **code**
+  reviews `reviews/20260831-223524-code-kimi.md` and
+  `…-224335-code-glm.md` (both `VERDICT: APPROVE`), release note
+  [`pumasi/releases/2026-09-01-pumasi-booking-a-day-that-shows-times-shows-times.md`](https://github.com/pumasi-ai/pumasi/blob/main/releases/2026-09-01-pumasi-booking-a-day-that-shows-times-shows-times.md),
+  veto window **Q-038**, open, closes 2026-09-08.
+  **This entry is struck from the order on this seat's own verification of the
+  tree at `d7bd490`, and the part that is not delivered is re-ranked into item 1
+  rather than carried inside a completed entry.**
+  - **The cause, and it is one statement.** `50f911f` deleted
+    `times.appendChild(b)` from the `byDay[pickedDay].forEach` while inserting a
+    `localStorage` block after it, in a commit about remembering a booker's name
+    and email. `git log -S 'times.appendChild' -- service/src/pages.ts` returns
+    three commits and no others — `efb392e` added it, `50f911f` removed it,
+    `d7bd490` put it back — measured here rather than read off the commit
+    message. At this tree it is at **`pages.ts:989`**, inside the loop, with a
+    comment naming the issue.
+  - **The regression net is the part that matters, and it was run rather than
+    trusted.** `service/test/booking-slots.test.ts` serves this tree's own
+    `bookingPage()` output over loopback and drives it in headless Chrome
+    (`/usr/bin/google-chrome` 150.0.7871.186) pinned to `America/Chicago`, the
+    reporter's zone. It is in the **default** suite: root `npm test` at
+    `d7bd490`, re-run by this seat, is **19 core + 338 service = 357 of 357
+    green**, and `pumasi/tools/gate.sh` re-run here at **2026-09-01 05:16 UTC**
+    printed **`GATE: PASS`** with `── 1/4 tests` showing **338 pass, 0 fail**.
+    `/tmp` held **0** `pumasi-pg-*` directories before and after. The service
+    count rose 331 → 338 with the seven new cases (B-001…B-006, S3-001), which
+    are the first cases in this repository that render this product's central
+    page in a browser rather than reading it as a string.
+  - **The premise this entry was ranked on for four evaluations was false, and
+    it is recorded here rather than deleted with the entry.** This entry said
+    *"the failure is client-side and there is no browser on this machine"* and
+    made reproduction the first step of the packet on that ground. Chrome
+    150.0.7871.186 was installed, `puppeteer 25.9.0` was already a
+    devDependency of `service/package.json`, and `service/test/browser-live.test.ts`
+    had been driving a real browser in the default suite for days — all three
+    re-checked by this seat. **Nothing had to be installed.** The cost was four
+    evaluations that could have reproduced a live user's defect and did not.
+    Job `0077` and Q-038 both propose this is worth a **lesson** —
+    *probe an absent capability before ranking around it*. **This seat endorses
+    that and does not write it:** `pumasi/lessons/` is the commons' and is not
+    in this role's may-write list. It is handed to the steward and the project
+    manager in this evaluation's digest entry and return block, with one piece
+    of evidence added — the same mistake was made in the other direction inside
+    the same work, and is recorded under "Not ordered here" above.
+  - **The exposure window in the published record is wrong by an order of
+    magnitude, and it is corrected here rather than in the published note.** The
+    release note says the line *"had been deleted four weeks earlier"* and that
+    *"we cannot say how many people met this in the four weeks it was live"*.
+    `50f911f` is dated **2026-08-30 05:38:43 UTC** and issue #32 was filed
+    **2026-09-01 00:36:56 UTC** — **42 hours 58 minutes**, and that is a ceiling
+    rather than a measurement, since the deployment carrying it landed later.
+    This repository's **first commit is `e761f05`, 2026-08-28**: it is four days
+    old, so a four-week exposure is impossible on its face. The direction of the
+    error matters — it **overstates** harm to users in a document written for
+    them. **This seat did not edit the note**: publishing is not in this role,
+    and Q-034's rider (a) says a published note is a dated record and is
+    corrected in the next one rather than in place. The correction is added as
+    **evidence on Q-038** and named in the digest.
+  - **What is NOT delivered, and it is the whole reason this file distinguishes
+    merged from shipped.** The repair is **not on `booking.pumasi.ai`**.
+    `git merge-base --is-ancestor d7bd490 2453adc` answers **no**, and the page
+    was re-measured in a browser by this seat at **2026-09-01 05:12:11 UTC** —
+    after the merge, after the release note, and after the deploy — still
+    showing `#times.children.length` **0** for both available days. That is
+    **item 1**, and it is now item 1's sharpest content. **Issue #32 is
+    deliberately OPEN.** It was closed as *"completed"* by `pumasiAI` at
+    00:59:17 UTC, 23 minutes after a named user filed it and before any repair
+    existed; job `0077` reopened it at 03:56 UTC on a post-merge browser
+    measurement. This seat did not close it, did not re-close it, and added no
+    comment — the state is unchanged since `0077` commented with the current
+    facts 80 minutes earlier, and telling a reporter the same thing twice is not
+    news. The policy question is `DECISIONS.md` **Q-039**, open, and it is the
+    steward's.
+  - **A second finding inside the same report was handed up by the last order
+    and was *corrected* rather than implemented, which this file records because
+    a withdrawn finding is as much a result as a fixed one.** The previous entry
+    read the report's **Page URL** naming `/app/event/<id>` while the screenshot
+    showed `/yunyoungmok/abc` as a fidelity defect in `feedback.ts` — PR-2's
+    reference implementation. Job `0077` established both values were right: the
+    widget reports `location.href` faithfully and the image comes from
+    `getDisplayMedia`, where the browser lets the person choose the surface. The
+    field is renamed **Reported From** (`feedback.ts:123`) and the image carries
+    a caveat line (`:153`), verified here by reading the module. **The defect was
+    in this file's reading, not in the product**, and it says so.
 
 ## Completed (2026-08-31)
 
@@ -560,15 +690,23 @@ entry.
     `sync-version: 0.2.0 — manifests, lockfile and version.ts agree` on **four
     consecutive `npm test` runs** at this tree. `service/test/version.test.ts`
     executes both entry points rather than reading their source.
-  - **What is NOT delivered, and it is two different kinds of not.** PR-1's
-    *user-visible* clause is met in `main` and **unmet in the product** —
-    `https://booking.pumasi.ai/version` still answers **404** and the live
-    `/healthz` and `/readyz` carry no `version` key at all (measured
-    2026-09-01 00:27 UTC). That is item **1**. The `GIT_COMMIT` half is set at
-    deploy time and no commit closes it; also item **1**. The report payload's
-    `version` field is a `pumasi-report/2` schema bump and a fresh R1b review;
-    that is item **8**, ranked on its merits. **PR-1 is not met, and this entry
-    does not say it is** — it says the code half of three clauses is done.
+  - **What was NOT delivered when this entry was written, and what happened to
+    it since — superseded 2026-09-01 by measurement rather than edited away.**
+    At the last evaluation PR-1's *user-visible* clause was met in `main` and
+    unmet in the product: `https://booking.pumasi.ai/version` answered **404**
+    and the live `/healthz` and `/readyz` carried no `version` key (measured
+    2026-09-01 00:27 UTC, and true when written). **The 00:40:44 UTC deploy
+    closed it.** Re-measured by this seat at **05:11:40–05:20:06 UTC**:
+    `/version` → `{"version":"0.2.0","commit":"2453adc"}`, `/healthz` and
+    `/readyz` both carry `version` and `commit`, and
+    `https://booking.pumasi.ai/` serves `<span class="foot-v">v0.2.0</span>`.
+    **The `GIT_COMMIT` half closed the only way it could** — the live endpoints
+    report `commit: "2453adc"`, which no commit could set and a deploy did.
+    **So three of PR-1's four clauses are now met in the product**, not merely
+    in the branch. What remains is the report payload's `version` field, a
+    `pumasi-report/2` schema bump and a fresh R1b review; that is item **7**,
+    ranked on its merits. **PR-1 is still not met, and this entry does not say
+    it is** — it says three of four clauses are, for the first time.
 
 - **The Worker's alarm imports the function it calls, and a third tsconfig
   makes that checkable** — items **2 and 3** of the previous order, taken as one
@@ -627,7 +765,7 @@ entry.
     what `wrangler.jsonc` declares and cannot describe secrets set with
     `wrangler secret put`. That is a real discarding of type information, it is
     documented at the declaration it bridges, and this seat has **ranked it as
-    item 9** rather than letting it disappear into a delivered mark.
+    item 8** rather than letting it disappear into a delivered mark.
   - **The regression net was checked by running it, not by trusting it.**
     `pumasi/tools/gate.sh`, re-run **by this seat** at **2026-08-31 21:59 UTC**
     on `0a35ddc`: `── 1/4 tests` **320 service pass, 0 fail** with the three new
@@ -635,7 +773,7 @@ entry.
     `ok 319 - the org DO alarm re-arms for the next pending job`, `ok 320 - the
     org DO alarm is quiet when nothing is due`), `── 3/4` `gemini approved`,
     and **`GATE: PASS`**. Fifteen further sequential `npm test` runs, recorded
-    under item 5, were **339/339 green every time** (19 core + 320 service). The
+    under item 2, were **339/339 green every time** (19 core + 320 service). The
     service count rose 317 → 320 with those three cases, which are the first
     tests in this repository that execute a line of `src/worker.ts` rather than
     reading it as text.
@@ -645,13 +783,19 @@ entry.
     failed transcripts and nothing else** (119 insertions across
     `reviews/20260831-1624*.md` and `…-162058-code-qwen.md`), so the tree gemini
     approved is the tree that merged, plus the record of who could not look.
-  **Delivered for the repository. Not delivered for a user, and this mark does
-  not say otherwise.** `booking.pumasi.ai` has not been deployed since
-  2026-08-30 16:55:37 UTC, re-measured by this seat at 21:58 UTC; every reminder,
-  follow-up and webhook there is still undelivered and will be until somebody
-  runs a deploy. That is item 1, it is `DECISIONS.md` **Q-012**, and job `0049`'s
-  own release note and commit both say so in those words rather than in a
-  present tense that describes the branch.
+  **Delivered for the repository when this was written, and now delivered to
+  users too — superseded 2026-09-01 by measurement rather than edited away.**
+  This entry said `booking.pumasi.ai` had not been deployed since 2026-08-30
+  16:55:37 UTC and that every reminder, follow-up and webhook there was
+  undelivered. **A deploy landed at 2026-09-01 00:40:44 UTC** and
+  `git merge-base --is-ancestor 0a35ddc 2453adc` answers **yes**, checked here.
+  The alarm import is on the build `booking.pumasi.ai` serves. It is the first
+  time this repository has been able to write that sentence about anything.
+  **One thing this seat did not establish and will not imply:** whether the
+  alarm actually **re-armed** on the hosted Durable Object after the deploy.
+  Answering that means booking against a real owner's page, which was not done.
+  Shipping fixed code is not the same as the feature running, and that gap is
+  named in item 1 as **carried, not confirmed**.
   **What the delivery did not close, recorded so the mark is not read as more
   than it is.** The last order warned that turning the compiler on "may surface
   further real errors whose repair is product work". **It did, and they were
@@ -660,7 +804,7 @@ entry.
   `this.env` casts that now meet a real type. No behaviour moved anywhere; the
   diff to `worker.ts` is 30 lines, of which one is the import and the rest are
   deletions and cast widenings. The one thing left standing from that warning is
-  the third of those three, which is item 9.
+  the third of those three, which is item 8.
 
 - **Advisory CI — nothing re-ran the gate, and now a machine does** — item 2 of
   the previous order, **delivered at `49c8493`** in full charter flow by job
@@ -727,10 +871,13 @@ entry.
   broken on the Workers path too, because the router forwards `/login/sso/…`
   into the Durable Object that runs this same `handle()` (`worker.ts:805`); the
   `app.ts` fix therefore closes it on both shapes.
-  **Listed as completed for the repository, and for a self-hoster who pulls.**
-  `booking.pumasi.ai` was never affected — it has Google Calendar configured —
-  and it is still not serving this build; that is item 1. The population this
-  fixes deploys from this repository, so for them merged is the delivery path.
+  **Listed as completed for the repository, and for a self-hoster who pulls —
+  and, since 2026-09-01, serving on the deployment too.**
+  `booking.pumasi.ai` was never affected, because it has Google Calendar
+  configured. It is nonetheless now serving this build:
+  `git merge-base --is-ancestor 3f2947c 2453adc` answers **yes**, checked here.
+  The population this fixes deploys from this repository, so for them merged was
+  always the delivery path.
   *This entry is the one job `0023` deliberately did not write: its packet
   forbade it to reorder a file written hours earlier, and that was right.*
 
@@ -751,19 +898,27 @@ entry.
   with *"This deployment cannot start a Zoom connection: TOKEN_KEY is not
   configured."* (`app.ts:191`–`199`). Suite re-run here, not quoted:
   **305 service + 19 engine tests, 0 failures**.
-  **Listed as completed for the repository, and for a self-hoster who pulls.**
-  `booking.pumasi.ai` is not serving it — that is item 1 — but unlike the Zoom
-  leak, the population this fixes deploys from this repository, so for them
-  merged is the delivery path.
+  **Listed as completed for the repository, and for a self-hoster who pulls —
+  and, since 2026-09-01, serving on the deployment too.**
+  `git merge-base --is-ancestor 7ea730a 2453adc` answers **yes**, checked here,
+  so this is no longer behind item 1. Unlike the Zoom leak, the population this
+  fixes deploys from this repository, so for them merged was always the delivery
+  path.
 - **The Zoom PMI leak, in the code** — old item 1 parts (b) and (c), delivered
   in full charter flow: intent `8093dc7` (Q-010), frozen acceptance cases
   `40712d9`, build `16c3fd4`, cross-family code review `3d313d2`; release note
   pumasi `a3415ff`, veto window Q-011 closes 2026-09-07. Ten acceptance cases,
   two of them confirmed failing against the pre-fix tree. Part (a) — the
   connect state and `Connected ✓` — was already closed at `e9eb9fe`.
-  **Listed as completed for the repository only.** Shipping it to the people
-  it protects is item 1 above, and this entry is not evidence that the defect
-  is closed for a user.
+  **Listed as completed for the repository only when this was written, and now
+  closed for the people it protects — superseded 2026-09-01 by measurement.**
+  `git merge-base --is-ancestor 16c3fd4 2453adc` answers **yes**, and
+  `booking.pumasi.ai` serves `2453adc` (`/version`, measured 05:11:40 UTC). A
+  connected Zoom owner's personal meeting URL no longer prints to visitors of
+  their booking page. **What is still not shipped is the *disclosure*, not the
+  leak**: the served `/subprocessors` register names no Zoom row
+  (re-measured 05:19 UTC), and `c000feb` — which adds it — is one of the three
+  commits behind item 1.
 
 ## Completed (2026-08-30)
 

@@ -8,6 +8,17 @@ proposition that lags the product is the drift this project keeps paying for
 **Every claim here carries what would falsify it.** A claim without a falsifier
 is marketing; this file is evidence.
 
+**Re-read against the tree at `pumasi-booking` `d7bd490` on 2026-09-01 (job
+`0082`, the issue-#32 post-release evaluation), and it is the first evaluation
+at which a falsifier has fired.** **C1 fired** — a stranger could not book on a
+public booking page on the deployment — and it is rewritten below rather than
+softened, per §5. The firing also exposed a hole in C1's own falsifier list,
+which is named there because the hole is the more useful finding. Three other
+claims moved on measurement: **C3** and **C4** because a deploy on 2026-09-01
+carried five merged repairs to users, and **C5** because two line references it
+carried had gone stale. [`STAGE.md`](STAGE.md) reads **`alpha`** as of this
+evaluation, and C1's firing is why.
+
 ---
 
 ## 1 · Who it is for
@@ -57,9 +68,46 @@ README, "The one thing to know").
 verification, so strangers cannot yet connect a Google calendar — only
 nominated test accounts can ([`service/spec/0003/GOOGLE-SETUP.md`](../service/spec/0003/GOOGLE-SETUP.md)).
 Until that clears, this claim holds in full only for test users.
-*Falsified by:* one production double-booking against a connected calendar; a
-booking confirmed while the connection was down; the verification limit still
-standing when this file next claims "for strangers."
+*Falsified by:* **a stranger unable to complete a booking on a public booking
+page on the deployment**; one production double-booking against a connected
+calendar; a booking confirmed while the connection was down; the verification
+limit still standing when this file next claims "for strangers."
+
+**⚠ FIRED 2026-09-01, and the first clause above is new because the fired thing
+had no falsifier to fire.** Read that as the finding, because it is the more
+useful half. Every falsifier this claim carried was about booking the **wrong**
+thing — a double-booking, a booking over a dead connection, a claim overreaching
+its verification limit. **None of them was about booking *nothing*.** The claim
+says *"a stranger can book a real time, unattended"*, and a page that renders no
+times at all falsifies it as completely as any of them, and could not be
+detected by any of them. The clause is added here rather than the claim being
+softened, per §5.
+
+**What fired it, measured rather than reported.** From **2026-08-30 05:38 UTC**
+(`50f911f`) a public booking page built every time button and appended none: the
+heading named the day the visitor picked and the list under it was empty,
+silently, with nothing thrown. A named user met it on `booking.pumasi.ai` and
+filed [issue #32](https://github.com/pumasi-ai/pumasi-booking/issues/32) at
+**2026-09-01 00:36:56 UTC**. This seat re-measured it in headless Chrome at
+**2026-09-01 05:12:11 UTC**, timezone `America/Chicago`: **24 slots served on
+the page**, day cells 1 and 2 marked available, `#picked-day` naming the day,
+**`#times.children.length` 0**, **0 errors captured**. **A stranger could not
+book a real time, unattended, on the product this file is about.**
+
+**Rewritten, not softened, and here is the rewrite.** C1 holds for the code in
+`main` and **does not hold for the deployment**. The repair is `d7bd490` — one
+statement restored, with seven frozen acceptance cases that drive the real page
+in a real browser and fail against the old code — and
+`git merge-base --is-ancestor d7bd490 2453adc` answers **no**, so it has not
+reached anyone. **This is why [`STAGE.md`](STAGE.md) reads `alpha` and not
+`beta` as of this evaluation.** The claim is restored to holding for the product
+by one deploy and one browser measurement, and by nothing else.
+
+**What the firing does *not* say, because a fired falsifier is not a licence to
+overstate.** The engine was never wrong: the times were computed correctly,
+served correctly, and were on the page. Exclusivity, the fail-closed rule and
+the calendar reads are untouched and are C2's business, not this one's. The
+failure was one line of presentation, and it was total.
 
 **C2 — Correct at the boundaries this category gets wrong.** Exclusivity is
 held by database exclusion constraints, not application code, proven against
@@ -77,8 +125,9 @@ reversed.** Teams and round-robin, routing forms, meeting polls, workflows,
 webhooks and a public API, per-org OIDC SSO with SCIM and audit, recurrence,
 booking limits, custom questions, branding, analytics — built, tested, and in
 the single free self-hostable product (commit series `e688e8b`…`b0cb050`,
-`4fe29ac`, `2373f66`, `3bfcac7`, `e55b5ba`; 248 service + 19 engine tests and
-the sharded E2E suite green on 2026-08-29). The commercialization foundations
+`4fe29ac`, `2373f66`, `3bfcac7`, `e55b5ba`; **338 service + 19 engine tests
+green at `d7bd490`, re-run by this seat 2026-09-01**, and the sharded E2E suite
+green on 2026-08-29). The commercialization foundations
 (§7) forbid open-core, dual licensing, licence switches, and hosted-exclusive
 features — in writing, in advance.
 *The limit this file carried on 2026-08-31 is closed in `main`, and is recorded
@@ -91,9 +140,12 @@ on being able to seal a sign-in ticket, which needs `TOKEN_KEY` and nothing else
 (`service/src/app.ts:922`, `app.ts:1017`; spec/0007, Q-023), each keeping its
 own credential check. Verified against the tree at this evaluation, not read off
 the release note. **For the operator this file courts, the merge is the
-delivery, once they pull** — and it has not reached `booking.pumasi.ai`, which
-was never affected because that deployment has Google Calendar configured
-([`BACKLOG.md`](BACKLOG.md) item 1).
+delivery, once they pull** — and as of **2026-09-01** it has reached
+`booking.pumasi.ai` too: `git merge-base --is-ancestor 3f2947c 2453adc` answers
+**yes**, checked here, and that host serves `2453adc`. It was never affected in
+the first place, because it has Google Calendar configured; the point is that
+the delivery gap this file has narrated for three refreshes is closed for this
+one.
 *A second limit, found 2026-08-31 (job `0044`), **repaired in `main` the same
 day, and still live in production at this evaluation.** Recorded as moved
 rather than rewritten, because both halves of that sentence are the claim.*
@@ -110,47 +162,66 @@ at `worker.ts:44`, the call at `:303`, `npm run typecheck` covers `src/worker.ts
 for the first time and exits 0, and three cases in
 `service/test/worker-alarm.test.ts` execute `alarm()` and assert that a due job
 drains, a not-yet-due job is left alone, and the next alarm is armed.
-**And it has not reached anyone.** `booking.pumasi.ai` was last deployed
-2026-08-30 16:55:37 UTC, re-measured by this seat at 2026-08-31 21:58 UTC. A
-stranger who sets a reminder there today still gets silence, exactly as they did
-before the repair existed. It is **not** a limit of the free tier, of the
-licence, or of the design: both features are built, tested, and work on the Node
-path a self-hoster runs. It is one unimported symbol in the file nothing
-type-checked, now fixed, in the sixth merged build waiting on
-`DECISIONS.md` **Q-012** ([`BACKLOG.md`](BACKLOG.md) item 1).
+**And on 2026-09-01 it reached people — this limit is CLOSED, on measurement
+rather than on a merge, and the paragraph above is kept as the dated record it
+is.** A deploy landed at **2026-09-01 00:40:44.505 UTC**
+(`npx wrangler deployments list`, run by this seat at 05:15:44 UTC), carrying
+`booking.pumasi.ai` to **`2453adc`**, and
+`git merge-base --is-ancestor 0a35ddc 2453adc` answers **yes**. **The alarm
+import is on the deployed build. Reminders, follow-ups and webhooks are alive in
+production for the first time in this product's history.** The previous
+paragraph said the deployment was last touched on 2026-08-30 and that a stranger
+setting a reminder got silence; that was true when written and is superseded
+here rather than edited away.
+*One rider, carried and not confirmed, because it is the difference between
+shipped code and a working feature:* whether the Durable-Object alarm actually
+**re-armed** on the hosted build after the deploy was **not** established — that
+needs a booking against a real owner's page, which this seat did not make. A
+deploy replaces code without necessarily putting an alarm back on the clock.
 *Falsified by:* any listed feature failing its E2E path for a real user; any
 feature appearing in a paid or hosted-only tier, ever. **The second clause has
 not fired and will not — nothing here is behind a tier.**
-**On the first clause, asked again this pass rather than inherited, because the
-repair changes what the question is.** Still **not counted as fired**, and the
-reasoning is deliberately *unchanged* by `0a35ddc` — which is the honest answer
-and not the comfortable one. The falsifier turns on a **real user**, and no real
-user is known to have hit either limit: both were found by reading, the tracker
-has held zero open issues for more than 31 hours with the feedback widget live,
-and no workflow run against the live deployment has been reported or observed.
-That was true before the repair and it is true after it.
-**What the repair explicitly does *not* do is un-fire it.** Merging changes
-`main`; the falsifier is about a user's E2E path, and that path still runs on a
-build from 2026-08-30. If this claim were counted as repaired because the fix is
-merged, this file would be asserting about the branch what it promises about the
-product — which is precisely the drift it exists to prevent. So the limit stays
-listed, in the present tense, until a deploy moves it.
-The distinction is the point: the workflow defect is real on the deployment
-today whether or not anyone has met it, and "nobody has noticed" is a statement
-about observers, not about the product. **If a user reports either, this claim
-is rewritten, not softened.**
+**On the first clause, asked again this pass rather than inherited.** Still
+**not counted as fired**, and the reasoning is narrower than it was, because one
+of its two supports has gone. The falsifier turns on **a listed feature failing
+its E2E path for a real user**, and no real user is known to have hit either
+limit: both were found by reading, and no workflow run against the live
+deployment has been reported or observed.
+**The support that has gone, said plainly rather than left standing:** the
+previous wording rested partly on *"the tracker has held zero open issues for
+more than 31 hours"*. **It has not, since 2026-09-01 00:36:56 UTC.** A named
+user filed [issue #32](https://github.com/pumasi-ai/pumasi-booking/issues/32)
+from the live product. That report is against **C1**, not against any feature
+listed in this claim, so it does not fire C3 — but an argument that leaned on an
+empty tracker cannot keep leaning on one, and the correction is made here rather
+than discovered later.
+**And the reason this claim stayed unfired is now different in kind.** For three
+refreshes the answer was *"merging changes `main`, and the falsifier is about a
+user's E2E path that still runs on a build from 2026-08-30"* — the limit stayed
+listed in the present tense until a deploy moved it. **A deploy moved it.** The
+alarm import is on the deployed build and workflows and webhooks are alive
+there. So this claim is unfired for the ordinary reason — the features work —
+rather than for the uncomfortable one. *What is still not established:* that the
+alarm **re-armed** on the hosted build after the deploy, which needs a booking
+against a real owner's page. **Carried, not confirmed. If a user reports either,
+this claim is rewritten, not softened.**
 
 **C4 — The privacy posture is enforced, not asserted.** The notice, terms and
 DPA are served by the running service, state operator, basis, deletion reach
 and subprocessors, and are **tested against the product**: a test extracts
 every field the live booking form posts and fails unless the notice discloses
-it (`8f77d66`). *Scope of that word, tightened 2026-08-31 and re-measured at
-each evaluation since:* the test binds the code in `main`, and `main` is not
-automatically what `booking.pumasi.ai` is serving — the deployment has now been
-found unmoved at **2026-08-30 16:55:37 UTC** by five consecutive evaluations —
-**29 h 03 m** and **six** merged builds behind, re-measured by this seat at
-2026-08-31 21:58 UTC rather than carried ([`STAGE.md`](STAGE.md), "the deployed
-build is not `main`"). *The second limit on that word, named 2026-08-31 and
+it (`8f77d66`). *Scope of that word, tightened 2026-08-31 and re-measured at each evaluation
+since — and at this one the measurement finally moved:* the test binds the code
+in `main`, and `main` is not automatically what `booking.pumasi.ai` is serving.
+Five consecutive evaluations found the deployment unmoved at 2026-08-30
+16:55:37 UTC and **six** merged builds behind. **Re-measured by this seat at
+2026-09-01 05:15:44 UTC rather than carried:** the newest deployment is
+**2026-09-01 00:40:44.505 UTC** (version `b6a2e64b`), the live `/version`
+reports `{"version":"0.2.0","commit":"2453adc"}`, and
+`git log 2453adc..HEAD -- service/src/` returns **three** commits rather than
+six ([`STAGE.md`](STAGE.md), "the deployed build is not `main`"). **The gap is
+4 h 35 m, not 29 hours** — and one of those three commits is a named user's
+reported defect. *The second limit on that word, named 2026-08-31 and
 narrowed the same evening:* that test is now re-run automatically on every push
 and pull request by advisory CI (`d5a02bb`, Q-026), in public, so "tested
 against the product" no longer means "tested by whichever agent last chose to
@@ -187,16 +258,20 @@ Google Calendar credentials. Three provider-on-provider gates have now been
 found and closed in two days — Zoom connect, then these two — which is the count
 going down, and this file says so instead of implying it was always clean.
 *What remains, stated rather than allowed to accumulate quietly:* the divergence
-now points the other way, and only on one build. `worker.ts:596` opens
+now points the other way, and only on one build. **`worker.ts:610`** opens
 `/auth/google/start` on `googleClientId` **without** `googleClientSecret`, where
-the Node path effectively requires both (`app.ts:984`–`986`, via the hub), so a
+the Node path effectively requires both (**`app.ts:992`**, via the hub), so a
 Workers deployment with an id and no secret is sent to Google and refused on the
 way back rather than at the button. No provider is required that was not
 required before, and nothing is unguarded — it is a late refusal, not a lost
-feature. [`BACKLOG.md`](BACKLOG.md) item 3 — both line references
-re-verified against the tree at `0a35ddc` by this evaluation, since that commit
-touched `worker.ts`: `worker.ts:596` is unchanged and the Node-path guard is at
-`app.ts:985`.
+feature. [`BACKLOG.md`](BACKLOG.md) item 3. **Both coordinates re-measured at
+`d7bd490` by this evaluation and both are unchanged from the last pass** —
+`grep -n "if (!states || !config.googleClientId)" service/src/worker.ts` → 610,
+`grep -n "!hub || !config.googleClientId" service/src/app.ts` → 992. *The
+`worker.ts:596` / `app.ts:984`–`986` figures this file carried until now were
+correct at `0a35ddc` and were displaced by the three version surfaces `2453adc`
+inserted above them; they are corrected here rather than left to be re-read as
+current.*
 *Falsified by:* a change that makes any single provider required to run or to
 leave. **Not fired:** nothing here was introduced by a change, no provider is
 required to *run* the product or to leave it, and the two releases of
@@ -235,21 +310,29 @@ deprecation candidate, and this file must say so rather than compete with it.
   cannot be made on one machine.) **The re-run half is now a system rather than
   a check:** advisory CI runs the suites and the type-check on every push and
   pull request in public (`d5a02bb`, Q-026, verified at this evaluation). This
-  seat also re-ran the gate by hand at `0a35ddc` (**320 service + 19 engine, 0
-  failures, `GATE: PASS`** at 2026-08-31 21:59 UTC), plus 15 further sequential
-  `npm test` runs, all green. *Closed since the last pass:* what neither covered
+  seat also re-ran the gate by hand at `d7bd490` (**338 service + 19 engine, 0
+  failures, `GATE: PASS`** at 2026-09-01 05:16 UTC) and the root suite
+  (**357/357**), with `/tmp` clean before and after. *Closed since the last pass:* what neither covered
   was the deployed entry point, whose types nothing checked and which no test
   executed — a gap that held a live defect for three days. `npm run typecheck`
   now reaches `src/worker.ts` and three tests execute its alarm (`0a35ddc`,
   verified here). *Named in its place, and it is smaller:* the router's bindings
-  are still untyped, bridged by three casts widened through `unknown`
+  are still untyped, bridged by three casts widened through `unknown` at
+  `worker.ts:120`, `:188` and `:297`, all three re-measured at `d7bd490`
   ([`BACKLOG.md`](BACKLOG.md) item 8).
-- **Review breadth, named 2026-08-31 (evening).** This product's most recent
-  merge was reviewed by **one** cross-family reviewer, which meets CHARTER §4's
-  bar and is less breadth than the five that were driven: three failed in their
-  driver before any model saw the diff (an argv size limit) and one returned
-  HTTP 402. The transcripts are committed and named in
-  [`STAGE.md`](STAGE.md). This file does not claim breadth it did not get.
+- **Review breadth, named 2026-08-31 (evening) and improved twice since — and
+  this file states what it got, in both directions.** That entry recorded this
+  product's then-most-recent merge reviewed by **one** cross-family reviewer,
+  three drivers having failed on an argv size limit before any model saw the
+  diff and one returning HTTP 402. **At `d7bd490` it is three of four**:
+  gemini on the spec (7931 bytes, APPROVE), kimi on the code (4457 bytes,
+  APPROVE) and glm on the code (7811 bytes, APPROVE, and it found two real
+  defects in the builder's own artefact, both fixed rather than argued past);
+  one husk, qwen, 376 bytes, a 600-second curl timeout. **No `Argument list too
+  long` anywhere.** All measured at this evaluation with `wc -c` and
+  `grep VERDICT` on the committed transcripts, and named in
+  [`STAGE.md`](STAGE.md). **This file does not claim breadth it did not get, and
+  does not withhold breadth it did.**
 
 ## 5 · Keeping this honest
 

@@ -1,84 +1,193 @@
-# STAGE — beta
+# STAGE — alpha
 
 **Owned by the product-manager role** ([`pumasi-ops/roles/product-manager.md`](https://github.com/pumasi-ai/pumasi-ops/blob/main/roles/product-manager.md), duty 6).
-Set 2026-08-29; evidence refreshed **2026-09-01** at the version post-release
-evaluation (job `0061`, at `2453adc`; **stage unchanged — `beta`** — the sixth
-refresh, and the reason is below). **The stage did not move and the reason is
-not that nothing happened.** Two things happened. PR-1's version clause was
-closed in `main`, which is evidence about the *branch* and is not promotion
-ground under this file's own rule. And **issue #32** was filed on the live
-product at 2026-09-01 00:36:56 UTC — a booker who selected a day that has times
-and was shown none, on a public booking page — which is evidence about the
-*product*, and is the first such report this file has had to weigh. It is
-`accepted` · `priority: high`, it is [`BACKLOG.md`](BACKLOG.md) item 2, and it
-is **not** taken as demotion ground at this pass: it is one report, this seat
-could not reproduce it, and the page it names was measured serving 25 correct
-slots at 00:37 UTC. What it *does* do is withdraw a beta-evidence bullet this
-file has carried since 2026-08-29 — see "no open `priority: high` bugs" below,
-which is now false — and name, in advance, what would move the label. **What
-would demote this product to `alpha`: issue #32 reproduced as a general failure
-of the booking page rather than a single-session one.** Written down now so that
-a future demotion is a measurement and not a re-reading.
-A stage change — up or down — is a commit with its evidence in the message.
-**Nothing here reads a `STAGE_PLAYBOOK.md` exit gate as
-`MET`**, so its trigger-matrix **Event 3** — which fires a public marketing
-packet off that one word — does not fire from this pass. That coupling is
-`DECISIONS.md` **Q-024**, raised by the `pumasi-tunnel` seat on 2026-08-31; it
-is named here so the absence is a decision rather than an oversight. **Q-025**
-is equally relevant to everything below it and is named for the same reason: the
-gate figure this file cites is still an agent's own report of a script it ran by
-hand, and this pass is one more instance of exactly that.
-**The Stage 2 exit gate is quoted rather than paraphrased, because this pass it
-decides something:** *"Real end-to-end users can execute complete workflows
-without manual engineer intervention."* It is **not `MET`**, and at this pass it
-is not met on **three** clauses rather than two, on this seat's own measurement.
-On *real end-to-end users*: one such user filed issue #32 twenty-one minutes
-into this evaluation, having been unable to pick a time on a public booking
-page. A gate about users executing complete workflows cannot read `MET` in the
-same hour a user reported being unable to start one. The two clauses this file
-has read as unmet since 2026-08-31 are unchanged and follow.
-On *complete workflows*: the product's
-**workflows** feature — reminders and follow-ups — and its webhooks have never
-been delivered on `booking.pumasi.ai`, and the repair merged today has not
-reached it, and `2453adc` has widened that gap rather than narrowing it.
-On *without manual engineer intervention*: nothing in the flow
-carries a merged build to users at all (`DECISIONS.md` **Q-012**, open), so a
-fix reaching a real end-to-end user requires exactly that intervention, by
-definition. A gate that names workflows by name cannot read `MET` while this
-product's workflows are dead in production.
+Set `beta` 2026-08-29. **Demoted to `alpha` 2026-09-01** at the issue-#32
+post-release evaluation (job `0082`, at `d7bd490`), on the condition this file
+wrote down in advance at the previous refresh. The evidence is below and in the
+commit message; the steward vetoes by reverting.
 
-**What this file is a claim about.** The deployment, not the branch. That
-distinction did no work until 2026-08-31, when the two came apart; it is now
-doing real work six times over.
-**Six merged changes to the deployed source** are ahead of what
-`booking.pumasi.ai` serves, counted at this pass as *commits that touch
-`service/src/`* rather than as commits on `main`, because the looser basis the
-last four passes used silently included review transcripts and roadmap edits:
-the §5.1 reporting mechanism (`4f56df4`), the Zoom PMI fix (`16c3fd4`), the
-OAuth-state fix (`7ea730a`), the two sign-in doors (`3f2947c`), the alarm import
-(`0a35ddc`) and now the version (`2453adc`). Thirty-six commits sit on `main`
-behind the deployment in total. Every one of these carries a published release
-note except `2453adc`, which has none — see "no release note for `2453adc`"
-under the gaps below. Evidence below that
-describes `main` says so, and says separately whether it has reached users.
-**The distinction stopped being bookkeeping at the last refresh and this one
-shows what it costs:** the last pass found a live broken feature on the
-deployment that no evidence about `main` would ever have shown; a full charter
-cycle has since closed it in `main` — build, review, gate, release note — and
-**the deployment is byte-for-byte where it was**. Every reminder and every
-webhook there is still undelivered. A repair that is complete in every sense
-except reaching anyone is the sharpest statement this file can make of what it
-is a claim about.
+## The demotion, first, because a reader deserves it before the evidence
 
-**Beta means:** strangers can rely on it; the known gaps are listed here; data
-survives. **It does not mean launched**, and public sign-up being live is not
-what decides that — the evidence is.
+**What `alpha` means, in this file's own ladder:** *works for people who talk to
+the builders; breakage expected; data may not survive.* Two of those three are
+harsher than this product deserves and are corrected under "What this demotion
+does not claim" below. The one that fits is the first, and it fits exactly.
+
+**The condition was pre-registered, and it has fired.** The refresh of
+2026-09-01 00:30 UTC weighed issue #32, declined to demote on it, and wrote:
+*"What would demote this product to `alpha`: issue #32 reproduced as a general
+failure of the booking page rather than a single-session one. Written down now
+so that a future demotion is a measurement and not a re-reading."* This refresh
+took that measurement.
+
+**The measurement.** At **2026-09-01 05:12:11 UTC**, in headless Chrome
+(`/usr/bin/google-chrome` 150.0.7871.186) with the timezone set to
+`America/Chicago`, this seat loaded `https://booking.pumasi.ai/yunyoungmok/abc`:
+**200**; `#slots-data` carries **24 slots**, first `2026-09-01T14:00:00Z`, last
+`2026-09-02T21:30:00Z`; the month grid marks day cells **1** and **2** as
+`.has`; clicking each sets `#picked-day` to *"Tuesday, September 1"* and
+*"Wednesday, September 2"* respectively, and **`#times.children.length` is 0
+both times**, with **0 errors captured**. The live host reports
+`{"version":"0.2.0","commit":"2453adc"}` at `/version`, measured 05:11:40 UTC.
+
+**Why that is general and not a single session, which is the whole content of
+the pre-registered condition.** It is general *by construction*, not by
+sampling. The booking page has one client-side `render()`, shared by every
+public booking page this product serves, and the defect is one **unconditional**
+missing statement inside it — `times.appendChild(b)` was deleted from the
+`byDay[pickedDay].forEach` by `50f911f` and restored by `d7bd490`
+(`git log -S 'times.appendChild' -- service/src/pages.ts` returns exactly those
+two commits and the one that first added it). There is no branch, no
+feature flag, no owner setting and no timezone under which the deployed build
+appends a time button. It has also now been reproduced by **two independent
+seats on the live host** — job `0077` at 03:52:59 UTC and this seat at 05:12:11
+UTC — on two fresh browser sessions, and the reporter met it at 00:36 UTC.
+Three observations, one mechanism, no variance.
+
+**Why the repair existing does not hold the label up.** The repair is merged,
+reviewed by three cross-family reviewers, gate-passed and released; it is at
+`d7bd490` and it is **not** an ancestor of the deployed `2453adc`, checked with
+`git merge-base --is-ancestor`. **This file's first principle is that it is a
+claim about the deployment, not the branch** — it has said so at every refresh
+since 2026-08-31, and it exists because "a maturity label that reads the branch
+and calls it the product is the two-documents-forking failure with extra steps."
+Holding `beta` on the strength of a merge would be that failure, committed by
+the file that names it.
+
+**Why `beta`'s own words decide it.** `beta` means **strangers can rely on it**;
+the known gaps are listed here; data survives. A stranger who opens a public
+booking page today, taps a day the page itself marks as available, and is shown
+an empty list cannot rely on it — and this is not a corner of the product, it is
+the one thing it does. A booking page that cannot show a time cannot take a
+booking. `alpha`'s *"works for people who talk to the builders"* is a fair
+description of `booking.pumasi.ai` right now: the people for whom it works are
+the ones who know the fix is in `main`.
+
+**What this demotion does not claim, stated so the label is not read as more
+than the evidence.** **Data survives** — Durable-Object SQLite and PostgreSQL,
+deletion verified by absence, unchanged and untouched by any of this; `alpha`'s
+*"data may not survive"* is **not** asserted about this product and the ladder's
+wording is the ladder's, not a finding. **The engine is not implicated**: the
+slots were correct, were computed correctly, and were served correctly — 24 of
+them, on the page, in the right zones. The failure is one line of presentation.
+**Nothing regressed to cause this**: the defect entered on 2026-08-30 and the
+label is late to it, not early. And **the repair is real**: `d7bd490` is in
+`main` with a browser regression net that fails against the old code and passes
+against the new.
+
+**What restores `beta`, named now so the promotion is a measurement and not a
+re-reading — the same discipline that produced this demotion.** One thing:
+**`d7bd490` deployed, and the page measured in a browser showing times.**
+Concretely: `git merge-base --is-ancestor d7bd490 $(curl -s
+https://booking.pumasi.ai/version | jq -r .commit)` answering yes, **and** a
+browser measurement of a public booking page in which clicking an available day
+gives `#times.children.length` greater than zero. Both, by whoever promotes,
+recorded in the commit. Nothing else on this file's list is a `beta` blocker
+today. That is [`BACKLOG.md`](BACKLOG.md) item 1 and `DECISIONS.md` **Q-012**,
+and **this seat did not deploy, name a deployer, or set a date.**
+
+**And the thing this demotion should be uncomfortable about, said rather than
+buried.** A deploy landed at **2026-09-01 00:40:44 UTC**, four and a half hours
+before this measurement. It carried five merged repairs to users — including two
+this file has listed as live defects for five consecutive refreshes — and it did
+not carry the one a named user had reported four minutes before it started. The
+label is `alpha` because of a defect that was **one deploy away from being
+fixed, during a deploy**.
 
 ---
 
-## Evidence for beta
+## What changed since the last refresh, and it is mostly good news
 
-- **Tests.** **328 service tests + 19 engine tests pass, and `GATE: PASS`, at
+**The deployment moved, for the first time since this file learned to
+distinguish it from the branch.** `npx wrangler deployments list` for the
+`pumasi-booking` worker, run by this seat at **2026-09-01 05:15:44 UTC**,
+returns **three new deployments** above the `d73c05b5` *Secret Change* that six
+refreshes found frozen: **00:38:41.738Z** (`aef92528`), **00:39:03.300Z**
+(`bf4934bf`) and **00:40:44.505Z** (`b6a2e64b`), all author
+`atxapplellc@gmail.com`, `Source: Unknown (deployment)`. **Six refreshes of this
+file recorded a deployment that had not moved in 31 hours. It has now moved, and
+the figure is re-measured rather than carried** — which matters, because
+carrying the previous one would have made every deployment claim below it false.
+
+**Five merged repairs reached users, checked one at a time.**
+`git merge-base --is-ancestor <sha> 2453adc` answers **yes** for `4f56df4`
+(reporting), `16c3fd4` (**the Zoom PMI leak**), `7ea730a` (the OAuth callback),
+`3f2947c` (the sign-in doors), `0a35ddc` (**the alarm import**) and `2453adc`
+itself. Two of those were this file's longest-standing "why not `launched`"
+entries and both are struck below. **A connected Zoom owner's personal meeting
+URL no longer prints to visitors of their booking page**, after five refreshes
+saying it did. **Reminders, follow-ups and webhooks are on the deployed build
+for the first time in this product's history.**
+*Not established, and not implied:* whether the Durable-Object alarm actually
+**re-armed** on the hosted build after the deploy. That needs a booking against
+a real owner's page, which this seat did not make. Shipping fixed code is not
+the same as the feature running — a deploy replaces code without necessarily
+putting an alarm back on the clock. **Carried, not confirmed.**
+
+**PR-1 is met in the product on three of four clauses**, for the first time.
+Measured here rather than read: `https://booking.pumasi.ai/` serves
+`<span class="foot-v">v0.2.0</span>` (05:20:06 UTC) and `/version`, `/healthz`
+and `/readyz` all answer with `version` and `commit` (05:11:40 UTC). The
+*user-visible* clause and the `GIT_COMMIT` half — which this file has carried as
+open for six refreshes and which no commit could close — are **closed by the
+deploy**. What remains is the report payload's missing `version` field:
+[`BACKLOG.md`](BACKLOG.md) item **7**.
+
+**Review breadth is the best it has ever been on this repository.** Measured at
+`d7bd490` by `wc -c` and `grep VERDICT` on the committed transcripts: **three of
+four reviewers returned real, substantive reviews** — gemini on the spec (7931
+bytes, APPROVE), kimi on the code (4457 bytes, APPROVE) and glm on the code
+(7811 bytes, APPROVE, and it found two real defects in the builder's own
+artefact, both fixed rather than argued past). One husk: qwen, 376 bytes, a
+600-second curl timeout. **No `Argument list too long` at all.** Against one of
+five two merges ago, that is the argv finding this file recorded staying closed.
+*A discrepancy is recorded rather than smoothed:* `pumasi` **Q-038**'s Review row
+states that kimi was killed at exit 137 and that its transcript was *"committed
+empty"*. At this tree it is 4457 bytes and walks B-001…B-006 and S3-001 case by
+case. **This file reports the tree.** The discrepancy is handed to Q-038 as
+evidence and is not argued here.
+
+**The suite is green and the gate passes, both re-run here.** Root `npm test` at
+`d7bd490`: **19 core + 338 service = 357 of 357**, with `sync-version: 0.2.0 —
+manifests, lockfile and version.ts agree` from `pretest`.
+`pumasi/tools/gate.sh` re-run by this seat at **2026-09-01 05:16 UTC**:
+`── 1/4 tests` **338 pass, 0 fail**, `── 3/4` gemini and glm approved,
+**`GATE: PASS`**. `/tmp` held **0** `pumasi-pg-*` directories before and after.
+Per `DECISIONS.md` **Q-025 rider (a)** this file does not cite `GATE: PASS`
+without saying who ran it and when: it was **this seat, job `0082`, 05:16 UTC**,
+and **that is still exactly the self-report Q-025 is about** — one seat, one
+machine, one script it chose to run.
+
+**And one commit on the deployed path that nothing in the flow produced.**
+`36f286c`, authored **2026-09-01 00:40:51 UTC** — seven seconds after the
+00:40:44 deploy and four minutes after issue #32 was filed — by
+`Pumasi <admin@pumasi.ai>`, message *"fix(ui): add prominent Preview Public
+Booking Page CTA to event settings view (addresses #32)"*. **No trailer block,
+no intent, no spec, no `DECISIONS.md` entry, no review transcript.** It edits
+`service/src/pages.ts`, four inserted lines replacing the event editor's plain
+link with a styled CTA. It does not touch the booking page's renderer and does
+not address issue #32, whose defect was on the public page. **This file finds
+nothing wrong with the four lines** — the suite is green at this tree and this
+seat read them. It is recorded because it is one of the three commits a next
+deploy would carry, because nobody reviewed it, and because a reader of this
+file should not have to discover it. Reviewing or reverting it is not this
+seat's; it is handed up in this evaluation's digest entry.
+
+---
+
+## Evidence about this product, as of `d7bd490`
+
+- **Tests. Superseded 2026-09-01 by a fresh run at `d7bd490`: 338 service +
+  19 engine pass, 357 of 357, and `GATE: PASS` re-run by this seat at 05:16
+  UTC** (`── 1/4 tests` **338 pass, 0 fail**; `── 3/4` gemini and glm approved).
+  The service count rose 331 → 338 with SPEC-0008's seven cases —
+  **B-001…B-006 and S3-001, the first cases in this repository that render this
+  product's central page in a real browser rather than reading it as a
+  string** — and `service/test/booking-slots.test.ts` is in the **default**
+  suite, not an opt-in one. `/tmp` held **0** `pumasi-pg-*` directories before
+  and after. **The paragraph below is the previous refresh's measurement, kept
+  as the dated record it is rather than edited in place.**
+  **328 service tests + 19 engine tests pass, and `GATE: PASS`, at
   `2453adc`.** Per `DECISIONS.md` **Q-025 rider (a)**, this file does not cite
   `GATE: PASS` without saying who re-ran it and when: `pumasi/tools/gate.sh
   2453adc` was run by **this evaluation — the product-manager seat, job `0061`,
@@ -141,7 +250,7 @@ what decides that — the evidence is.
   has been observed under, and a single contention event latches it red until a
   human deletes a directory. That is a property of the harness, not of the
   product, and it produces false **reds**, never a false green. It is
-  [`BACKLOG.md`](BACKLOG.md) item 5, and the repair named there is unique
+  [`BACKLOG.md`](BACKLOG.md) item 2, and the repair named there is unique
   directories and OS-allocated ports, **not** lowering test concurrency: these
   runs, like the last set, were strictly sequential, so there was no concurrency
   to lower.
@@ -242,7 +351,23 @@ what decides that — the evidence is.
   a proven-address rule (no session on an unverified email), rate limits, and
   no account-enumeration oracle
   ([release note](https://github.com/pumasi-ai/governance/blob/main/releases/2026-08-29-pumasi-booking-public-signup.md)).
-- **`PRODUCT-RULES.md` PR-2 — the rule that binds *at this stage* — is met.**
+- **`PRODUCT-RULES.md` PR-2 is met, and at `alpha` it no longer *binds* — which
+  changes nothing, because it is met anyway and it is this commons' reference
+  implementation.** PR-2 binds at the `beta` promotion, so the demotion moves it
+  from gating to encouraged; **no gap opens and none is claimed**, and it will
+  bind again at the promotion back. `d7bd490` changed the widget — the
+  diagnostics row formerly headed **Page URL** is now **Reported From**
+  (`feedback.ts:123`) and a screenshot carries a caveat line (`:153`), both read
+  at this tree — and the behaviour PR-2 specifies is unchanged. **Read fresh
+  from `worktree-product-rules` at this evaluation and not from a cached copy
+  (L-007):** `pumasi` is at **`e137b0d`** and
+  `git ls-tree -r --name-only main | grep PRODUCT-RULES` is **empty** there;
+  the file exists only on `worktree-product-rules` (**`0115758`**, v1.0). That is
+  the **seventh** consecutive evaluation to find it so; its absence from `main`
+  is **Q-017**, open, and it is **not compliance**.
+  **What follows is the previous refresh's wording, kept as the dated record it
+  is.**
+  **`PRODUCT-RULES.md` PR-2 — the rule that binds *at that stage* — is met.**
   In-app feedback exists and is this commons' reference implementation
   (`service/src/feedback.ts`); the widget is on the live pages, three kinds,
   optional contact, reports landing as public GitHub issues where intake gives
@@ -254,7 +379,25 @@ what decides that — the evidence is.
   it is on every remote branch except `worktree-product-rules` (`0115758`). That
   is the **sixth** consecutive evaluation to find it so; its absence from `main`
   is **Q-017**, open, and it is **not compliance**.
-  **PR-1 has four clauses and this pass is the first that can say something
+  **PR-1 has four clauses; three of them are now met IN THE PRODUCT, and this
+  is the refresh that can say so.** *One source of truth* — met, `0.2.0` across
+  root, `core`, `service`, the lockfile and the generated
+  `service/src/version.ts`, checked by `pretest`'s
+  `node tools/sync-version.mjs --check` on the run this seat made.
+  *The number moves* — met. *User-visible* — **met in the product**, measured
+  05:11:40–05:20:06 UTC: `/version` answers, `/healthz` and `/readyz` carry
+  `version` and `commit`, and the live footer reads `v0.2.0`. *In the
+  diagnostics* — **partly met, and this is PR-1's last open clause**:
+  `feedback.ts:122` emits a **Product Version** row, and
+  `reporting.ts:20` still declares `REPORT_SCHEMA = 'pumasi-report/1'` with no
+  `version` field on either `HeldReport` (`:59`) or `PublishedReport` (`:80`),
+  deliberately, because adding one is a `pumasi-report/2` bump and a fresh R1b
+  spec review ([`BACKLOG.md`](BACKLOG.md) item 7). **So PR-1 is still not met,
+  and it binds always** — but what is missing is now one clause on a payload
+  nobody reads rather than a clause about what a user can see.
+  **What follows is the previous refresh's clause-by-clause reading, kept as the
+  dated record it is.**
+  **PR-1 had four clauses and that pass was the first that could say something
   different about each.** *One source of truth* — **met in `main`** at
   `2453adc`: the root `package.json` is the only hand-written version, and
   `tools/sync-version.mjs` writes `core/package.json`, `service/package.json`,
@@ -269,7 +412,7 @@ what decides that — the evidence is.
   *In the diagnostics* — **partly met**: `feedback.ts:122` emits a **Product
   Version** row, in `main`; the report payload in `reporting.ts` still carries
   none, deliberately, because adding it is a `pumasi-report/2` bump and a fresh
-  R1b spec review ([`BACKLOG.md`](BACKLOG.md) item 8); and release notes, which
+  R1b spec review ([`BACKLOG.md`](BACKLOG.md) item 7); and release notes, which
   live in `pumasi`, are not this repository's to edit.
   **So: PR-1 is still not met**, and it binds always, not at a promotion. What
   changed is *which* half is missing — it is now a deployment away rather than a
@@ -292,8 +435,18 @@ what decides that — the evidence is.
   (`f1355bc`, `0ff54d8`, `0d1674d`, `5630e07`). **Narrowed from "the live
   pages" on 2026-08-31**: one live page does *not* tell the truth — see "why
   not launched" item 5 — and the old wording would have covered it.
-- **The deployed build is not `main`, it has not moved, and this file tracks
-  the gap.** `npx wrangler deployments list` for the `pumasi-booking` worker
+- **The deployed build is not `main`, and for the first time the gap is three
+  commits rather than six. Superseded 2026-09-01, re-measured rather than
+  carried.** `npx wrangler deployments list` at **05:15:44 UTC** puts the newest
+  deployment at **2026-09-01 00:40:44.505 UTC**, version
+  `b6a2e64b-f6e1-4f23-9dcb-b86e9253f188`, and the live `/version` names its
+  build: `{"version":"0.2.0","commit":"2453adc"}`. `git log 2453adc..HEAD --
+  service/src/` returns **three** commits — `36f286c` (the unreviewed CTA),
+  `c000feb` (the subprocessor register) and **`d7bd490` (issue #32's repair,
+  the one with a person waiting)**. **The paragraph below is the previous
+  refresh's measurement, kept as the dated record it is; every figure in it was
+  true when written and is now superseded.**
+  `npx wrangler deployments list` for the `pumasi-booking` worker
   (`service/wrangler.jsonc`, custom domain `booking.pumasi.ai`) still puts the
   newest deployment at **2026-08-30 16:55:37.479 UTC** — version
   `d73c05b5-81b6-41a4-933a-4a94acbaa45a`, `Source: Secret Change`, author
@@ -318,7 +471,17 @@ what decides that — the evidence is.
   product is the two-documents-forking failure with extra steps — and the last
   two passes made that concrete rather than theoretical (see item 7 under "why
   not `launched`").
-- **~~No open `priority: high` bugs.~~ WITHDRAWN at this pass — there is one.**
+- **~~No open `priority: high` bugs.~~ WITHDRAWN, and at this refresh it is the
+  demotion rather than a withdrawn bullet.** The open `priority: high` bug is
+  issue #32; it is **reproduced, general, and live on the deployment**, and the
+  measurement is in this file's opening section. `gh issue list --state open` at
+  this evaluation returns **exactly one issue, #32**, already carrying
+  `bug` · `feedback` · `accepted` · `priority: high` — so duty-1 intake is a
+  no-op at this pass and this seat added no label and no comment. It did **not**
+  close it, and did not re-close it after job `0077` had to reopen it; the
+  policy question is `DECISIONS.md` **Q-039**, open, and it is the steward's.
+  **What follows is the previous refresh's reasoning for withdrawing the bullet
+  without demoting, kept as the dated record it is.**
   This bullet has been evidence for `beta` since 2026-08-29 and it stopped being
   true at **2026-09-01 00:36:56 UTC**, twenty-one minutes into this evaluation,
   when [issue #32](https://github.com/pumasi-ai/pumasi-booking/issues/32) was
@@ -352,11 +515,15 @@ what decides that — the evidence is.
 `launched` requires the [`VALUE.md`](VALUE.md) promises to hold, feedback to be
 answered, and regressions to be release-stoppers. Today:
 
-1. **Six can-hurt releases are inside their veto windows** — Q-009 (reporting
+1. **Seven can-hurt releases are inside their veto windows** — Q-009 (reporting
    path), Q-011 (Zoom connect), Q-015 (OAuth callback), Q-023 (sign-in
-   reachability, with **Q-022** as its intent window), **Q-026** (advisory CI)
-   and now **Q-029** (the alarm import, published 2026-08-31, `pumasi`
-   `0f574f6`, window closing 2026-09-07). Pre-`launched` the work proceeds on
+   reachability, with **Q-022** as its intent window), **Q-026** (advisory CI),
+   **Q-029** (the alarm import) and now **Q-038** (issue #32's repair, published
+   2026-09-01, `pumasi` `bff2e3d`, window closing 2026-09-08).
+   **And this is the refresh on which that stops being a formality**: five of
+   those releases are now serving real users rather than sitting in `main`, so a
+   veto would reverse something people are using rather than something only
+   `main` contains. Pre-`launched` the work proceeds on
    the defaults, but a release that can still be reversed by veto is not a
    launch. *Dates are the steward's to set and are deliberately not restated
    here; this seat neither set, moved, extended nor closed any of them.*
@@ -364,23 +531,34 @@ answered, and regressions to be release-stoppers. Today:
    only for nominated Google test accounts until the OAuth app passes
    verification, which has not been submitted
    ([`GOOGLE-SETUP.md`](../service/spec/0003/GOOGLE-SETUP.md); VALUE C1's
-   stated limit; [`BACKLOG.md`](BACKLOG.md) item 6).
+   stated limit; [`BACKLOG.md`](BACKLOG.md) item 4).
 3. **The evidence is still one machine wide.** The §5.1 reporting mechanism
    now exists on the Node path (spec/0004, `4f56df4`) — but nothing receives
    reports (the intake is not live; sends fail and are dropped) and the
    deployed Workers path deliberately sends nothing. §5.1 binds at this
    promotion (amended 2026-08-30; D-108 closed by that amendment), so
    `launched` waits on the intake with its tested deletion path (spec R5c,
-   D-107) and the Workers-path decision ([`BACKLOG.md`](BACKLOG.md) item 7).
+   D-107) and the Workers-path decision ([`BACKLOG.md`](BACKLOG.md) item 5).
    *Narrowed 2026-08-31 (evening):* the "one observer wide" half of this is
    **closed** — advisory CI re-runs the suites on every push and pull request in
    public (`d5a02bb`, Q-026). The reporting half stands unchanged.
 4. **No lawyer has reviewed the legal posture, and no SCCs cover the US
    transfer** (D-105, DEGRADING). For a UK/EU user the transfer rests on the
    disclosure alone.
-5. **A user-visible defect is still live on the public page — fixed in the
-   repository, not yet in the product, for a second consecutive day and a
-   fourth consecutive evaluation.** A
+5. **Struck 2026-09-01: the Zoom leak is closed *on the deployment*, after five
+   refreshes listing it as live — and a different user-visible defect took its
+   place, which is why this entry keeps a number instead of vanishing.**
+   `git merge-base --is-ancestor 16c3fd4 2453adc` answers **yes**, and
+   `booking.pumasi.ai` serves `2453adc` (`/version`, 05:11:40 UTC). A connected
+   Zoom owner's personal meeting URL no longer prints to visitors of their
+   booking page. **What replaces it is issue #32**, measured live at 05:12:11
+   UTC and described in this file's opening section — and unlike the Zoom leak
+   it is not merely listed here, it is the demotion. *The published
+   `/subprocessors` register still names no Zoom row (re-measured 05:19 UTC);
+   that disclosure repair is `c000feb` and is one of the three commits behind
+   [`BACKLOG.md`](BACKLOG.md) item 1.*
+   **What follows is the entry as it stood before this refresh, kept as the
+   dated record it is.** A
    connected Zoom owner's personal meeting URL prints to anyone who loads their
    booking page, before any booking. The fix is merged and reviewed (`16c3fd4`,
    `3d313d2`, release note 2026-08-31, Q-011); this evaluation re-checked that
@@ -413,11 +591,20 @@ answered, and regressions to be release-stoppers. Today:
    for why:* what a self-reported result is worth turns on **who actually
    looked**, and on this very merge four of five cross-family reviewers returned
    no verdict while leaving artefacts that read like reviews. See the reviewer-
-   breadth entry under "Evidence for beta". That is Q-025's question arriving
+   breadth entry under "Evidence about this product". That is Q-025's question arriving
    from the review side rather than the CI side, and it is recorded, not
    answered.
-7. **A feature this product sells has never worked on the deployment, it is
-   repaired in `main`, and it is still dead in production.** The defect —
+7. **Struck 2026-09-01: the alarm import is on the deployed build, and
+   workflows and webhooks are alive in production for the first time.**
+   `git merge-base --is-ancestor 0a35ddc 2453adc` answers **yes**, checked here.
+   *One thing not established and not implied:* whether the Durable-Object alarm
+   actually **re-armed** on the hosted build after the deploy — answering that
+   means booking against a real owner's page, which this seat did not do.
+   Shipping fixed code is not the same as the feature running. **Carried, not
+   confirmed**, and it is why this entry is struck as *"has never worked"*
+   rather than marked as *"works"*.
+   **What follows is the entry as it stood before this refresh, kept as the
+   dated record it is.** The defect —
    `service/src/worker.ts:303` calling `processDueJobs` without importing it, so
    the Durable Object alarm that drains due jobs throws `ReferenceError` and
    dies before it re-arms — was found at the last evaluation and **closed in
@@ -439,7 +626,48 @@ answered, and regressions to be release-stoppers. Today:
    cannot read `MET`: that gate names complete workflows, and these are the
    workflows.
 
-## Why not `alpha`
+## Why `alpha` and not lower
+
+**`alpha` is where the evidence lands, and the ladder's next rung down is not
+close.** `deprecated` names a replacement and a shutdown date; `retired` is kept
+readable and not kept running. Neither describes a product that took its last
+deploy four and a half hours ago, passes 357 of 357 tests, and has one repaired
+defect waiting on a deploy. `under construction` — *"do not rely on it, builders
+only"* — is the only one worth a sentence, and it is wrong: strangers do sign up
+through a proven-address gate, data survives and is deletion-tested, and the
+booking engine computes correct times and served 24 of them to the very page
+this demotion is about. **The failure is one line of presentation on a build
+that is one deploy behind its own repair, not a product that does not work.**
+
+**The previous refresh's case *against* demotion is kept below rather than
+deleted, because it is the record of what was weighed and it names, correctly,
+what would change the answer.** Read it as the reasoning of 2026-09-01 00:30
+UTC. Two of its load-bearing grounds have since failed on measurement and are
+struck here rather than left to be re-read as current:
+
+- *"one report, no reproduction by this seat"* — **struck.** It has now been
+  reproduced by two independent seats on the live host, at 03:52:59 and
+  05:12:11 UTC, on fresh browser sessions, and the mechanism is a single
+  unconditional missing statement in a renderer every booking page shares.
+- *"a live measurement showing that page serving 25 correct slots at the same
+  minute"* — **struck as evidence, and it was never evidence against.** Slots
+  being served correctly is precisely compatible with none being displayed;
+  that is the defect. This refresh measured 24 slots on the page **and** zero
+  time buttons rendered from them, in the same page load.
+
+Its third ground — *"`beta` requires that known gaps be listed here, and this
+one now is"* — is the one that survived longest and is answered rather than
+struck: **listing a gap is what `beta` asks for a gap. It is not what `beta`
+asks for the product's central function being broken for every stranger who
+opens the page.** A list is not a substitute for the thing working.
+
+**What the previous refresh got right, and it is why the demotion is a
+measurement and not a re-reading:** it wrote the condition down in advance
+instead of leaving the judgement to a later seat's mood. That is the practice
+that produced this section, and it is repeated at the top of this file for the
+promotion back.
+
+### The previous refresh's case against demotion, 2026-09-01 00:30 UTC
 
 Demotions must be earned too, so the case against is recorded, and it was
 re-asked this evaluation rather than inherited: alpha says "works for people
@@ -516,22 +744,37 @@ each.
 
 ## Known gaps, so nobody discovers them the hard way
 
-- **A public booking page can show a day that has times and then show no
-  times** — [issue #32](https://github.com/pumasi-ai/pumasi-booking/issues/32),
-  filed on the live product 2026-09-01 00:36:56 UTC, `accepted` ·
-  `priority: high`, [`BACKLOG.md`](BACKLOG.md) **item 2**. Unlike almost
-  everything else in this list it is **not** waiting on a deploy: the renderer is
-  byte-identical on the live build and in `main`. Not reproduced by this seat;
-  the precondition (25 slots served, 13 on the day picked) was measured at
-  00:37:43 UTC. Listed first among the gaps because a booker is the person on
-  the other end of it.
-- **Six merged changes to the deployed source are not serving anyone**, five of
-  them with a published release note and four of those reviewed can-hurt
-  releases inside open windows: `4f56df4`, `16c3fd4`, `7ea730a`, `3f2947c`,
-  `0a35ddc`, `2453adc`. The deployment has not moved since 2026-08-30
-  16:55:37.479 UTC (version `d73c05b5`, a *Secret Change*), re-measured **by
-  this seat** at 2026-09-01 00:27:49 UTC — **31 h 32 m**.
-- **`2453adc` has no release note.** Checked at this evaluation:
+- **A public booking page shows a day that has times and then shows no times —
+  and this one is not a gap, it is the stage.**
+  [Issue #32](https://github.com/pumasi-ai/pumasi-booking/issues/32), filed on
+  the live product 2026-09-01 00:36:56 UTC, `accepted` · `priority: high`.
+  **Reproduced by this seat in a browser at 05:12:11 UTC** — 24 slots on the
+  page, day cells 1 and 2 marked available, `#times.children.length` **0** for
+  both, 0 errors captured. The cause is one unconditional missing statement in
+  the one renderer every booking page shares; **it is repaired at `d7bd490` and
+  the repair is not deployed** (`git merge-base --is-ancestor d7bd490 2453adc`
+  → no). It is now [`BACKLOG.md`](BACKLOG.md) **item 1**'s sharpest content,
+  and it is why this file says `alpha`. **Unlike almost everything else in this
+  list it was *not* waiting on a deploy when it was found — it is now, and only
+  now, because the repair exists.** The previous refresh recorded the renderer
+  as byte-identical between the live build and `main`, which was true and was
+  the measurement that correctly ruled out "just deploy it" as the answer at
+  that time.
+- **Three merged changes to the deployed source are not serving anyone**, down
+  from six, and the count is re-taken rather than carried:
+  `git log 2453adc..HEAD -- service/src/` returns `36f286c`, `c000feb` and
+  `d7bd490`. **The six this list carried for five refreshes — `4f56df4`,
+  `16c3fd4`, `7ea730a`, `3f2947c`, `0a35ddc`, `2453adc` — are all ancestors of
+  the deployed commit**, checked one at a time. The deployment moved at
+  **2026-09-01 00:40:44.505 UTC** (version `b6a2e64b`), re-measured **by this
+  seat** at 05:15:44 UTC. **The gap is 4 h 35 m and one named user's defect**,
+  where it was 31 h 32 m and six invisible repairs.
+- **`2453adc` has no release note.** Re-checked at this evaluation and still
+  true — and **Q-034's named default has now been taken by the note that could
+  take it**: the `d7bd490` release note carries a *"Which build this is"*
+  section stating the current fact rather than the stale one, so the correction
+  rode on the next note exactly as that default said it should. What is still
+  absent is a note naming `2453adc` itself. Checked at the previous evaluation:
   `pumasi/releases/` holds notes for the reporting path, Zoom connect, the OAuth
   callback, sign-in, advisory CI and the alarm import, and none naming `2453adc`
   or the version work. The coder that merged it left the note deliberately and
@@ -540,7 +783,16 @@ each.
   either**, and it is not written here as a defect against anyone; it is raised
   as `DECISIONS.md` **Q-034** with a named default, and recorded in this list so
   that the absence is visible rather than inferred.
-- **Every workflow email and every webhook is still dead on the deployment,
+- **~~Every workflow email and every webhook is still dead on the deployment.~~
+  CLOSED 2026-09-01 by a deploy**, and recorded rather than deleted.
+  `git merge-base --is-ancestor 0a35ddc 2453adc` answers **yes**, so the alarm
+  import is on the build `booking.pumasi.ai` serves — the first time a repair in
+  this list has moved from "merged" to "serving". *Not established, and not
+  implied:* whether the alarm actually **re-armed** on the hosted Durable Object
+  after the deploy; that needs a booking against a real owner's page, which this
+  seat did not make. **Carried, not confirmed.** The paragraph below is the gap
+  as it stood, kept as the dated record it is.
+  **Every workflow email and every webhook was dead on the deployment,
   and the repair is merged.** `PumasiService.alarm()` — the Durable Object alarm
   that drains due jobs and re-arms — called `processDueJobs` without importing
   it from `de4abbe` (2026-08-28), so on the hosted build it threw
@@ -571,7 +823,7 @@ each.
   '*.sql'`. **What the closure did not buy:** three casts of `this.env` are now
   widened through `unknown` because the generated `Env` cannot describe secrets
   set with `wrangler secret put`, so the deployed router's *bindings* are still
-  untyped. That is ranked as [`BACKLOG.md`](BACKLOG.md) item 9, with no live
+  untyped. That is ranked as [`BACKLOG.md`](BACKLOG.md) item 8, with no live
   user consequence found and the reason stated there.
 - **A machine re-runs the checks now, and it blocks nothing.** Advisory CI runs
   the core suite, the service suite (minus `browser-live.test.ts`, named on
@@ -587,7 +839,23 @@ each.
   the same workflow's `typecheck` step reaches `src/worker.ts`, without
   `.github/workflows/` being edited. Recorded as evidence inside the **Q-026**
   window rather than after it.
-- **Three reviewers of the most recent merge never reached a model, and the
+- **~~Three reviewers of the most recent merge never reached a model.~~ No
+  longer true of the most recent merge, and improving twice in a row.** At
+  `d7bd490`, measured here with `wc -c` and `grep VERDICT`: **three of four
+  reviewers returned real, substantive reviews** — gemini on the spec (7931
+  bytes, APPROVE), kimi on the code (4457 bytes, APPROVE) and glm on the code
+  (7811 bytes, APPROVE, and it found two real defects in the builder's own
+  artefact, both fixed rather than argued past). One husk: qwen, 376 bytes, a
+  600-second curl timeout — a **latency** failure, not the argv one. **No
+  `Argument list too long` anywhere.** *Recorded rather than smoothed:* `pumasi`
+  **Q-038**'s Review row says kimi was killed at exit 137 and its transcript
+  *"committed empty"*; at this tree it is neither. This file reports the tree,
+  and the discrepancy is handed to Q-038 as evidence. **What has not changed:**
+  the four husks from `0a35ddc` are still in `reviews/` and still read like
+  reviews at a glance, which is the finding below and is why it is kept rather
+  than deleted. The paragraph below is the gap as it stood, kept as the dated
+  record it is.
+  **Three reviewers of the `0a35ddc` merge never reached a model, and the
   transcripts they left look like reviews.** `reviews/20260831-162058-code-qwen.md`,
   `…-162414-code-glm.md` and `…-162439-code-kimi.md` are 350, 348 and 350 bytes,
   each declaring `Context supplied: 630964 bytes inlined` and each containing
@@ -602,7 +870,22 @@ each.
   in `pumasi/tools/review.sh` and `pumasi-ops/tools/recruit.sh` — not this
   product's code, both under live writers during this pass — and is reported,
   not attempted, in this evaluation's digest entry.
-- **The suite latches red on a shared machine.** The 19 service test files that
+- **The suite latches red on a shared machine, and at this refresh the
+  mechanism is reproduced on demand rather than inferred from a failure rate.**
+  Measured here at `d7bd490`, from a clean `/tmp`: `bootstrap.test.ts` alone is
+  **7/7 green**; the same command `SIGKILL`ed 0.8 s in leaves
+  `/tmp/pumasi-pg-bootstrap` with **24 entries**; the identical command re-run
+  is **0 pass, 7 fail**, every failure `initdb: error: directory
+  "/tmp/pumasi-pg-bootstrap" exists but is not empty`; `rm -rf` on that
+  directory restores **7/7**. **New, and it narrows the repair:** the orphaned
+  `postgres` process the kill leaves behind is *not* part of the mechanism —
+  killed on its own, with the directory left in place, the re-run still failed
+  7 of 7 with the same message, so the cause is the directory alone.
+  `embedded-postgres`'s `initialise()` runs `initdb` unconditionally with no
+  already-initialised branch, which is why a *complete* leftover cluster is as
+  fatal as a partial one. Promoted to [`BACKLOG.md`](BACKLOG.md) **item 2** — the
+  top build entry — on that mechanism and on a demonstrated recurring cost.
+  The 19 service test files that
   start PostgreSQL hard-code both their port and their data directory, so one
   contention failure leaves `/tmp/pumasi-pg-<name>` behind and **every later run
   of that file fails on it** until a human deletes it. Measured at the last
@@ -613,7 +896,7 @@ each.
   which the 19 failures occurred*, which settles that load is not the cause. Job
   `0049` paid this cost mid-packet, deleting leftover directories that had
   failed 45 tests. It is a false red, never a false green, and a fresh CI runner
-  cannot carry it between runs. [`BACKLOG.md`](BACKLOG.md) item 5.
+  cannot carry it between runs. [`BACKLOG.md`](BACKLOG.md) item 2.
 - **Nothing in the flow deploys a merged fix.** The charter flow ends at
   `GATE: PASS` and a published release note; no role in
   `pumasi-ops/roles/` owns carrying the build to `booking.pumasi.ai`, and
@@ -622,8 +905,18 @@ each.
   open; this gap, not the Zoom bug, is why item 5 above is still open, and it
   is now what stands between a merged, reviewed, gate-passed workflow repair and
   a single reminder being sent.
-- **Nothing tells you which build is live — including the endpoint built to.**
-  `https://booking.pumasi.ai/healthz` answers
+- **~~Nothing tells you which build is live.~~ CLOSED 2026-09-01 by the deploy,
+  and it is the clause no commit could close.** Measured by this seat at
+  05:11:40 UTC: `/version` → `{"version":"0.2.0","commit":"2453adc"}`,
+  `/healthz` → `{"status":"ok","version":"0.2.0","commit":"2453adc","sharded":true}`,
+  `/readyz` → `{"status":"ready","version":"0.2.0","commit":"2453adc","owners":11}`,
+  and `https://booking.pumasi.ai/` serves `<span class="foot-v">v0.2.0</span>`
+  (05:20:06 UTC). **PR-1's *user-visible* clause and its `GIT_COMMIT` half are
+  both met in the product**, and establishing what is deployed no longer needs
+  Cloudflare API access. What remains of PR-1 is the report payload's `version`
+  field, [`BACKLOG.md`](BACKLOG.md) **item 7**. The paragraph below is the gap
+  as it stood, kept as the dated record it is.
+  `https://booking.pumasi.ai/healthz` answered
   `{"status":"ok","commit":"unknown","sharded":true}`: at `2453adc`
   `worker.ts:448` serves `version: VERSION` beside
   `env['GIT_COMMIT'] ?? 'unknown'`, and the live answer has neither the version
@@ -679,42 +972,55 @@ each.
   Recorded as closed rather than deleted, because "closed in `main`" and "closed
   for a user" are the distinction this file exists to keep.
 
-## What `launched` requires
+## What `beta` requires, and then what `launched` requires
 
-The Q-009, Q-011, Q-015, Q-023, Q-026 and **Q-029** windows passing unvetoed;
-Google verification cleared so C1 holds for strangers; the reporting *intake*
-live with its deletion path implemented and tested, and the Workers-path
-reporting decision made (§5.1 binds at this promotion; spec/0004 R5c, D-107 —
-[`BACKLOG.md`](BACKLOG.md) item 7); the PMI leak closed **on the deployment**,
-not only in `main`, and **workflows and webhooks actually working on the
-deployment** — both now the same requirement and both item 1; a route by which
-a merged fix reaches users at all (`DECISIONS.md` Q-012); **issue #32 closed**,
-since a booking page that shows no times is a `VALUE.md` C2 promise failing at
-the surface a stranger meets (item 2); PR-1 met, which after `2453adc` means
-only its user-visible clause reaching production (item 1) and its diagnostics
-clause reaching the report payload (item 8) — the version half is done and this
-list no longer asks for it; and the D-105 residue either cleared by counsel or
-explicitly accepted by the steward as the standing posture.
-*Satisfied since the last pass, and struck from this list:* **the deployed entry
-point being brought under a compiler so that the workflow claim can be checked
-rather than asserted.** It was named as a requirement one pass ago and it is
-met — `service/tsconfig.worker.json` puts `src/worker.ts` under `npm run
-typecheck`, `service/test/worker-alarm.test.ts` executes its alarm, and both
-were verified by this seat at `0a35ddc` rather than read off the release note.
-It is struck as a *requirement*, not forgotten: the remaining piece of it —
-that the router's bindings are still untyped through three `unknown` widenings —
-is ranked as item 9 and is deliberately **not** a promotion requirement, because
-no live user consequence was found for it.
-*Newly satisfied in part, and struck as a whole requirement only where it is
-whole:* **PR-1's version clause**, which this list has carried for five
-evaluations, is met in `main` at `2453adc` — one source of truth, a number that
-moved, and both entry points reporting it from the same generated constant. It
-is **not** struck from this list, because two of its four clauses are still
-open; what is struck is the framing that made it a build. It is now an instance
-of the requirement below rather than a requirement beside it.
-*Not satisfied, and it is the one that has moved least:* nothing carries a
-merged build to users. Six changes to the deployed source now wait. `launched` means the
-[`VALUE.md`](VALUE.md) promises hold, and C3 lists workflows and webhooks by
-name; a promise that has been repaired in the repository and has still never
-once worked in production is not a gap in the evidence, it is the thing the
-evidence was supposed to be about. Promotion is a commit citing each.
+**`beta` first, because that is the near rung now.** One thing, named at the top
+of this file and repeated here so it is not lost in a longer list: **`d7bd490`
+deployed, and a public booking page measured in a browser showing times when an
+available day is tapped.** Both, by whoever promotes, with the measurement in
+the commit. That is [`BACKLOG.md`](BACKLOG.md) item 1 and `DECISIONS.md`
+**Q-012**. Nothing else on this file's list blocks `beta` today.
+
+**`launched` requires all of the following, and the list is shorter than it has
+ever been because a deploy happened.**
+The Q-009, Q-011, Q-015, Q-023, Q-026, **Q-029** and **Q-038** windows passing
+unvetoed; Google verification cleared so C1 holds for strangers; the reporting
+*intake* live with its deletion path implemented and tested, and the
+Workers-path reporting decision made (§5.1 binds at this promotion; spec/0004
+R5c, D-107 — [`BACKLOG.md`](BACKLOG.md) item 5); **issue #32 closed to its
+reporter**, which after `d7bd490` means only a deploy and a measurement
+(item 1); a route by which a merged fix reaches users at all — not one deploy,
+but a *route* (`DECISIONS.md` **Q-012**); PR-1 met, which after the 00:40 UTC
+deploy means only its diagnostics clause reaching the report payload (item 7);
+and the D-105 residue either cleared by counsel or explicitly accepted by the
+steward as the standing posture.
+
+*Struck 2026-09-01, on measurement rather than on a merge, and this is the first
+refresh that has been able to strike anything for this reason:* **the PMI leak
+closed on the deployment** and **workflows and webhooks actually working on the
+deployment**. Both were requirements on this list at every refresh since they
+were found; `git merge-base --is-ancestor` puts `16c3fd4` and `0a35ddc` inside
+the deployed `2453adc`, and `booking.pumasi.ai` serves it. *One rider carried,
+not confirmed:* the alarm's **re-arming** on the hosted Durable Object was not
+exercised, and shipping fixed code is not the same as the feature running.
+
+*Struck 2026-09-01:* **PR-1's user-visible clause reaching production**. The
+live footer reads `v0.2.0` and `/version`, `/healthz` and `/readyz` all answer
+with `version` and `commit`, all measured by this seat. The `GIT_COMMIT` half
+closed with it, the only way it could.
+
+*Satisfied two refreshes ago, and kept struck:* **the deployed entry point being
+brought under a compiler.** `service/tsconfig.worker.json` puts `src/worker.ts`
+under `npm run typecheck`, `service/test/worker-alarm.test.ts` executes its
+alarm. The remaining piece — the router's bindings still untyped through three
+`unknown` widenings — is item 8 and is deliberately **not** a promotion
+requirement, because no live user consequence was found for it.
+
+*Not satisfied, and it is now the only structural one left:* **nothing in the
+flow carries a merged build to users.** A deploy happened; that is an event, not
+a route. Three changes to the deployed source wait behind it right now, and one
+of them is a named user's reported defect that a deploy four minutes after they
+filed it did not carry. `launched` means the [`VALUE.md`](VALUE.md) promises
+hold; C1 promises a stranger can book a real time unattended, and on 2026-09-01
+a stranger could not. **Promotion is a commit citing each, and demotion was
+one.**
