@@ -264,7 +264,8 @@ the Node path effectively requires both (**`app.ts:992`**, via the hub), so a
 Workers deployment with an id and no secret is sent to Google and refused on the
 way back rather than at the button. No provider is required that was not
 required before, and nothing is unguarded — it is a late refusal, not a lost
-feature. [`BACKLOG.md`](BACKLOG.md) item 3. **Both coordinates re-measured at
+feature. [`BACKLOG.md`](BACKLOG.md) item 2 (item 3 until 2026-09-01, when the
+entry above it was built). **Both coordinates re-measured at
 `d7bd490` by this evaluation and both are unchanged from the last pass** —
 `grep -n "if (!states || !config.googleClientId)" service/src/worker.ts` → 610,
 `grep -n "!hub || !config.googleClientId" service/src/app.ts` → 992. *The

@@ -6,6 +6,17 @@ post-release evaluation (job `0082`, at `d7bd490`), on the condition this file
 wrote down in advance at the previous refresh. The evidence is below and in the
 commit message; the steward vetoes by reverting.
 
+**Re-evaluated 2026-09-01 19:04–19:54 UTC (job `0094`, finished as job `0100` after
+`0094` ended its turn on a background sweep) at `7e41d36`: the label
+stays `alpha`.** The promotion condition below was re-measured rather than
+re-read — `https://booking.pumasi.ai/version` still answers `2453adc` (19:04
+UTC), `npx wrangler deployments list` still ends at 2026-09-01 00:40:44 UTC, and
+`git merge-base --is-ancestor d7bd490 2453adc` still answers **no** — so the one
+thing that restores `beta` has not happened. What changed is the evidence under
+the label, not the label: the test harness can no longer latch (`7e41d36`), and
+this file carries a determinism figure as a bare number for the first time (see
+*Tests* under "Evidence about this product").
+
 ## The demotion, first, because a reader deserves it before the evidence
 
 **What `alpha` means, in this file's own ladder:** *works for people who talk to
@@ -177,7 +188,16 @@ seat's; it is handed up in this evaluation's digest entry.
 
 ## Evidence about this product, as of `d7bd490`
 
-- **Tests. Superseded 2026-09-01 by a fresh run at `d7bd490`: 338 service +
+- **Tests. Superseded again 2026-09-01 by fresh runs at `7e41d36`: 19 engine +
+  338 service, 357 of 357, 21 consecutive times (the 20-run sweep under
+  *Determinism* below and one more before the gate), and `GATE: PASS` re-run by
+  this seat (job `0100`, finishing `0094`'s pass) at 19:53:30–19:53:58 UTC** (`── 1/4 tests` **338 pass, 0
+  fail**; `── 3/4` gemini and kimi approved). Per Q-025 rider (a): run by this
+  seat, and still the self-report that entry is about. The service count did
+  not move at `7e41d36` — no test name, assertion or count changed — which is
+  the evidence that the harness change changed no test's meaning. **The
+  previous refresh's run follows as the dated record it is.**
+  **Superseded 2026-09-01 by a fresh run at `d7bd490`: 338 service +
   19 engine pass, 357 of 357, and `GATE: PASS` re-run by this seat at 05:16
   UTC** (`── 1/4 tests` **338 pass, 0 fail**; `── 3/4` gemini and glm approved).
   The service count rose 331 → 338 with SPEC-0008's seven cases —
@@ -215,6 +235,37 @@ seat's; it is handed up in this evaluation's digest entry.
   UNVERIFIED`, which is the known cosmetic defect in the script's path handling,
   not a finding about this tree — and see the reviewer-breadth entry below,
   which is a finding about this tree.
+  **Determinism — per Q-025 rider (b), and for the first time it is a bare
+  number, measured on this pass.** The harness changed at `7e41d36` (job
+  `0086`): every one of the 19 PostgreSQL-backed test files now starts its
+  cluster through `service/test/support/pg.ts`, on a directory named for the
+  run's pid and eight random bytes and a port the OS allocates, with a failed
+  start removing its own directory and a narrow sweep of dead runs' leftovers
+  on the way in. The reason the last three refreshes gave for not re-measuring
+  — that a sweep poisons `/tmp` for the other seats on this machine — no longer
+  applies, so this refresh ran one. **Root `npm test`, 20 consecutive
+  sequential runs at `7e41d36`: 20 of 20 green, 19 core + 338 service, 357 of
+  357 every time**, run by this seat (job `0100`, finishing `0094`'s pass)
+  between 19:42:34 and 19:52:25 UTC, one-minute load average 0.89 at the first
+  run's start and 8.95 at the last's, 26–29 s per run; `/tmp` held **0**
+  `pumasi-pg-*` directories before the first run, after every one of the 20, and
+  after the last. Every figure is read from the runs' own logs
+  (`# pass 19` / `# pass 338`, `# fail 0` each time), not from exit codes alone.
+  **The interruption trial was repeated on this harness by this seat (job `0100`) at 19:52:58–19:53:02 UTC, from a `/tmp` holding 0 `pumasi-pg-*` directories:** `node --test .build/test/bootstrap.test.js` **7 pass, 0 fail**; the same command `SIGKILL`ed 0.8 s in left one directory, `pumasi-pg-bootstrap-4174119-1cd9f4e77196ea1f`, holding **24 entries**, and an orphan `postgres -D <that directory> -p 37101`; the identical command re-run with no `rm -rf` — **7 pass, 0 fail**, and `/tmp` held **0** `pumasi-pg-*` directories and no `postgres` process afterwards. The corpse was litter, not a latch, and the next run's sweep took it.
+  **What the number means and does not.** It is one seat's measurement on one
+  machine, strictly sequential, so it says nothing about two suites in flight
+  at once — the only concurrency trial is still the accidental overlap recorded
+  below. It is taken on a harness that cannot latch, so a red run in it would
+  have been a real red; there were **none**. Load during the sweep reached
+  **9.57** (the highest one-minute average read at a run boundary; the peak
+  between readings is not recorded), inside the 9.0–12.4 band in which the old harness recorded
+  nineteen consecutive failures. And it is still exactly the self-report Q-025
+  is about.
+  **The paragraphs below are the previous refreshes' measurements, kept as the
+  dated record they are. The 19-of-40 and 15-of-15 figures were taken on the
+  harness that could latch and describe that harness, not this one; the
+  sentence that this product's determinism is "still not a bare number" was
+  true when written and is superseded above.**
   **Determinism — per Q-025 rider (b), and this pass adds fewer runs than the
   last one and says so rather than implying otherwise.** The refresh two before
   this ran `npm test` 40 consecutive times at `d5a02bb` and recorded **19 of 40
@@ -358,13 +409,29 @@ seat's; it is handed up in this evaluation's digest entry.
   bind again at the promotion back. `d7bd490` changed the widget — the
   diagnostics row formerly headed **Page URL** is now **Reported From**
   (`feedback.ts:123`) and a screenshot carries a caveat line (`:153`), both read
-  at this tree — and the behaviour PR-2 specifies is unchanged. **Read fresh
-  from `worktree-product-rules` at this evaluation and not from a cached copy
-  (L-007):** `pumasi` is at **`e137b0d`** and
-  `git ls-tree -r --name-only main | grep PRODUCT-RULES` is **empty** there;
-  the file exists only on `worktree-product-rules` (**`0115758`**, v1.0). That is
-  the **seventh** consecutive evaluation to find it so; its absence from `main`
-  is **Q-017**, open, and it is **not compliance**.
+  at this tree — and the behaviour PR-2 specifies is unchanged.
+  **Read fresh from `pumasi` `main` at `23bbc64` at this evaluation, not from a
+  branch and not from a cached copy (L-007): `PRODUCT-RULES.md` v1.0 is on
+  `main`** — `git ls-tree -r --name-only main | grep PRODUCT-RULES` returns the
+  file, the eighth evaluation to look and the first to find it there. Q-017's
+  own retirement condition is therefore met; evidence is added to it at this
+  pass and closing it is the steward's. **PR-2's five clauses, re-read against
+  `service/src/feedback.ts` at `7e41d36` as v1.0 states them:** *three kinds* —
+  `FeedbackPayload.type` is `'bug' | 'feature' | 'general'` (`:20`); *lands in
+  the open* — `formatFeedbackMarkdown` labels every issue `feedback` and adds
+  `bug` / `enhancement` by kind (`:91`–`:93`); *sanitized* — `sanitizeUrl`
+  strips query keys matching token, state, code, session, secret, key or auth
+  (`:51`–`:56`), and errors travel as message and location; *contact optional*
+  — `email?` (`:31`), rendered *None provided* when empty (`:114`);
+  *inspectable* — the widget opens an *Included Diagnostics (Full
+  Transparency)* disclosure before send (`pages.ts:383`). *Carried, not
+  confirmed:* that the server appends nothing the disclosure did not show — the
+  issue body is composed server-side from the payload the widget sent, and this
+  seat read both ends without diffing them field by field. **The previous
+  refresh's reading follows as the dated record it is:** `pumasi` was at
+  `e137b0d`, `git ls-tree -r --name-only main | grep PRODUCT-RULES` was empty,
+  and the file existed only on `worktree-product-rules` (`0115758`) — the
+  seventh consecutive evaluation to find it so, recorded as **Q-017**.
   **What follows is the previous refresh's wording, kept as the dated record it
   is.**
   **`PRODUCT-RULES.md` PR-2 — the rule that binds *at that stage* — is met.**
@@ -531,7 +598,7 @@ answered, and regressions to be release-stoppers. Today:
    only for nominated Google test accounts until the OAuth app passes
    verification, which has not been submitted
    ([`GOOGLE-SETUP.md`](../service/spec/0003/GOOGLE-SETUP.md); VALUE C1's
-   stated limit; [`BACKLOG.md`](BACKLOG.md) item 4).
+   stated limit; [`BACKLOG.md`](BACKLOG.md) item 3, item 4 until 2026-09-01).
 3. **The evidence is still one machine wide.** The §5.1 reporting mechanism
    now exists on the Node path (spec/0004, `4f56df4`) — but nothing receives
    reports (the intake is not live; sends fail and are dropped) and the
@@ -870,7 +937,20 @@ each.
   in `pumasi/tools/review.sh` and `pumasi-ops/tools/recruit.sh` — not this
   product's code, both under live writers during this pass — and is reported,
   not attempted, in this evaluation's digest entry.
-- **The suite latches red on a shared machine, and at this refresh the
+- **~~The suite latches red on a shared machine.~~ CLOSED 2026-09-01 at
+  `7e41d36`, verified by this seat rather than read off the commit, and
+  recorded rather than deleted.** `service/test/support/pg.ts` gives every run
+  its own directory and an OS-allocated port and sweeps dead runs' leftovers;
+  `grep -l "databaseDir: '/tmp/pumasi-pg-" service/test/*.test.ts` returns
+  **0** files against 19 at `d7bd490`. Reproduced on the new harness by this seat
+  (job `0100`) at 19:52–19:53 UTC: the same `SIGKILL` 0.8 s into
+  `bootstrap.test.js` leaves a 24-entry directory and an orphan `postgres`, and the
+  identical re-run with no `rm -rf` passes **7/7** and leaves `/tmp` with **0**
+  `pumasi-pg-*` directories. The determinism sweep this
+  unblocked is under *Tests* above. The paragraph below is the gap as it stood,
+  kept as the dated record it is; its `BACKLOG.md` item 2 is the struck entry
+  under that file's *Completed (2026-09-01)*.
+  **The suite latches red on a shared machine, and at this refresh the
   mechanism is reproduced on demand rather than inferred from a failure rate.**
   Measured here at `d7bd490`, from a clean `/tmp`: `bootstrap.test.ts` alone is
   **7/7 green**; the same command `SIGKILL`ed 0.8 s in leaves
@@ -946,8 +1026,10 @@ each.
   that commit touched `worker.ts` and `app.ts` again, and **both moved**:
   `worker.ts:596` → **`610`**, and the Node guard `app.ts:985` → **`992`**,
   displaced by the three version surfaces inserted above them on each build. The
-  finding is unchanged; only its coordinates are.
-  [`BACKLOG.md`](BACKLOG.md) item 3.
+  finding is unchanged; only its coordinates are. Re-taken at `7e41d36` by job
+  `0094`: still `610` and `992`.
+  [`BACKLOG.md`](BACKLOG.md) **item 2** since 2026-09-01 — the top build entry,
+  by succession — and the next coder packet, can-hurt, both paths in one change.
 - Deletion cannot recall mail already sent — by nature, and disclosed in the
   notice.
 - The deployed (Workers/Gmail) mail path's subprocessor control is code review,

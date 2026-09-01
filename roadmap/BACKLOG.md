@@ -12,94 +12,89 @@ takes the highest entry that *is* a build, and the operator item keeps its
 rank rather than being demoted for being unbuildable. Reordering is a commit
 with the reasoning in the message; the steward vetoes by reverting.
 
-**The highest *build* entry today is item 2 — the service suite's red latch —
-and it reached the top by being the only entry on this list whose cost is being
-paid by somebody who actually exists.** Item 2 of the previous order, **issue
-#32**, is **delivered at `d7bd490`** and is struck into Completed below, on this
-seat's own verification of the tree: `service/src/pages.ts:989` carries
-`times.appendChild(b)` again, `service/test/booking-slots.test.ts` drives the
-real page in a real browser, and the root suite is **19 core + 338 service, 357
-of 357 green**, re-run here rather than quoted. **Its user-visible half is not
-delivered and is not quietly dropped**: the repair is not on
-`booking.pumasi.ai`, the reporter still meets the defect, and that residual sits
-with item 1 where every other undeployed thing already sits — measured, not
-assumed, and the measurement is in item 1.
+**The highest *build* entry today is item 2 — a half-configured deployment gets
+an answer it cannot act on — and it is the top build entry by succession, not by
+promotion: the entry that outranked it was built.** Item 2 of the previous
+order, **the service suite's red latch**, is **delivered at `7e41d36`** by job
+`0086` and is struck into Completed below on this seat's own verification of the
+tree: `service/test/support/pg.ts` exists (170 lines), all **19** files that
+start PostgreSQL import it (`grep -l "support/pg" service/test/*.test.ts` →
+19; `grep -l "databaseDir: '/tmp/pumasi-pg-"` → **0**, against 19 at
+`d7bd490`), and the root suite is **19 core + 338 service, 357 of 357**,
+re-run here **21 consecutive times, 357 of 357 every time, by job `0100`, which
+finished this pass after `0094` ended its turn on a background sweep**. Nothing under `service/src/` changed between
+`d7bd490` and `7e41d36` — `git diff --stat d7bd490 7e41d36 -- service/src/` is
+empty — which is why every `service/src` coordinate below that says
+*re-verified at `d7bd490`* still holds at this tree; the two the new top build
+entry rests on were re-taken anyway.
 
-**A deployment happened, and this file has never had to say that before.**
-Every previous order was written against a production build frozen at
-2026-08-30 16:55:37 UTC. Three deployments landed at **2026-09-01
-00:38:41.738Z · 00:39:03.300Z · 00:40:44.505Z**, re-measured here by
-`npx wrangler deployments list` at **05:15 UTC**, and they carried
-`booking.pumasi.ai` to **`2453adc`**. **Five of the six merged builds this file
-has ranked behind item 1 for five consecutive evaluations are now serving
-users** — checked one at a time with `git merge-base --is-ancestor <sha>
-2453adc`, not inferred from the timestamp: `4f56df4` (reporting), `16c3fd4`
-(the Zoom PMI leak), `7ea730a` (the OAuth callback), `3f2947c` (the sign-in
-doors) and `0a35ddc` (the alarm import) are **all ancestors of the deployed
-commit**. The Zoom leak is closed for the people it exposed. Workflows and
-webhooks are alive on the deployment for the first time. Item 1 did not become
-smaller because anything was re-read; it became smaller because somebody ran a
-deploy, and this file measured it rather than carrying its own previous figure.
+**What the next coder packet takes, said so it can be acted on without opening
+the ops log.** Item 2, **both halves in one packet**, as its own text has said
+since it was ranked: *(a)* neither sign-in refusal names a missing `TOKEN_KEY`;
+*(b)* `worker.ts:610` opens `/auth/google/start` on `googleClientId` alone,
+where the Node path (`app.ts:992`, via the hub) effectively needs the secret too
+— both line numbers re-taken at `7e41d36`. It is **user-visible copy on the Node
+path and the Workers router at once** (L-009), on the sign-in path of the file
+every hosted user meets, so it is **can-hurt**: it carries an intent statement,
+a published release note and a **7-day veto window** that the latch did not,
+and the intent window should open at the start of the run rather than at its
+end. The two halves are recorded as found-not-fixed in
+[`service/spec/0007/SPEC.md` §5](../service/spec/0007/SPEC.md) — those are the
+two bullets the coder strikes when the work lands. Nothing about this entry got
+better or worse to put it here, and its sufferers are still hypothetical; it
+reached the top because the entries above it were built, and it stays below
+item 1, which is operator action and keeps its rank.
 
-**What is left behind item 1 is three commits, and only one of them has a person
-waiting.** `git log 2453adc..HEAD -- service/src/` returns exactly
-`36f286c`, `c000feb` and `d7bd490`. **`d7bd490` is issue #32's repair and its
-reporter is still meeting the defect** — re-measured by this seat in headless
-Chrome at **2026-09-01 05:12:11 UTC**, after the merge and after the deploy, at
-`America/Chicago`: `booking.pumasi.ai/yunyoungmok/abc` → 200, `#slots-data`
-carries **24 slots**, day cells **1** and **2** are marked `.has`, and clicking
-each gives `#picked-day` *"Tuesday, September 1"* / *"Wednesday, September 2"*
-with `#times.children.length` **0** and **0 errors captured**. Item 1 is
-therefore no longer a list of six invisible repairs. It is one named user, one
-legal register, and one commit nobody reviewed.
+**Q-007 closed today, and its default is taken.** *Video conferencing
+integration — roadmap scope addition* (72 h from 2026-08-29) ran to its deadline
+unvetoed. This seat marked it closed in `DECISIONS.md` under that file's own
+rule and ranks its outcome here as **item 4**, adjacent to the Google OAuth
+verification item because Google Meet for strangers rides on it. In short: the
+capability is in the tree and the deployment holds all three providers'
+credentials; what is not delivered is the `0004-feature-parity.md` §3 row — a
+file outside this role's may-write list — and a measurement that a link
+actually arrives on a hosted booking.
 
 **The reorder, before → after, so the change is readable rather than inferred.**
 
-| | Before (`2453adc`, job `0061`) | After (`d7bd490`, this pass) |
+| | Before (`b66860b`, job `0082`) | After (`7e41d36`, this pass) |
 |---|---|---|
-| 1 | Deploy the reviewed build to `booking.pumasi.ai` (Q-012) · *operator action* | Deploy the reviewed build to `booking.pumasi.ai` (Q-012) · *operator action* — **unchanged in rank, five-sixths emptied by a deploy that happened**, and what remains has a named user in it |
-| 2 | A public booking page shows a day that has times and then shows no times — issue #32 | **The service suite latches red** *(was item 4)* · **top build entry** — promoted on a re-verified mechanism and a demonstrated, recurring cost |
-| 3 | A half-configured deployment gets an answer it cannot act on | A half-configured deployment gets an answer it cannot act on — *unchanged in severity, displaced by an entry whose sufferers exist* |
-| 4 | The service suite latches red | Submit the Google OAuth app for verification *(was 5)* |
-| 5 | Submit the Google OAuth app for verification | The reporting intake, and the Workers-path decision *(was 6)* |
-| 6 | The reporting intake, and the Workers-path decision | A runtime subprocessor guard for the deployed mail path *(was 7)* |
-| 7 | A runtime subprocessor guard for the deployed mail path | `pumasi-report/2` — PR-1's last open clause *(was 8)* |
-| 8 | `pumasi-report/2` — PR-1's diagnostics clause | `worker.ts` models its environment as a string bag *(was 9)* |
-| 9 | `worker.ts` models its environment as a string bag | O2 — secrets posture, completed *(was 10)* |
-| 10 | O2 — secrets posture, completed | — |
+| 1 | Deploy the reviewed build to `booking.pumasi.ai` (Q-012) · *operator action* | Deploy the reviewed build (Q-012) · *operator action* — **unchanged in rank and in content**: the deployment is still `2453adc` and the same three commits sit behind it, re-measured at this pass |
+| 2 | The service suite latches red · *top build entry* | A half-configured deployment gets an answer it cannot act on *(was 3)* · **top build entry, by succession** |
+| 3 | A half-configured deployment gets an answer it cannot act on | Submit the Google OAuth app for verification *(was 4)* |
+| 4 | Submit the Google OAuth app for verification | **Video conferencing — Q-007's default, taken** *(new)* |
+| 5 | The reporting intake, and the Workers-path decision | unchanged |
+| 6 | A runtime subprocessor guard for the deployed mail path | unchanged |
+| 7 | `pumasi-report/2` — PR-1's last open clause | unchanged |
+| 8 | `worker.ts` models its environment as a string bag | unchanged |
+| 9 | O2 — secrets posture, completed | unchanged |
+| 10 | — | **`test/support/pg.ts` — `freePort()` outside the retry** *(new; low)* |
 
-**One entry left the order and one moved up two places; everything else moved
-because of those two and not because of its own merits.** Issue #32 left because
-it was built. The latch moved from 4 to 2 for a reason stated at the entry and
-in the commit message. Items 3 and 4 of the old order swapped; items 5 through
-10 each moved down one and then up one and are exactly where they were relative
-to each other. **Nothing was demoted for getting better or worse.**
+**One entry left the order, two entered, and items 5 through 9 keep their
+numbers.** The latch left because it was built. Q-007's outcome entered at 4 for
+the reason given at the entry. The `freePort()` nit entered at 10 because a
+reviewer's uncited, self-described-unreachable observation needs a home on this
+list or it is lost, and the bottom is the home its evidence earns. Items 3 and 4
+of the old order each moved up one place because the entry above them left.
+**Nothing was demoted for getting better or worse.**
 
-**Why the latch outranks the half-configured refusal, since this reverses five
-passes of ordering and should not pass as bookkeeping.** This file ranks by
-**who meets the defect**, and it has always meant a real person rather than a
-possible one. Item 3's own text says, and this seat re-read it rather than
-taking it: *"No live user on `booking.pumasi.ai` is affected"* — the operator it
-protects is one who configured a Google client id, omitted the secret, and has
-never been observed. Item 2's sufferers are named and counted: job `0049` paid
-it mid-packet on 45 tests, job `0077` paid it during the very run that produced
-this packet, and **this evaluation paid it deliberately to re-verify the
-mechanism**. A rule that prefers an unobserved operator to three named jobs is
-being applied to the wrong noun. Item 2's remedy is also one line where item 3's
-is a two-path user-visible copy change on L-009 ground with a can-hurt review
-cycle behind it — so the cheaper fix closes the larger demonstrated cost, and
-that is the ordering.
-**There is a second reason, and it is about this file rather than about a
-user.** The latch corrupts the evidence every other entry rests on. `GATE:
-PASS`, the determinism figures in [`STAGE.md`](STAGE.md), and the suite counts
-in this file are all measured on a harness that can latch red and has. Fixing it
-makes every later measurement in this repository cheaper and more trustworthy.
-No other entry has that property.
+**Why the latch's departure changes what this file's numbers are worth, which is
+the reason this pass is not bookkeeping.** For three passes this list said the
+latch *"corrupts the evidence every other entry rests on"* — `GATE: PASS`, the
+determinism figures in [`STAGE.md`](STAGE.md) and the suite counts here were all
+taken on a harness that could latch red. At `7e41d36` it cannot, and this pass
+used that: root `npm test` ran **20 consecutive times at `7e41d36` and was green
+20 times, 357 of 357 each**, between 19:42:34 and 19:52:25 UTC on 2026-09-01,
+`/tmp` holding 0 `pumasi-pg-*` directories before, between and after, load rising
+from 0.89 to 9.57 — inside the band in which the old harness recorded nineteen
+consecutive failures. The figure is in [`STAGE.md`](STAGE.md), and it is the
+first this product has carried as a bare number.
 
 Every entry below carries one of two labels and none is unlabelled:
-**re-verified at `d7bd490`** means this seat re-ran or re-read the thing the
-entry rests on at this tree; **carried, not confirmed** means it did not, and
-says why. The label is `0055`'s, adopted here because an unlabelled entry is
+**re-verified at `7e41d36`** (or at `d7bd490`, the previous pass's tree — the
+two are identical under `service/src/`, so a `d7bd490` coordinate is a
+`7e41d36` coordinate) means a seat re-ran or re-read the thing the entry rests
+on at this tree; **carried, not confirmed** means it did not, and says why. The label is `0055`'s, adopted here because an unlabelled entry is
 indistinguishable from a re-measured one.
 
 Context the ordering assumes: the feature-parity sequence in
@@ -120,6 +115,18 @@ served subprocessor register still omits a provider the deployed build calls;
 and one commit on the deployed path was never reviewed** — source: this
 evaluation (2026-09-01, job `0082`), checking the deployment rather than the
 merge, for the **seventh** consecutive evaluation.
+**Re-measured again at `7e41d36` by this pass (job `0094` at 19:04 UTC; `/version`
+re-curled by job `0100` at 19:40 UTC with the same answer, and `wrangler
+deployments list` at 19:42 UTC still ending at 00:40:44.505Z), and unchanged in
+every particular:** `curl https://booking.pumasi.ai/version` at **2026-09-01
+19:04 UTC** → `{"version":"0.2.0","commit":"2453adc"}`; `npx wrangler
+deployments list` at 19:05 UTC still ends at **2026-09-01 00:40:44.505Z**;
+`git merge-base --is-ancestor d7bd490 2453adc` still answers **no**; and `git
+log 2453adc..HEAD -- service/src/` still returns exactly `d7bd490`, `c000feb`
+and `36f286c` — `7e41d36` touched nothing under `service/src/`. **No evidence
+row was added to Q-012 at this pass, because nothing about it changed**; this
+seat did not deploy, did not name a deployer and did not set a date. The
+previous pass's measurement follows and stands.
 **Re-verified at `d7bd490`, re-measured rather than carried, and this is the
 pass on which carrying would have been badly wrong.**
 **The deployment moved, for the first time since this entry was written.** Run
@@ -190,7 +197,7 @@ they are three different kinds of thing:
   Reviewing or reverting it is not this seat's; it is handed up in this
   evaluation's digest entry.
 **PR-1's user-visible clause is met — in the product, not the branch — and this
-entry loses it.** [`PRODUCT-RULES.md` PR-1](https://github.com/pumasi-ai/pumasi/blob/worktree-product-rules/PRODUCT-RULES.md)
+entry loses it.** [`PRODUCT-RULES.md` PR-1](https://github.com/pumasi-ai/pumasi/blob/main/PRODUCT-RULES.md)
 asks that *"a person using the product can find the version without reading
 source"*. Measured at **05:20:06 UTC**: `https://booking.pumasi.ai/` serves
 `<span class="foot-v">v0.2.0</span>`, and `/version` answers. That clause was
@@ -219,82 +226,14 @@ default, or the status. **Nothing here closes, extends, softens or dates that
 window, and no deployer is named.** That a deploy happened is reported; who ran
 it, and whether that is the answer to Q-012, is not this seat's to say.
 
-**2 · The service suite latches red: one interrupted run leaves a data directory
-behind, and every later run of that file fails on it until a human deletes it**
-— source: job `0034` handed this on itself and declined to rank it; job `0077`
-reproduced it on demand during the issue-#32 build and named the mechanism; **it
-is re-verified from scratch here, and this pass establishes one thing the
-previous accounts did not.**
-**Re-verified at `d7bd490`, by reproducing it deliberately rather than by
-reading anyone's report.** `/tmp` held **0** `pumasi-pg-*` directories at the
-start of this evaluation.
-- **Baseline.** `node --test .build/test/bootstrap.test.js` from a clean `/tmp`:
-  **7 tests, 7 pass, 0 fail**, 817 ms.
-- **The interruption.** The same command was started and the node process
-  `SIGKILL`ed 0.8 s in — the shape of any run that dies mid-suite. `ls -A
-  /tmp/pumasi-pg-bootstrap` afterwards: **24 entries** (`PG_VERSION`, `base`,
-  `global`, `pg_hba.conf`, …).
-- **The latch.** The identical command, re-run: **7 tests, 0 pass, 7 fail**,
-  every one of them `Postgres init script failed (code: 1, signal: null). ERROR
-  OUTPUT: initdb: error: directory "/tmp/pumasi-pg-bootstrap" exists but is not
-  empty`. The directory still held **24 entries** afterwards, so it latches
-  rather than self-clearing.
-- **The remedy, checked.** `rm -rf /tmp/pumasi-pg-bootstrap`, then the identical
-  command: **7 pass, 0 fail**. `/tmp` held **0** `pumasi-pg-*` directories at
-  the end of this evaluation, and the root suite ran **357/357** afterwards.
-**New here, and it narrows the fix rather than the finding: the leftover
-directory alone is sufficient, and an orphaned server process is not part of the
-mechanism.** The `SIGKILL` leaves a `postgres -D /tmp/pumasi-pg-bootstrap -p
-55436` orphan behind, which is the obvious suspect — a held port would explain
-the same symptom. It was killed on its own, **leaving the directory in place**,
-and the re-run **still failed 7 of 7 with the same `initdb` message**. So the
-cause is the directory and nothing else, and a repair that only reaps stray
-processes would not close this. `initialise()` in `embedded-postgres` runs
-`initdb` unconditionally — there is no "already initialised" branch to fall
-through to (`node_modules/embedded-postgres/dist/index.js:106`ff), which is why
-a *complete* leftover cluster is as fatal as a partial one.
-**The scope, counted at this tree rather than carried:** `grep -l "databaseDir:
-'/tmp/pumasi-pg-" service/test/*.test.ts` returns **19** files, each hard-coding
-both its data directory and its port — `analytics`, `automation`, `bootstrap`,
-`branding`, `calendar`, `concurrency`, `directory`, `enterprise`, `frontdoor`,
-`gate`, `identity`, `legal`, `meetings`, `owner`, `parity`, `questions`,
-`recur`, `routing`, `teams`.
-*What the entry asks for, and the one thing it must not do.* Give each run its
-own data directory and let the OS allocate the port, and remove the directory
-when a start fails. **It must not lower `--test-concurrency`.** Every run
-recorded above was a single test file, alone, with nothing else in flight —
-there was no concurrency to lower, and that knob would make the latch less
-likely to be sprung while leaving both fixed resources exactly where they are.
-**What is carried, not confirmed, and named so the entry is not read as more
-settled than it is.** The **19 consecutive failures out of 40 runs** measured
-two evaluations ago, and the **15-of-15 green load sweep** across loads
-2.56–10.99 measured at the last one, were not re-run here. Neither is withdrawn;
-this pass did not need them, because it reproduced the mechanism directly in
-four commands instead of inferring it from a failure rate. What they establish
-and this pass does not is that **load is not the cause** — eleven of those
-fifteen green runs sat inside the 9.0–12.4 band in which the nineteen failures
-occurred.
-Why here, and this is the promotion: **it is the highest entry on this list
-whose cost is being paid by somebody who exists.** No user can be hurt by it —
-it produces false **reds**, never a false green, and a fresh CI runner cannot
-carry it between runs, so today's advisory CI is unaffected. But
-`pumasi/tools/gate.sh` is run by hand on this shared machine by every agent that
-needs to pass it, and after one interrupted run the gate reports failures to
-every agent afterwards, on a clean tree, until someone knows to delete a
-directory in `/tmp`. Job `0049` paid it on 45 tests. Job `0077` paid it during
-the run that produced this packet. **This evaluation paid it on purpose, to
-re-verify it.** Item 3 below protects an operator who has never been observed;
-this one has three named jobs behind it and a one-line remedy. **And it is the
-only entry that corrupts the evidence the rest of this list rests on** —
-`GATE: PASS`, the determinism figures in [`STAGE.md`](STAGE.md) and the suite
-counts in this file are all taken on a harness that can latch red and has.
-
-**3 · A half-configured deployment gets an answer it cannot act on — both
+**2 · A half-configured deployment gets an answer it cannot act on — both
 refusals, on both builds** — source: the job `0023` run recorded both halves as
 found-not-fixed (`service/spec/0007/SPEC.md` §5) and handed the ranking here.
-**Re-verified at `d7bd490`, and this time the line numbers did NOT move — which
-is worth one sentence, because the last two passes had to re-take them and a
-reader should be able to tell a stable coordinate from an unchecked one:**
+**Re-verified at `7e41d36`, and again the line numbers did NOT move — `grep -n
+"if (!states || !config.googleClientId)" service/src/worker.ts` → **610**,
+`grep -n "!hub || !config.googleClientId" service/src/app.ts` → **992**, both
+re-taken by this seat at this tree. The previous pass's reading follows and
+holds:**
 - **(b) `worker.ts:610` opens `/auth/google/start` on `config.googleClientId`
   alone.** `grep -n "if (!states || !config.googleClientId)"
   service/src/worker.ts` → **`610`**, unchanged from `2453adc`. The Node-path
@@ -316,16 +255,24 @@ class, both span the same two builds, and splitting them into two `can_hurt`
 cycles buys nothing but a second review round on the same files. A coder packet
 takes both or neither.
 Why here: an operator who meets a wrong answer is a user meeting a defect, which
-is the test this file ranks by. **Nothing about this entry got better or worse
-and it was not demoted** — it is displaced by item 2, whose sufferers are named
-and counted where this entry's are hypothetical. **No live user on
+is the test this file ranks by. **Nothing about this entry got better or worse,
+and it was not promoted on merit** — it is the top build entry because the
+entries that outranked it were built; its sufferers are still hypothetical, and
+this file says so rather than inflating them to justify the rank. **For the
+coder packet, in one place:** both halves, one packet; **can-hurt** — intent
+statement, published release note, 7-day window, the intent window opened at
+the start of the run; L-009 — both paths changed in the same commit, each with
+a test that exercises its refusal; the refusal copy names the missing variable
+(`TOKEN_KEY`; `GOOGLE_OAUTH_CLIENT_SECRET`) and never echoes a value; and the
+two found-not-fixed bullets in `service/spec/0007/SPEC.md` §5 are struck when it
+lands. **No live user on
 `booking.pumasi.ai` is affected**: that deployment holds both Google
 credentials, and its own text has said so since it was written. Nothing here is
 unguarded — on a deployment with no `googleClientSecret`, Google sign-in cannot
 complete on either build, and (b) only decides whether the refusal arrives
 before or after a round trip.
 
-**4 · Submit the Google OAuth app for verification** — source:
+**3 · Submit the Google OAuth app for verification** — source:
 [`0002-calendar-integration.md` §4](0002-calendar-integration.md);
 [`service/spec/0003/GOOGLE-SETUP.md`](../service/spec/0003/GOOGLE-SETUP.md)
 ("Not yet — deliberately").
@@ -340,6 +287,56 @@ deployed homepage and a live privacy URL, and both are now not merely deployed
 but **current** — `booking.pumasi.ai` serves `2453adc` as of 2026-09-01
 00:40:44 UTC, re-measured at 05:11 UTC. Nothing about the submission itself is
 this seat's to do or to date.
+
+**4 · Video conferencing — Google Meet, Microsoft Teams, Zoom — accepted in
+principle under GAP-0004's parity intent (Q-007, closed 2026-09-01 on
+silence), with two residuals that are not builds** — source: `DECISIONS.md`
+**Q-007**, whose default this seat took at this pass;
+[issue #4](https://github.com/pumasi-ai/pumasi-booking/issues/4) and
+[issue #30](https://github.com/pumasi-ai/pumasi-booking/issues/30), both
+`escalated` and both closed; [`0004-feature-parity.md` §3](0004-feature-parity.md),
+where the default places it after 2b, adjacent to item 8.
+**Re-verified at `7e41d36`, in the tree and on the deployment — and this entry is
+mostly a measurement, which is why it ranks here and not above item 2.** The
+capability the question asked about already exists, built at `66c93e9`
+(2026-08-30 04:51 UTC) while the window was open — CHARTER Part 0's
+proceed-on-default shape. **Google Meet:** `service/src/calendar-google.ts:199`
+adds a `conferenceData.createRequest` to the calendar event when the event type
+is a conference, under the `events` scope level (`:29`). **Microsoft Teams:**
+`calendar-microsoft.ts:204` sets `isOnlineMeeting`. **Zoom:** `video-zoom.ts`
+carries OAuth connect and per-booking `createZoomMeeting`, called from
+`app.ts:3551`; connections live in migration
+`service/migrations-sqlite/016_video_connections.sql` (PostgreSQL twin
+`service/migrations/020_video_connections.sql`). **On
+the deployment**, `npx wrangler secret list` for the `pumasi-booking` worker,
+run by this seat at **2026-09-01 19:05 UTC**, returns the secret **names**
+`ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET`, `MS_OAUTH_CLIENT_ID`,
+`MS_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_CLIENT_ID` and
+`GOOGLE_OAUTH_CLIENT_SECRET` — values not read, and whose accounts they are is
+not readable from here and is not asserted. Q-007's convention rider is met:
+[`SUBPROCESSORS.md`](../SUBPROCESSORS.md) names Google Calendar, Microsoft
+Graph and Zoom (`:77`–`:79`).
+**What is not delivered, and is ranked rather than dropped.** *(a)* No
+conferencing row exists in `0004-feature-parity.md` §3, which Q-007's default
+makes the outcome. That file records steward-decided scope and is outside this
+role's may-write list; the row is handed to the project manager in this pass's
+digest entry. *(b)* **Nobody has measured a conferencing link actually arriving
+on a booking made against `booking.pumasi.ai`.** Issue #30's user met
+`/app/integrations?zoom_needed=1` at 2026-08-30 06:04 UTC, which `app.ts:190`
+sends when `zoomClientId` is unset; the two *Secret Change* deployments at 16:55
+UTC that day postdate it, and which secrets they set is not recorded. Meet for
+strangers waits on item 3, because an unverified OAuth app admits test accounts
+only. *Carried, not confirmed:* whether a booking on the deployment against an
+event type set to Meet, Teams or Zoom carries a link today.
+Why here: two real users asked, which is more than item 2's hypothetical
+operator can say — but the build they asked for is in the tree, so what this
+entry can hand a coder is nothing until the measurement finds a defect, and a
+measurement is not a build. It sits directly under item 3 because Meet for
+strangers cannot be measured until that item lands, and above item 5 because
+item 5 hurts nobody today where this one has a user who met a dead end. **What
+moves it up:** the measurement finding no link on a hosted booking, which
+becomes a `priority: high` build. **What retires it:** the GAP-0004 row written
+and the measurement made.
 
 **5 · The reporting intake, and the Workers-path decision** — source:
 [`service/spec/0004/SPEC.md`](../service/spec/0004/SPEC.md) R5c;
@@ -388,7 +385,7 @@ https://booking.pumasi.ai/subprocessors` at 05:19 UTC names no Zoom row.
 
 **7 · `pumasi-report/2` — PR-1's diagnostics clause in the report payload** —
 source: item 2 of the previous order, **ranked here rather than closed with it**;
-[`PRODUCT-RULES.md` PR-1](https://github.com/pumasi-ai/pumasi/blob/worktree-product-rules/PRODUCT-RULES.md)
+[`PRODUCT-RULES.md` PR-1](https://github.com/pumasi-ai/pumasi/blob/main/PRODUCT-RULES.md)
 *"In the diagnostics"*; [`service/spec/0004/SPEC.md`](../service/spec/0004/SPEC.md)
 R1b. **Re-verified at `d7bd490` by reading the module, not the commit message.**
 `service/src/reporting.ts:20` still declares `REPORT_SCHEMA = 'pumasi-report/1'`,
@@ -483,7 +480,7 @@ router, which is L-009 ground and touches the file every hosted user meets.
 Also unchecked either way: the default export is `{ async fetch(request:
 Request, env: WorkerEnv) }` (`worker.ts:376`) rather than `ExportedHandler<Env>`,
 so nothing checks the handler's shape against the runtime's contract.
-**Why it ranks here, at 9 of 10, and what would move it.** No live user
+**Why it ranks here, at 8 of 10, and what would move it.** No live user
 consequence was found, and the previous seat looked for one rather than assuming
 its absence: every failure mode the missing typing permits — a renamed binding, a
 new non-string binding read as a string, a typo'd name — fails **loudly and on
@@ -510,6 +507,23 @@ Why here: small, and it closes the spec's only admitted gap; below the
 user-facing items because no user can currently be hurt by it, and below item 8
 because item 8's cheap half is measured and this one's is not. *Carried, not confirmed at `d7bd490`:* re-read only; no new measurement, and
 `service/spec/0002/SPEC.md` is untouched since the last pass.
+
+**10 · `service/test/support/pg.ts` — `freePort()` and the `EmbeddedPostgres`
+constructor sit outside the retry `try`, so a probe-level failure skips the
+retry loop** — source: kimi's code review of `7e41d36`
+(`reviews/20260901-012723-code-kimi.md`), **uncited**, discarded by job `0086`
+in writing per CHARTER Part 3 and handed here to be housed rather than lost.
+**Re-verified at `7e41d36` by reading the file, not the review:** `pg.ts:143`
+names the directory, `:144` calls `freePort()` and `:145`–`:147` construct the
+cluster, all before the `try` at `:148`; a rejection from `freePort()`
+(ephemeral-port exhaustion, or the probe socket failing to report an address)
+therefore leaves `startPostgres` on the first attempt instead of consuming one
+of its three. Test-harness code; nothing under `service/src/`.
+Why here, at the bottom: no user can meet it, the reviewer called it essentially
+unreachable and cited no clause, and the cost of the defect is one suite run
+failing loudly on a machine that has already run out of ports. It is ranked at
+all because an unranked observation is an observation nobody schedules. **Fold
+it into whatever next opens `pg.ts`; do not packet it alone.**
 
 
 ---
@@ -567,6 +581,122 @@ risk are the same mistake in opposite directions, and both are cheap to probe.
 
 
 ## Completed (2026-09-01)
+
+- **The service suite latches red: one interrupted run leaves a data directory
+  behind, and every later run of that file fails on it until a human deletes
+  it** — item **2** of the previous order and its top build entry, **delivered
+  at `7e41d36`** by job `0086`: one commit, `service/test/support/pg.ts` (new,
+  170 lines) plus the fixtures of 19 test files; cross-family code reviews
+  `reviews/20260901-011428-code-gemini.md` (4096 bytes, `VERDICT: APPROVE`) and
+  `reviews/20260901-012723-code-kimi.md` (4755 bytes, `VERDICT: APPROVE`), with
+  qwen published as a 366-byte timeout husk carrying no verdict and correctly
+  not cited as a review; `GATE: PASS` in the commit. **No release note and no
+  window are owed**: nothing under `service/src/` or any `spec/*/acceptance/`
+  moved — `git diff --stat d7bd490 7e41d36 -- service/src/` is empty — and the
+  diff is test scaffolding.
+  **Struck on this seat's own verification of the tree at `7e41d36`, not on the
+  commit message.**
+  - **The mechanism is gone, checked by reading what replaced it.** `pg.ts:143`
+    names each cluster's directory `pumasi-pg-<label>-<pid>-<16 hex>`; `:144`
+    takes a port from the OS; `:162`–`:167` remove the directory when a start
+    fails; `:111`–`:122` sweep only names matching `OURS` (`:41`) whose test
+    pid is dead, and only after `reapServer` (`:81`–`:97`) has confirmed via
+    `/proc/<pid>/cmdline` that the orphaned `postgres` holding it is ours and
+    has shut down. `grep -l "databaseDir: '/tmp/pumasi-pg-"
+    service/test/*.test.ts` returns **0** files against 19 at `d7bd490`;
+    `grep -l "support/pg"` returns **19**. `--test-concurrency` is untouched.
+  - **The interruption was reproduced here, on the new harness, and it did not
+    latch.** **The interruption trial was repeated on this harness by this seat (job `0100`) at 19:52:58–19:53:02 UTC, from a `/tmp` holding 0 `pumasi-pg-*` directories:** `node --test .build/test/bootstrap.test.js` **7 pass, 0 fail**; the same command `SIGKILL`ed 0.8 s in left one directory, `pumasi-pg-bootstrap-4174119-1cd9f4e77196ea1f`, holding **24 entries**, and an orphan `postgres -D <that directory> -p 37101`; the identical command re-run with no `rm -rf` — **7 pass, 0 fail**, and `/tmp` held **0** `pumasi-pg-*` directories and no `postgres` process afterwards. The corpse was litter, not a latch, and the next run's sweep took it.
+  - **The determinism figure this repair unblocks was taken at this pass, and
+    the full record is in [`STAGE.md`](STAGE.md).** Root `npm test` **20 of 20
+    green, 357 of 357 each**, 19:42:34–19:52:25 UTC, 26–29 s per run, load
+    0.89 → 9.57, `/tmp` holding 0 `pumasi-pg-*` directories before, between and
+    after, run by job `0100` finishing this pass — against 19-of-40 red on the
+    harness that could latch.
+  - **What `0086` said its work made stale, checked one by one rather than
+    taken.** `STAGE.md`'s determinism section and its latch bullet under known
+    gaps — both rewritten at this pass, the old measurements kept as dated
+    records. This entry — struck here. And `service/spec/0008/SPEC.md`
+    *"D-f/§5.2"*, which `0086`'s commit message says records this repair as
+    found-not-fixed — **that citation does not resolve at `7e41d36`.** SPEC-0008
+    is sectioned S1–S7 with no lettered items, `grep -rn "Address already in
+    use" service/spec/` returns nothing, and no `service/spec/*/SPEC.md` records
+    the latch as found-not-fixed at all. **The next coder has nothing to strike
+    there**; the stale sentence lives in `0086`'s own commit message, which is
+    immutable, and is corrected here so nobody goes looking.
+  - **Kimi's uncited nit is housed as item 10**, not dropped.
+  - **The entry as it stood when it was the top build entry is kept below, as
+    the dated record of what was measured and why it ranked where it did.**
+
+  > **2 · The service suite latches red: one interrupted run leaves a data directory
+  > behind, and every later run of that file fails on it until a human deletes it**
+  > — source: job `0034` handed this on itself and declined to rank it; job `0077`
+  > reproduced it on demand during the issue-#32 build and named the mechanism; **it
+  > is re-verified from scratch here, and this pass establishes one thing the
+  > previous accounts did not.**
+  > **Re-verified at `d7bd490`, by reproducing it deliberately rather than by
+  > reading anyone's report.** `/tmp` held **0** `pumasi-pg-*` directories at the
+  > start of this evaluation.
+  > - **Baseline.** `node --test .build/test/bootstrap.test.js` from a clean `/tmp`:
+  >   **7 tests, 7 pass, 0 fail**, 817 ms.
+  > - **The interruption.** The same command was started and the node process
+  >   `SIGKILL`ed 0.8 s in — the shape of any run that dies mid-suite. `ls -A
+  >   /tmp/pumasi-pg-bootstrap` afterwards: **24 entries** (`PG_VERSION`, `base`,
+  >   `global`, `pg_hba.conf`, …).
+  > - **The latch.** The identical command, re-run: **7 tests, 0 pass, 7 fail**,
+  >   every one of them `Postgres init script failed (code: 1, signal: null). ERROR
+  >   OUTPUT: initdb: error: directory "/tmp/pumasi-pg-bootstrap" exists but is not
+  >   empty`. The directory still held **24 entries** afterwards, so it latches
+  >   rather than self-clearing.
+  > - **The remedy, checked.** `rm -rf /tmp/pumasi-pg-bootstrap`, then the identical
+  >   command: **7 pass, 0 fail**. `/tmp` held **0** `pumasi-pg-*` directories at
+  >   the end of this evaluation, and the root suite ran **357/357** afterwards.
+  > **New here, and it narrows the fix rather than the finding: the leftover
+  > directory alone is sufficient, and an orphaned server process is not part of the
+  > mechanism.** The `SIGKILL` leaves a `postgres -D /tmp/pumasi-pg-bootstrap -p
+  > 55436` orphan behind, which is the obvious suspect — a held port would explain
+  > the same symptom. It was killed on its own, **leaving the directory in place**,
+  > and the re-run **still failed 7 of 7 with the same `initdb` message**. So the
+  > cause is the directory and nothing else, and a repair that only reaps stray
+  > processes would not close this. `initialise()` in `embedded-postgres` runs
+  > `initdb` unconditionally — there is no "already initialised" branch to fall
+  > through to (`node_modules/embedded-postgres/dist/index.js:106`ff), which is why
+  > a *complete* leftover cluster is as fatal as a partial one.
+  > **The scope, counted at this tree rather than carried:** `grep -l "databaseDir:
+  > '/tmp/pumasi-pg-" service/test/*.test.ts` returns **19** files, each hard-coding
+  > both its data directory and its port — `analytics`, `automation`, `bootstrap`,
+  > `branding`, `calendar`, `concurrency`, `directory`, `enterprise`, `frontdoor`,
+  > `gate`, `identity`, `legal`, `meetings`, `owner`, `parity`, `questions`,
+  > `recur`, `routing`, `teams`.
+  > *What the entry asks for, and the one thing it must not do.* Give each run its
+  > own data directory and let the OS allocate the port, and remove the directory
+  > when a start fails. **It must not lower `--test-concurrency`.** Every run
+  > recorded above was a single test file, alone, with nothing else in flight —
+  > there was no concurrency to lower, and that knob would make the latch less
+  > likely to be sprung while leaving both fixed resources exactly where they are.
+  > **What is carried, not confirmed, and named so the entry is not read as more
+  > settled than it is.** The **19 consecutive failures out of 40 runs** measured
+  > two evaluations ago, and the **15-of-15 green load sweep** across loads
+  > 2.56–10.99 measured at the last one, were not re-run here. Neither is withdrawn;
+  > this pass did not need them, because it reproduced the mechanism directly in
+  > four commands instead of inferring it from a failure rate. What they establish
+  > and this pass does not is that **load is not the cause** — eleven of those
+  > fifteen green runs sat inside the 9.0–12.4 band in which the nineteen failures
+  > occurred.
+  > Why here, and this is the promotion: **it is the highest entry on this list
+  > whose cost is being paid by somebody who exists.** No user can be hurt by it —
+  > it produces false **reds**, never a false green, and a fresh CI runner cannot
+  > carry it between runs, so today's advisory CI is unaffected. But
+  > `pumasi/tools/gate.sh` is run by hand on this shared machine by every agent that
+  > needs to pass it, and after one interrupted run the gate reports failures to
+  > every agent afterwards, on a clean tree, until someone knows to delete a
+  > directory in `/tmp`. Job `0049` paid it on 45 tests. Job `0077` paid it during
+  > the run that produced this packet. **This evaluation paid it on purpose, to
+  > re-verify it.** Item 3 below protects an operator who has never been observed;
+  > this one has three named jobs behind it and a one-line remedy. **And it is the
+  > only entry that corrupts the evidence the rest of this list rests on** —
+  > `GATE: PASS`, the determinism figures in [`STAGE.md`](STAGE.md) and the suite
+  > counts in this file are all taken on a harness that can latch red and has.
 
 - **A public booking page shows a day that has times and then shows no times —
   issue [#32](https://github.com/pumasi-ai/pumasi-booking/issues/32)** — item
