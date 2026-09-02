@@ -51,8 +51,12 @@ beforeEach(async () => {
   };
 });
 
-const call = (method: string, path: string, opts: Partial<{ form: Record<string,string>; cookie: string; query: Record<string,string>; ip: string }> = {}) =>
-  handle(deps, { method, path, ip: opts.ip ?? '5.5.5.5', form: opts.form, cookie: opts.cookie, query: opts.query });
+const call = (method: string, path: string, opts: Partial<{
+  form: Record<string,string>; cookie: string; query: Record<string,string>; ip: string;
+  trusted: { ssoEmail?: string; displayName?: string; timezone?: string };
+}> = {}) =>
+  handle(deps, { method, path, ip: opts.ip ?? '5.5.5.5', form: opts.form,
+    cookie: opts.cookie, query: opts.query, trusted: opts.trusted });
 
 const cookieOf = (r: { headers: Record<string, string> }) =>
   (r.headers['set-cookie'] ?? '').split(';')[0]!;
@@ -125,6 +129,31 @@ test('SSO signs an existing owner in (Google & Microsoft)', async () => {
     assert.equal(cb.status, 303);
     assert.equal(cb.headers['location'], '/app');
   } finally { restoreMs(); }
+});
+
+test('trusted SSO repairs a directory account whose tenant owner was never created', async () => {
+  // This is the state left by an interruption after the global directory
+  // commits an email but before the tenant Durable Object finishes signup.
+  const repaired = await call('POST', '/internal/sso-login', {
+    trusted: {
+      ssoEmail: 'partial@example.com',
+      displayName: 'Partial Account',
+      timezone: 'America/Chicago',
+    },
+  });
+
+  assert.equal(repaired.status, 303);
+  assert.equal(repaired.headers['location'], '/app');
+  assert.ok(repaired.headers['set-cookie']?.includes('pumasi_session='));
+  const owners = await db.query(
+    `SELECT display_name, timezone FROM owners WHERE email = 'partial@example.com'`);
+  assert.deepEqual(owners.rows[0], {
+    display_name: 'Partial Account', timezone: 'America/Chicago',
+  });
+  const membership = await db.query(
+    `SELECT m.role FROM org_members m JOIN owners o ON o.owner_id = m.owner_id
+     WHERE o.email = 'partial@example.com'`);
+  assert.equal(membership.rows[0]?.['role'], 'admin');
 });
 
 test('SSO with a valid invite creates the account and consumes the invite (Microsoft)', async () => {
@@ -433,4 +462,3 @@ test('Issue #4 · video chat options (Meet, Teams, Zoom) in editor and location 
   const editor2 = await call('GET', `/app/event/${scheduleId}`, { cookie });
   assert.ok(editor2.body.includes('https://zoom.us/j/123456789'));
 });
-

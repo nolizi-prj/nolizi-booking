@@ -1,6 +1,6 @@
 {
   "name": "@pumasi/booking-service",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Deployable scheduling service. Implements SPEC-0002.",
   "license": "Apache-2.0",
   "private": true,

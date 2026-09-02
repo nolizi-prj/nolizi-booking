@@ -677,7 +677,11 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
           return forward(String(existing), {
             path: '/internal/sso-login',
             orgCookie: true,
-            trusted: { 'x-trusted-sso-email': email },
+            trusted: {
+              'x-trusted-sso-email': email,
+              'x-trusted-name': email.split('@')[0] ?? 'user',
+              'x-trusted-tz': state['timezone'] || 'UTC',
+            },
           });
         }
         if (state['invite']) {
@@ -759,7 +763,11 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
           return forward(String(existing), {
             path: '/internal/sso-login',
             orgCookie: true,
-            trusted: { 'x-trusted-sso-email': email },
+            trusted: {
+              'x-trusted-sso-email': email,
+              'x-trusted-name': email.split('@')[0] ?? 'user',
+              'x-trusted-tz': state['timezone'] || 'UTC',
+            },
           });
         }
         if (state['invite']) {

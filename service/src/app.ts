@@ -785,10 +785,41 @@ async function handleRoutes(
   // ── internal SSO landing (sharding): the worker verified the identity and
   // the directory said this org owns the email; we only start the session. ──
   if (parts[0] === 'internal' && parts[1] === 'sso-login' && req.trusted?.ssoEmail) {
-    const found = await sql.query(
+    let found = await sql.query(
       `SELECT owner_id FROM owners WHERE lower(email) = lower($1)`, [req.trusted.ssoEmail]);
-    if (!found.rows[0]) return html(403, errorPage(403, 'No account for that identity here.'));
-    const sid = await createSession(sql, String(found.rows[0]['owner_id']), now, config.sessionTtlHours);
+    if (!found.rows[0]) {
+      // The directory claims the address before the tenant creates its owner.
+      // A Worker interruption between those two durable writes used to leave a
+      // permanent split-brain account: future verified SSO callbacks found the
+      // directory entry, reached this trusted route, and received 403 forever.
+      // Only the global router can attach `ssoEmail`, and it does so only after
+      // the provider verified the mailbox and the directory resolved this
+      // exact tenant, so repairing the missing half here grants nothing new.
+      const email = req.trusted.ssoEmail.trim().toLowerCase();
+      const made = await createOwnerDirect(sql, deps.tx, {
+        email,
+        displayName: (req.trusted.displayName ?? email.split('@')[0] ?? 'user').trim(),
+        timezone: (req.trusted.timezone ?? 'UTC').trim() || 'UTC',
+      }, Number.MAX_SAFE_INTEGER);
+      if (!made.ok) {
+        return html(409, errorPage(409,
+          'This account could not be repaired automatically. Please start sign-in again.'));
+      }
+      const tenant = await sql.query(`SELECT org_id FROM orgs ORDER BY created_at LIMIT 1`);
+      const orgId = tenant.rows[0]?.['org_id'] ? String(tenant.rows[0]['org_id']) : randomUUID();
+      if (!tenant.rows[0]) {
+        await sql.query(`INSERT INTO orgs (org_id, name) VALUES ($1, $2)`,
+          [orgId, `${made.owner.display_name}'s team`]);
+      }
+      await sql.query(
+        `INSERT INTO org_members (org_id, owner_id, role) VALUES ($1, $2, $3)
+         ON CONFLICT (org_id, owner_id) DO NOTHING`,
+        [orgId, made.owner.owner_id, tenant.rows[0] ? 'member' : 'admin']);
+      found = { rows: [{ owner_id: made.owner.owner_id }] };
+    }
+    const ownerId = found.rows[0]?.['owner_id'];
+    if (!ownerId) return html(409, errorPage(409, 'Please start sign-in again.'));
+    const sid = await createSession(sql, String(ownerId), now, config.sessionTtlHours);
     return {
       status: 303,
       headers: { location: '/app', 'set-cookie': sessionCookie(sid, secure, config.sessionTtlHours) },
