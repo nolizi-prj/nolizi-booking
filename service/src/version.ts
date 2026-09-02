@@ -9,4 +9,4 @@
  * (`worker.ts`) has no filesystem; wrangler bundles this constant and tsc
  * compiles it, so both entry points get the same number the same way (L-009).
  */
-export const VERSION = '0.3.0';
+export const VERSION = '0.3.1';

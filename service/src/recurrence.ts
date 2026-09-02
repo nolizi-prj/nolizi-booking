@@ -24,9 +24,16 @@ import { Temporal } from '@js-temporal/polyfill';
 // arrived. Getting this wrong breaks one runtime silently while the other
 // passes its tests, which is exactly what happened once.
 import * as rruleNs from 'rrule';
+// Reflect.get keeps the CommonJS compatibility path runtime-only. Directly
+// spelling `rruleNs.default` makes esbuild warn while bundling the ESM build,
+// even though Node needs that property when it loads rrule's CommonJS entry.
+const rruleDefault = Reflect.get(rruleNs, 'default') as
+  | { rrulestr?: typeof import('rrule').rrulestr }
+  | undefined;
 const rrulestr: typeof import('rrule').rrulestr =
   (rruleNs as { rrulestr?: typeof import('rrule').rrulestr }).rrulestr ??
-  (rruleNs as unknown as { default: { rrulestr: typeof import('rrule').rrulestr } }).default.rrulestr;
+  rruleDefault?.rrulestr ??
+  (() => { throw new Error('rrule did not expose rrulestr'); })();
 
 export interface Occurrence {
   start: string;
