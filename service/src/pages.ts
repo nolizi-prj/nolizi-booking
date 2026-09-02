@@ -38,7 +38,7 @@ export const FAVICON_DATA_URL = `data:image/svg+xml,${encodeURIComponent(FAVICON
 export const FOOTER = `<footer class="foot">
   <a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a> &middot;
   <a href="/subprocessors">Who sees data</a>
-  <span class="foot-v">v${VERSION}</span>
+  <span class="foot-v">${PRODUCT} v${VERSION}</span>
 </footer>
 <style>
  .foot{margin-top:2.5rem;padding-top:1rem;border-top:1px solid var(--line);
@@ -113,6 +113,7 @@ const sidebar = (active: string): string => `<a class="skip" href="#main">Skip t
     <form method="post" action="/logout" class="railout">
       <button type="submit">${icon('M15 12H3m0 0l4-4m-4 4l4 4M13 4h6a1 1 0 011 1v14a1 1 0 01-1 1h-6')}<span>Sign out</span></button>
     </form>
+    <p class="rail-version">${PRODUCT} v${VERSION}</p>
   </div>
 </nav>
 <script>(function(){var b=document.querySelector('.nav-toggle'),n=document.getElementById('app-navigation');
@@ -183,6 +184,7 @@ const SHELL = (title: string, rawBody: string): string => {
  .rail svg{width:17px;height:17px;flex:none;fill:none;stroke:currentColor;
    stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;opacity:.85}
  .railout{margin-top:auto;padding-top:.5rem;border-top:1px solid var(--line)}
+ .rail-version{margin:.55rem .6rem 0;color:var(--muted);font-size:.68rem;letter-spacing:.02em}
  .main{padding:2rem 2rem 4rem;max-width:56rem}
  @media(max-width:52rem){
    .app{grid-template-columns:1fr}
@@ -194,6 +196,7 @@ const SHELL = (title: string, rawBody: string): string => {
    .rail ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
    .rail a span,.railout button span{font-size:.88rem}
    .railout{margin:.5rem 0 0;border-top:1px solid var(--line);padding-top:.5rem}
+   .rail-version{margin:.45rem .35rem 0}
    .main{padding:1.25rem 1rem 3rem}
  }
  @media(max-width:26rem){.rail ul{grid-template-columns:1fr}}

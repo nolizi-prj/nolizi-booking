@@ -14,6 +14,7 @@ import { handle, type AppDeps } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import { RecordingMail, RetryingMail } from '../src/mail.ts';
 import { CalendarHub } from '../src/calendars.ts';
+import { VERSION } from '../src/version.ts';
 
 const KEY = Buffer.alloc(32, 5).toString('base64');
 const NOW = '2026-06-01T08:00:00Z';
@@ -379,6 +380,7 @@ test('the dashboard shows the getting-started checklist until complete', async (
   assert.ok(dash.body.includes('Automation'));
   assert.ok(dash.body.includes('href="/app/api-keys"'));
   assert.ok(dash.body.includes('aria-controls="app-navigation"'));
+  assert.ok(dash.body.includes(`Pumasi Booking v${VERSION}`));
   await call('POST', '/app/schedules', {
     cookie, form: { title: 'Intro', slug: 'fintro', duration_minutes: '30' },
   });

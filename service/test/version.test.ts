@@ -69,7 +69,7 @@ test('PR-1 · the number moves — 0.1.0 was six merged builds ago', () => {
 });
 
 test('PR-1 · user-visible: the footer on every public page carries it', () => {
-  assert.match(FOOTER, new RegExp(`v${VERSION.replace(/\./g, '\\.')}`));
+  assert.match(FOOTER, new RegExp(`Pumasi Booking v${VERSION.replace(/\./g, '\\.')}`));
 });
 
 test('PR-1 · in the diagnostics: a feedback report states the version', () => {
