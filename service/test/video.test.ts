@@ -512,6 +512,17 @@ test('Z-009 · the card copy states the fallback order and the never-public rule
     'Z4d — the static field says what it is for');
 });
 
+test('GitHub #33 · Google and Microsoft use the same connected status component', () => {
+  const html = integrationsPage({
+    googleConnected: true, googleEmail: 'google@example.com',
+    msConnected: true, msEmail: 'microsoft@example.com',
+    zoomConnected: false, baseUrl: 'https://booking.test',
+  });
+  assert.equal((html.match(/class="pill integration-status pill-ok"/g) ?? []).length, 2);
+  assert.ok(html.includes('<span aria-hidden="true">✓</span> Connected — google@example.com'));
+  assert.ok(html.includes('<span aria-hidden="true">✓</span> Connected — microsoft@example.com'));
+});
+
 // ── Z-010 · disconnect, deletion, migrations ─────────────────────────────
 
 test('Z-010 · disconnect removes the credential and the stamped link', async () => {

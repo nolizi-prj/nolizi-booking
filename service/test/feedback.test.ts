@@ -1,6 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { formatFeedbackMarkdown, submitFeedback } from '../src/feedback.ts';
+import { homePage } from '../src/pages.ts';
+
+test('GitHub #34 · feedback never auto-attaches a synthetic or racing DOM capture', () => {
+  const html = homePage();
+  assert.ok(html.includes('For an accurate image, choose Capture Screen'));
+  assert.ok(html.includes('id="pf-include-shot">'), 'attachment starts unchecked');
+  assert.ok(!html.includes('html2canvas'), 'the unreliable DOM renderer is not loaded');
+  assert.equal((html.match(/addEventListener\('click', openModal\)/g) ?? []).length, 1,
+    'one click starts one modal-open cycle');
+});
 
 test('formatFeedbackMarkdown formats markdown with diagnostics, errors, and sanitized URLs', () => {
   const formatted = formatFeedbackMarkdown({

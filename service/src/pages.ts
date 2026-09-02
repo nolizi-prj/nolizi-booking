@@ -376,13 +376,13 @@ table.rows{border-collapse:collapse;width:100%}
               <span>Remove</span>
             </button>
             <label class="pf-toggle-label" style="margin-left:.25rem;">
-              <input type="checkbox" id="pf-include-shot" checked>
+              <input type="checkbox" id="pf-include-shot">
               <span>Attach</span>
             </label>
           </div>
         </div>
         <div id="pf-preview-wrap" style="margin-top:.4rem">
-          <div id="pf-shot-loading" class="muted" style="font-size:.8rem;">Capturing preview... (or press Ctrl+V to paste)</div>
+          <div id="pf-shot-loading" class="muted" style="font-size:.8rem;">For an accurate image, choose Capture Screen, paste a screenshot, or attach a file.</div>
           <div id="pf-shot-wrap" class="pf-shot-wrap" style="display:none;">
             <img id="pf-shot-preview" class="pf-shot-preview" alt="Preview" style="cursor:zoom-in;" title="Click to view full size" />
             <span class="pf-shot-zoom-hint">Click to view full size &middot; Ctrl+V to paste new</span>
@@ -489,78 +489,6 @@ table.rows{border-collapse:collapse;width:100%}
   function removeAttachment() {
     updateScreenshotUI(null);
     if (fileLabel) fileLabel.innerText = 'Attachment removed';
-  }
-
-  function loadHtml2Canvas(callback) {
-    if (window.html2canvas) {
-      callback(window.html2canvas);
-      return;
-    }
-    const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-    s.crossOrigin = 'anonymous';
-    s.onload = function() {
-      if (window.html2canvas) callback(window.html2canvas);
-      else drawFallbackCanvas();
-    };
-    s.onerror = function() {
-      drawFallbackCanvas();
-    };
-    document.head.appendChild(s);
-  }
-
-  function autoCaptureDOM() {
-    if (shotLoading) {
-      shotLoading.style.display = 'block';
-      shotLoading.innerText = 'Capturing page preview... (or press Ctrl+V to paste)';
-    }
-    if (shotWrap) shotWrap.style.display = 'none';
-
-    // Draw instant fallback immediately so preview is available with zero lag
-    drawFallbackCanvas();
-
-    loadHtml2Canvas(function(h2c) {
-      try {
-        h2c(document.body, {
-          ignoreElements: function(el) {
-            return el && (el.id === 'pf-modal' || (el.classList && el.classList.contains('pf-widget')));
-          },
-          logging: false,
-          useCORS: true,
-          scale: Math.min(window.devicePixelRatio || 1, 2)
-        }).then(function(canvas) {
-          if (canvas) {
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            updateScreenshotUI(dataUrl);
-          }
-        }).catch(function(err) {
-          console.warn('html2canvas capture error:', err);
-        });
-      } catch (err) {}
-    });
-  }
-
-  function drawFallbackCanvas() {
-    try {
-      const w = Math.min(window.innerWidth, 1280);
-      const h = Math.min(window.innerHeight, 800);
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.fillStyle = getComputedStyle(document.body).backgroundColor || '#ffffff';
-      ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = getComputedStyle(document.body).color || '#101828';
-      ctx.font = 'bold 16px system-ui, sans-serif';
-      ctx.fillText('Pumasi Booking Session Snapshot', 24, 45);
-      ctx.font = '14px system-ui, sans-serif';
-      ctx.fillText('URL: ' + location.href, 24, 80);
-      ctx.fillText('Title: ' + document.title, 24, 110);
-      ctx.fillText('Time: ' + new Date().toLocaleString(), 24, 140);
-      ctx.fillText('Tip: Press Ctrl+V anytime to paste your screenshot!', 24, 180);
-      updateScreenshotUI(canvas.toDataURL('image/png', 0.8));
-    } catch(e) {}
   }
 
   async function captureDisplayMedia() {
@@ -674,7 +602,6 @@ table.rows{border-collapse:collapse;width:100%}
       submitBtn.disabled = false;
       submitBtn.innerText = 'Submit Feedback \u2192';
     }
-    try { autoCaptureDOM(); } catch(err) { drawFallbackCanvas(); }
     try { renderDiagnostics(); } catch(err) {}
     setTimeout(function() {
       document.getElementById('pf-desc')?.focus();
@@ -690,7 +617,6 @@ table.rows{border-collapse:collapse;width:100%}
   }
 
   if (openBtn) {
-    openBtn.onclick = openModal;
     openBtn.addEventListener('click', openModal);
   }
 
@@ -3186,6 +3112,10 @@ export function integrationsPage(opts: {
   baseUrl: string;
   notice?: string;
 }): string {
+  const connectionStatus = (connected: boolean, email?: string): string =>
+    `<span class="pill integration-status ${connected ? 'pill-ok' : ''}">${connected
+      ? `<span aria-hidden="true">✓</span> Connected${email ? ` — ${esc(email)}` : ''}`
+      : 'Not connected'}</span>`;
   return SHELL(
     'Apps & Video Integrations',
     `<!--nav:integrations-->
@@ -3232,9 +3162,9 @@ ${opts.notice ? `<p class="ok" style="border-left-color:var(--accent);background
   </div>
 </div>
 
-<div class="card">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem">
-    <div style="display:flex;gap:.85rem;align-items:center">
+<div class="card integration-card">
+  <div class="integration-head">
+    <div class="integration-provider">
       <div style="width:44px;height:44px;border-radius:10px;background:#e8f0fe;display:flex;align-items:center;justify-content:center;color:#1a73e8">
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l5-3v10l-5-3v-4z"/><rect x="3" y="6" width="12" height="12" rx="2"/></svg>
       </div>
@@ -3243,11 +3173,9 @@ ${opts.notice ? `<p class="ok" style="border-left-color:var(--accent);background
         <p class="muted" style="margin:0;font-size:.85rem">Automatically mints unique Google Meet links for every booking via Google Calendar integration.</p>
       </div>
     </div>
-    <div>
-      <span class="pill ${opts.googleConnected ? 'pill-ok' : ''}">${opts.googleConnected ? `Connected (${esc(opts.googleEmail || '')})` : 'Not Connected'}</span>
-    </div>
+    ${connectionStatus(opts.googleConnected, opts.googleEmail)}
   </div>
-  <div style="margin-top:1rem;display:flex;gap:.75rem;align-items:center">
+  <div class="integration-actions">
     <form method="post" action="/app/calendar/google/connect" style="margin:0;display:inline">
       <button class="submit" type="submit">${opts.googleConnected ? 'Reconnect Google Account' : 'Connect Google Calendar & Meet'}</button>
     </form>
@@ -3255,9 +3183,9 @@ ${opts.notice ? `<p class="ok" style="border-left-color:var(--accent);background
   </div>
 </div>
 
-<div class="card">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem">
-    <div style="display:flex;gap:.85rem;align-items:center">
+<div class="card integration-card">
+  <div class="integration-head">
+    <div class="integration-provider">
       <div style="width:44px;height:44px;border-radius:10px;background:#f3f2fd;display:flex;align-items:center;justify-content:center;color:#5c55be">
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 10l4-2.5v9l-4-2.5v-4z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
       </div>
@@ -3266,11 +3194,9 @@ ${opts.notice ? `<p class="ok" style="border-left-color:var(--accent);background
         <p class="muted" style="margin:0;font-size:.85rem">Automatically mints Microsoft Teams online meeting links via Microsoft 365 Graph API.</p>
       </div>
     </div>
-    <div>
-      <span class="pill ${opts.msConnected ? 'pill-ok' : ''}">${opts.msConnected ? `Connected (${esc(opts.msEmail || '')})` : 'Not Connected'}</span>
-    </div>
+    ${connectionStatus(opts.msConnected, opts.msEmail)}
   </div>
-  <div style="margin-top:1rem;display:flex;gap:.75rem;align-items:center">
+  <div class="integration-actions">
     <form method="post" action="/app/calendar/microsoft/connect" style="margin:0;display:inline">
       <button class="submit" type="submit">${opts.msConnected ? 'Reconnect Microsoft Account' : 'Connect Microsoft 365 & Teams'}</button>
     </form>
@@ -3281,6 +3207,11 @@ ${opts.notice ? `<p class="ok" style="border-left-color:var(--accent);background
 ${CARD_CSS}
 <style>
  .pill-ok{background:rgba(6,118,71,.12);color:var(--ok);border:1px solid rgba(6,118,71,.2)}
+ .integration-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:1rem}
+ .integration-provider{display:flex;gap:.85rem;align-items:center;min-width:0}
+ .integration-status{display:inline-flex;align-items:center;gap:.3rem;white-space:nowrap;margin-top:.15rem}
+ .integration-actions{margin-top:1rem;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap}
+ @media(max-width:40rem){.integration-head{grid-template-columns:1fr}.integration-status{justify-self:start}}
  #zoom-card .btn-disconnect{padding:.35rem .75rem;font-size:.85rem}
  .btn-disconnect{background:transparent;color:var(--danger,#b3261e);border:1px solid var(--danger,#b3261e)}
 </style>`,
