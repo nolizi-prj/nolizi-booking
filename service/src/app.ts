@@ -511,7 +511,7 @@ async function handleRoutes(
           const claim = await deps.directory.claimEmail(email);
           if (claim !== 'ok') return scimJson(409, { detail: claim });
         }
-        const made = await createOwnerDirect(sql, deps.tx,
+        const made = await createOwnerDirect(deps.tx,
           { email, displayName: display, timezone: 'UTC' },
           deps.directory ? Number.MAX_SAFE_INTEGER : config.maxOwnerAccounts);
         if (!made.ok) return scimJson(409, { detail: made.reason });
@@ -796,7 +796,7 @@ async function handleRoutes(
       // the provider verified the mailbox and the directory resolved this
       // exact tenant, so repairing the missing half here grants nothing new.
       const email = req.trusted.ssoEmail.trim().toLowerCase();
-      const made = await createOwnerDirect(sql, deps.tx, {
+      const made = await createOwnerDirect(deps.tx, {
         email,
         displayName: (req.trusted.displayName ?? email.split('@')[0] ?? 'user').trim(),
         timezone: (req.trusted.timezone ?? 'UTC').trim() || 'UTC',
@@ -837,7 +837,7 @@ async function handleRoutes(
         displayName: (req.trusted.displayName ?? req.trusted.signupEmail.split('@')[0]!).trim(),
         timezone: (req.trusted.timezone ?? 'UTC').trim() || 'UTC',
       };
-      const made = await createOwnerDirect(sql, deps.tx, input, Number.MAX_SAFE_INTEGER);
+      const made = await createOwnerDirect(deps.tx, input, Number.MAX_SAFE_INTEGER);
       if (!made.ok) {
         return html(400, errorPage(400, 'That address already has an account here. Sign in instead.'));
       }
@@ -903,7 +903,7 @@ async function handleRoutes(
       if (await overLimit(sql, `signup:${req.ip}`, RATE_LIMITS.signups_per_ip_per_hour, 3600, now)) {
         return html(429, errorPage(429, 'Too many sign-up attempts. Try again later.'));
       }
-      const made = await createOwnerDirect(sql, deps.tx, input, config.maxOwnerAccounts);
+      const made = await createOwnerDirect(deps.tx, input, config.maxOwnerAccounts);
       if (made.ok) {
         const token = await issueSignInToken(sql, made.owner.owner_id, now);
         await mail.send({ kind: 'signin', to: input.email, bookingId: '', start: now,
@@ -918,7 +918,7 @@ async function handleRoutes(
       return html(200, loginPage(true));
     }
     const result = await redeemInvite(
-      sql, deps.tx,
+      deps.tx,
       {
         code: inviteCode,
         email: input.email,
@@ -1164,9 +1164,9 @@ async function handleRoutes(
           timezone: state['timezone'] || 'UTC',
         };
         const made = state['invite']
-          ? await redeemInvite(sql, deps.tx, { code: state['invite'], ...input }, config.maxOwnerAccounts)
+          ? await redeemInvite(deps.tx, { code: state['invite'], ...input }, config.maxOwnerAccounts)
           : config.publicSignup
-            ? await createOwnerDirect(sql, deps.tx, input, config.maxOwnerAccounts)
+            ? await createOwnerDirect(deps.tx, input, config.maxOwnerAccounts)
             : undefined;
         if (!made) {
           return html(403, errorPage(403,
@@ -1220,9 +1220,9 @@ async function handleRoutes(
           timezone: state['timezone'] || 'UTC',
         };
         const made = state['invite']
-          ? await redeemInvite(sql, deps.tx, { code: state['invite'], ...input }, config.maxOwnerAccounts)
+          ? await redeemInvite(deps.tx, { code: state['invite'], ...input }, config.maxOwnerAccounts)
           : config.publicSignup
-            ? await createOwnerDirect(sql, deps.tx, input, config.maxOwnerAccounts)
+            ? await createOwnerDirect(deps.tx, input, config.maxOwnerAccounts)
             : undefined;
         if (!made) {
           return html(403, errorPage(403,
@@ -1288,7 +1288,7 @@ async function handleRoutes(
               'That identity already belongs to a different organization here.'));
           }
         }
-        const made = await createOwnerDirect(sql, deps.tx, {
+        const made = await createOwnerDirect(deps.tx, {
           email, displayName: email.split('@')[0]!, timezone: 'UTC',
         }, deps.directory ? Number.MAX_SAFE_INTEGER : config.maxOwnerAccounts);
         if (!made.ok) {
@@ -1540,7 +1540,7 @@ async function handleRoutes(
       }
       if (req.method === 'POST') {
         const f = req.form ?? {};
-        const trigger = ['booking_created', 'booking_cancelled', 'booking_rescheduled',
+        const trigger = ['booking_created', 'booking_cancelled', 'booking_rescheduled', 'booking_no_show',
           'before_event', 'after_event'].includes(f['trigger'] ?? '')
           ? f['trigger']! : 'booking_created';
         const offset = Math.max(0, Number(f['offset_minutes'] ?? 0) || 0);
@@ -1565,6 +1565,17 @@ async function handleRoutes(
     }
 
     if (parts[1] === 'webhooks') {
+      if (req.method === 'POST' && parts[2] === 'retry') {
+        const jobId = req.form?.['id'] ?? '';
+        await sql.query(
+          `UPDATE jobs SET status = 'pending', attempts = 0, run_at = $3
+            WHERE job_id = $1 AND kind = 'webhook' AND status = 'failed'
+              AND EXISTS (SELECT 1 FROM bookings b
+                           WHERE b.booking_id = jobs.booking_id AND b.owner_id = $2)`,
+          [jobId, owner.owner_id, now]);
+        await deps.pump?.();
+        return { status: 303, headers: { location: '/app/webhooks?retried=1' }, body: '' };
+      }
       if (req.method === 'POST' && parts[2] === 'delete') {
         await sql.query(`DELETE FROM webhooks WHERE webhook_id = $1 AND owner_id = $2`,
           [req.form?.['id'] ?? '', owner.owner_id]);
@@ -1586,10 +1597,18 @@ async function handleRoutes(
       const { rows } = await sql.query(
         `SELECT webhook_id, url, secret, format FROM webhooks
           WHERE owner_id = $1 ORDER BY created_at`, [owner.owner_id]);
+      const deliveries = await sql.query(
+        `SELECT j.job_id, j.status, j.attempts, j.run_at
+           FROM jobs j JOIN bookings b ON b.booking_id = j.booking_id
+          WHERE j.kind = 'webhook' AND b.owner_id = $1
+          ORDER BY j.run_at DESC LIMIT 50`, [owner.owner_id]);
       return html(200, webhooksPage(rows.map((r) => ({
         webhook_id: String(r['webhook_id']), url: String(r['url']),
         secret: String(r['secret']), format: String(r['format']),
-      }))));
+      })), deliveries.rows.map((r) => ({
+        job_id: String(r['job_id']), status: String(r['status']),
+        attempts: Number(r['attempts']), run_at: String(r['run_at']),
+      })), req.query?.['retried'] === '1'));
     }
 
     if (parts[1] === 'api-keys') {
@@ -1888,6 +1907,20 @@ async function handleRoutes(
         const found = await sql.query(
           `SELECT owner_id FROM owners WHERE lower(email) = lower($1)`, [memberEmail]);
         if (!found.rows[0]) {
+          if (deps.directory && memberEmail) {
+            const code = await deps.directory.mintInvite('org');
+            const link = `${config.baseUrl}/signup?invite=${encodeURIComponent(code)}`;
+            await mail.send({
+              kind: 'custom', to: memberEmail, bookingId: '', start: now,
+              subject: `${owner.display_name} invited you to Pumasi Booking`,
+              body: `${owner.display_name} invited you to join their scheduling team.\n\n` +
+                `Create your account or continue with Google/Microsoft:\n  ${link}\n\n` +
+                `This invitation works once. If you were not expecting it, you can ignore this email.\n`,
+            });
+            return { status: 303, headers: {
+              location: `/app/team?invited=${encodeURIComponent(memberEmail)}`,
+            }, body: '' };
+          }
           return html(400, errorPage(400,
             'No account with that address. Members need an account here first (invite them).'));
         }
@@ -1974,7 +2007,7 @@ async function handleRoutes(
       }
       return html(200, teamPage(orgs, owner.owner_id,
         openInvites.rows.map((r) => String(r['code'])), config.baseUrl,
-        ssoByOrg, req.query?.['scim'], req.query?.['invite']));
+        ssoByOrg, req.query?.['scim'], req.query?.['invite'], req.query?.['invited']));
     }
 
     // ── audit (P8): what happened to this account ────────────────────────
@@ -2226,7 +2259,7 @@ async function handleRoutes(
       // Owner actions on one booking — scoped at the query (I4).
       if (req.method === 'POST' && parts[2] && parts[3]) {
         const found = await sql.query(
-          `SELECT booking_id, starts_at, status, group_id FROM bookings
+          `SELECT booking_id, starts_at, status, group_id, no_show FROM bookings
             WHERE booking_id = $1 AND owner_id = $2 ORDER BY id DESC LIMIT 1`,
           [parts[2], owner.owner_id],
         );
@@ -2265,6 +2298,13 @@ async function handleRoutes(
               WHERE booking_id = $1 AND owner_id = $2`,
             [bookingId, owner.owner_id],
           );
+          if (Number(b['no_show']) !== 1) {
+            const actx = await automationCtx(sql, bookingId);
+            if (actx) {
+              await fireTrigger(sql, 'booking_no_show', actx, actx.ownerEmail, actx.ownerTz, now);
+              await deps.pump?.();
+            }
+          }
         }
         if (parts[3] === 'note') {
           await sql.query(
@@ -2553,19 +2593,32 @@ async function handleRoutes(
           return { status: 303, headers: { location: `/app/availability/${setId}` }, body: '' };
         }
         const date = (f['date'] ?? '').trim();
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        const through = (f['through'] ?? date).trim() || date;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{4}-\d{2}-\d{2}$/.test(through)) {
           return html(400, errorPage(400, 'An override needs a date (YYYY-MM-DD).'));
+        }
+        const first = Temporal.PlainDate.from(date);
+        const last = Temporal.PlainDate.from(through);
+        const days = first.until(last).days;
+        if (days < 0 || days > 90) {
+          return html(400, errorPage(400,
+            'The end date must be on or after the start date, within 90 days.'));
         }
         const st = (f['start'] ?? '').trim();
         const en = (f['end'] ?? '').trim();
         const windowed = /^\d{2}:\d{2}$/.test(st) && /^\d{2}:\d{2}$/.test(en);
         // S11: a date present with no window means unavailable that day.
-        await sql.query(`DELETE FROM set_overrides WHERE set_id = $1 AND local_date = $2`,
-          [setId, date]);
-        await sql.query(
-          `INSERT INTO set_overrides (set_id, local_date, starts_local, ends_local)
-           VALUES ($1, $2, $3, $4)`,
-          [setId, date, windowed ? st : null, windowed ? en : null]);
+        await deps.tx.transaction(async (tx) => {
+          for (let offset = 0; offset <= days; offset += 1) {
+            const localDate = first.add({ days: offset }).toString();
+            await tx.query(`DELETE FROM set_overrides WHERE set_id = $1 AND local_date = $2`,
+              [setId, localDate]);
+            await tx.query(
+              `INSERT INTO set_overrides (set_id, local_date, starts_local, ends_local)
+               VALUES ($1, $2, $3, $4)`,
+              [setId, localDate, windowed ? st : null, windowed ? en : null]);
+          }
+        });
         return { status: 303, headers: { location: `/app/availability/${setId}` }, body: '' };
       }
 

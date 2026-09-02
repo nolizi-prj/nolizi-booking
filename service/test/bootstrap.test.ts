@@ -45,7 +45,7 @@ test('it does not mint a second invite while the first is unused', async () => {
 test('it goes silent the moment an account exists — this is the guard', async () => {
   const boot = await bootstrapInvite(db);
   const owner = await redeemInvite(
-    db, db,
+    db,
     { code: boot.code, email: 'first@example.invalid', displayName: 'First', timezone: 'UTC' },
     10,
   );
@@ -67,11 +67,11 @@ test('it goes silent the moment an account exists — this is the guard', async 
 
 test('an operator can still mint invites deliberately, once running', async () => {
   const boot = await bootstrapInvite(db);
-  await redeemInvite(db, db, { code: boot.code, email: 'a@example.invalid', displayName: 'A', timezone: 'UTC' }, 10);
+  await redeemInvite(db, { code: boot.code, email: 'a@example.invalid', displayName: 'A', timezone: 'UTC' }, 10);
 
   const code = await createInvite(db, 'FOR-BOB');
   assert.equal(code, 'FOR-BOB');
-  const second = await redeemInvite(db, db, { code, email: 'bob@example.invalid', displayName: 'Bob', timezone: 'UTC' }, 10);
+  const second = await redeemInvite(db, { code, email: 'bob@example.invalid', displayName: 'Bob', timezone: 'UTC' }, 10);
   assert.equal(second.ok, true, 'a deliberately minted invite works normally');
 });
 
@@ -84,7 +84,7 @@ test('a requested bootstrap code is honoured when the service is empty', async (
 test('an invite stays spent after the account that used it is deleted', async () => {
   const boot = await bootstrapInvite(db);
   const owner = await redeemInvite(
-    db, db, { code: boot.code, email: 'gone@example.invalid', displayName: 'Gone', timezone: 'UTC' }, 10,
+    db, { code: boot.code, email: 'gone@example.invalid', displayName: 'Gone', timezone: 'UTC' }, 10,
   );
   assert.ok(owner.ok);
   if (!owner.ok) return;
@@ -97,7 +97,7 @@ test('an invite stays spent after the account that used it is deleted', async ()
   assert.ok(inv.rows[0]?.['consumed_at'], 'but it is still recorded as spent');
 
   const reuse = await redeemInvite(
-    db, db, { code: boot.code, email: 'other@example.invalid', displayName: 'Other', timezone: 'UTC' }, 10,
+    db, { code: boot.code, email: 'other@example.invalid', displayName: 'Other', timezone: 'UTC' }, 10,
   );
   assert.equal(reuse.ok, false, 'leaving must not mint a fresh way in');
 

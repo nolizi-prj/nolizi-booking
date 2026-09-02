@@ -32,6 +32,8 @@ export interface Schedule {
   owner_timezone: string;
   /** Who the booker is meeting — shown on the public page. */
   owner_name: string;
+  /** Workspace branding follows every public event page, including retries. */
+  owner_brand_color?: string;
   duration_minutes: number;
   granularity_minutes: number;
   buffer_before_minutes: number;
@@ -61,7 +63,7 @@ export interface Schedule {
   org_id: string | null;
 }
 
-const SCHEDULE_COLS = `sc.schedule_id, sc.owner_id, sc.slug, sc.title, o.timezone AS owner_timezone, o.display_name AS owner_name,
+const SCHEDULE_COLS = `sc.schedule_id, sc.owner_id, sc.slug, sc.title, o.timezone AS owner_timezone, o.display_name AS owner_name, o.brand_color AS owner_brand_color,
             sc.duration_minutes, sc.granularity_minutes, sc.buffer_before_minutes,
             sc.buffer_after_minutes, sc.minimum_notice_minutes, sc.maximum_horizon_days,
             sc.max_bookings_per_day, sc.max_bookings_per_week, sc.max_bookings_per_month,
@@ -79,6 +81,7 @@ function toSchedule(r: Record<string, unknown>): Schedule {
     title: s(r['title']),
     owner_timezone: s(r['owner_timezone']),
     owner_name: s(r['owner_name'] ?? ''),
+    owner_brand_color: r['owner_brand_color'] ? s(r['owner_brand_color']) : undefined,
     duration_minutes: n(r['duration_minutes']),
     granularity_minutes: n(r['granularity_minutes']),
     buffer_before_minutes: n(r['buffer_before_minutes']),

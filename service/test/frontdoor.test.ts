@@ -375,6 +375,10 @@ test('the dashboard shows the getting-started checklist until complete', async (
   const cookie = await makeOwner('fresh@example.com');
   const dash = await call('GET', '/app', { cookie });
   assert.ok(dash.body.includes('Getting started'));
+  assert.ok(dash.body.includes('Team tools'));
+  assert.ok(dash.body.includes('Automation'));
+  assert.ok(dash.body.includes('href="/app/api-keys"'));
+  assert.ok(dash.body.includes('aria-controls="app-navigation"'));
   await call('POST', '/app/schedules', {
     cookie, form: { title: 'Intro', slug: 'fintro', duration_minutes: '30' },
   });
@@ -427,7 +431,7 @@ test('Issue #6 · home page renders hero, feature cards, how it works, and CTA',
 
 test('Issue #4 · video chat options (Meet, Teams, Zoom) in editor and location text', async () => {
   const cookie = await makeOwner('video@example.com');
-  const create = await call('POST', '/app/schedules', {
+  await call('POST', '/app/schedules', {
     cookie, form: { title: 'Teams Sync', slug: 'teams-sync', duration_minutes: '30' },
   });
   const schedRes = await db.query(`SELECT schedule_id FROM schedules WHERE slug = 'teams-sync'`);

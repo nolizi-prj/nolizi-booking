@@ -27,7 +27,6 @@ const dataUrl = (mime: string, bytes: number[]) =>
   `data:${mime};base64,${Buffer.from(Uint8Array.from(bytes)).toString('base64')}`;
 
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-const JPEG_MAGIC = [0xff, 0xd8, 0xff];
 const pngOf = (n: number) => dataUrl('image/png', [...PNG_MAGIC, ...Array(n).fill(0)]);
 
 // ── the validator, against hostile input ────────────────────────────────────
@@ -138,11 +137,13 @@ const settings = (cookie: string, over: Record<string, string> = {}) =>
 test('an uploaded logo reaches the booking page and the owner\'s own page', async () => {
   const cookie = await ownerWithEvent();
   const logo = pngOf(64);
-  const saved = await settings(cookie, { logo });
+  const saved = await settings(cookie, { logo, brand_color: '#7c3aed' });
   assert.ok(saved.status < 400, `save failed: ${saved.status}`);
 
   const booking = await call('GET', '/chat');
   assert.ok(booking.body.includes(logo), 'the logo did not reach the booking page');
+  assert.ok(booking.body.includes('--accent:#7c3aed'),
+    'the workspace colour did not reach the booking page');
   const landing = await call('GET', '/ho');
   assert.ok(landing.body.includes(logo), 'the logo did not reach the owner page');
 });

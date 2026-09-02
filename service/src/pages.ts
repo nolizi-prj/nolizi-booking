@@ -81,19 +81,20 @@ ${FOOTER}
  * and an owner's brand colour can override the accent without breaking
  * contrast elsewhere.
  */
-const NAV: { key: string; href: string; label: string; icon: string }[] = [
-  { key: 'scheduling', href: '/app', label: 'Event types', icon: 'M4 5h16M4 12h16M4 19h10' },
-  { key: 'meetings', href: '/app/meetings', label: 'Meetings', icon: 'M7 3v3M17 3v3M4 8h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z' },
-  { key: 'contacts', href: '/app/contacts', label: 'Contacts', icon: 'M12 11a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0' },
-  { key: 'team', href: '/app/team', label: 'Team', icon: 'M9 11a3 3 0 100-6 3 3 0 000 6zM2 20a7 7 0 0114 0M17 11a3 3 0 100-6M22 20a7 7 0 00-4-6.3' },
-  { key: 'routing', href: '/app/routing', label: 'Routing', icon: 'M6 3v6a3 3 0 003 3h9M18 8l3 4-3 4M6 12v9' },
-  { key: 'polls', href: '/app/polls', label: 'Polls', icon: 'M6 20V10M12 20V4M18 20v-6' },
-  { key: 'workflows', href: '/app/workflows', label: 'Workflows', icon: 'M5 7a2 2 0 100-4 2 2 0 000 4zM5 21a2 2 0 100-4 2 2 0 000 4zM19 14a2 2 0 100-4 2 2 0 000 4zM7 5h6a4 4 0 014 4v1M7 19h6a4 4 0 004-4' },
-  { key: 'webhooks', href: '/app/webhooks', label: 'Webhooks', icon: 'M10 8a4 4 0 116 3.5M8 13a4 4 0 105 5M12 12l3 6M12 12l-5 2' },
-  { key: 'integrations', href: '/app/integrations', label: 'Apps & Video', icon: 'M15 10l5-3v10l-5-3v-4zM4 6h11a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2z' },
-  { key: 'analytics', href: '/app/analytics', label: 'Analytics', icon: 'M4 20V10M10 20V4M16 20v-8M22 20H2' },
-  { key: 'audit', href: '/app/audit', label: 'Audit log', icon: 'M9 5h9a1 1 0 011 1v13a1 1 0 01-1 1H6a1 1 0 01-1-1V8M9 5V3h6v2M8 12h8M8 16h5' },
-  { key: 'settings', href: '/app/settings', label: 'Settings', icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19 12a7 7 0 00-.1-1l2-1.5-2-3.4-2.3 1a7 7 0 00-1.7-1L14.5 3h-4l-.4 2.6a7 7 0 00-1.7 1l-2.3-1-2 3.4L6 11a7 7 0 000 2l-2 1.5 2 3.4 2.3-1a7 7 0 001.7 1l.4 2.6h4l.4-2.6a7 7 0 001.7-1l2.3 1 2-3.4-2-1.5a7 7 0 00.2-1z' },
+const NAV: { group: string; key: string; href: string; label: string; icon: string }[] = [
+  { group: 'Scheduling', key: 'scheduling', href: '/app', label: 'Event types', icon: 'M4 5h16M4 12h16M4 19h10' },
+  { group: 'Scheduling', key: 'meetings', href: '/app/meetings', label: 'Meetings', icon: 'M7 3v3M17 3v3M4 8h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z' },
+  { group: 'Scheduling', key: 'contacts', href: '/app/contacts', label: 'Contacts', icon: 'M12 11a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0' },
+  { group: 'Team tools', key: 'team', href: '/app/team', label: 'Team', icon: 'M9 11a3 3 0 100-6 3 3 0 000 6zM2 20a7 7 0 0114 0M17 11a3 3 0 100-6M22 20a7 7 0 00-4-6.3' },
+  { group: 'Team tools', key: 'routing', href: '/app/routing', label: 'Routing forms', icon: 'M6 3v6a3 3 0 003 3h9M18 8l3 4-3 4M6 12v9' },
+  { group: 'Team tools', key: 'polls', href: '/app/polls', label: 'Meeting polls', icon: 'M6 20V10M12 20V4M18 20v-6' },
+  { group: 'Automation', key: 'workflows', href: '/app/workflows', label: 'Workflows', icon: 'M5 7a2 2 0 100-4 2 2 0 000 4zM5 21a2 2 0 100-4 2 2 0 000 4zM19 14a2 2 0 100-4 2 2 0 000 4zM7 5h6a4 4 0 014 4v1M7 19h6a4 4 0 004-4' },
+  { group: 'Automation', key: 'webhooks', href: '/app/webhooks', label: 'Webhooks', icon: 'M10 8a4 4 0 116 3.5M8 13a4 4 0 105 5M12 12l3 6M12 12l-5 2' },
+  { group: 'Automation', key: 'api', href: '/app/api-keys', label: 'API keys', icon: 'M8 12h8M12 8v8M5 4h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z' },
+  { group: 'Workspace', key: 'integrations', href: '/app/integrations', label: 'Integrations', icon: 'M15 10l5-3v10l-5-3v-4zM4 6h11a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2z' },
+  { group: 'Workspace', key: 'analytics', href: '/app/analytics', label: 'Analytics', icon: 'M4 20V10M10 20V4M16 20v-8M22 20H2' },
+  { group: 'Workspace', key: 'audit', href: '/app/audit', label: 'Audit log', icon: 'M9 5h9a1 1 0 011 1v13a1 1 0 01-1 1H6a1 1 0 01-1-1V8M9 5V3h6v2M8 12h8M8 16h5' },
+  { group: 'Workspace', key: 'settings', href: '/app/settings', label: 'Settings', icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19 12a7 7 0 00-.1-1l2-1.5-2-3.4-2.3 1a7 7 0 00-1.7-1L14.5 3h-4l-.4 2.6a7 7 0 00-1.7 1l-2.3-1-2 3.4L6 11a7 7 0 000 2l-2 1.5 2 3.4 2.3-1a7 7 0 001.7 1l.4 2.6h4l.4-2.6a7 7 0 001.7-1l2.3 1 2-3.4-2-1.5a7 7 0 00.2-1z' },
 ];
 
 const icon = (d: string): string =>
@@ -101,15 +102,22 @@ const icon = (d: string): string =>
 
 const sidebar = (active: string): string => `<a class="skip" href="#main">Skip to content</a>
 <nav class="rail" aria-label="Sections">
-  <a class="brand" href="/app">${esc(PRODUCT)}</a>
-  <ul>
-    ${NAV.map((n) => `<li><a href="${n.href}" class="${n.key === active ? 'on' : ''}"
-      ${n.key === active ? 'aria-current="page"' : ''}>${icon(n.icon)}<span>${n.label}</span></a></li>`).join('')}
-  </ul>
-  <form method="post" action="/logout" class="railout">
-    <button type="submit">${icon('M15 12H3m0 0l4-4m-4 4l4 4M13 4h6a1 1 0 011 1v14a1 1 0 01-1 1h-6')}<span>Sign out</span></button>
-  </form>
-</nav>`;
+  <div class="railhead"><a class="brand" href="/app">${esc(PRODUCT)}</a>
+    <button class="nav-toggle" type="button" aria-expanded="true" aria-controls="app-navigation">Menu</button></div>
+  <div class="railbody" id="app-navigation">
+    ${[...new Set(NAV.map((n) => n.group))].map((group) => `<section class="navgroup" aria-labelledby="nav-${group.toLowerCase().replace(/[^a-z]+/g, '-')}">
+      <h2 id="nav-${group.toLowerCase().replace(/[^a-z]+/g, '-')}">${group}</h2><ul>
+      ${NAV.filter((n) => n.group === group).map((n) => `<li><a href="${n.href}" class="${n.key === active ? 'on' : ''}"
+        ${n.key === active ? 'aria-current="page"' : ''}>${icon(n.icon)}<span>${n.label}</span></a></li>`).join('')}
+      </ul></section>`).join('')}
+    <form method="post" action="/logout" class="railout">
+      <button type="submit">${icon('M15 12H3m0 0l4-4m-4 4l4 4M13 4h6a1 1 0 011 1v14a1 1 0 01-1 1h-6')}<span>Sign out</span></button>
+    </form>
+  </div>
+</nav>
+<script>(function(){var b=document.querySelector('.nav-toggle'),n=document.getElementById('app-navigation');
+if(!b||!n)return;function compact(){if(matchMedia('(max-width:52rem)').matches){n.hidden=true;b.setAttribute('aria-expanded','false')}else{n.hidden=false;b.setAttribute('aria-expanded','true')}}
+b.addEventListener('click',function(){var open=n.hidden;n.hidden=!open;b.setAttribute('aria-expanded',String(open))});compact();})();</script>`;
 
 const SHELL = (title: string, rawBody: string): string => {
   const m = rawBody.match(/^\s*<!--nav:([a-z-]+)-->/);
@@ -156,9 +164,16 @@ const SHELL = (title: string, rawBody: string): string => {
  .app{display:grid;grid-template-columns:15rem minmax(0,1fr);min-height:100vh}
  .rail{background:var(--rail);border-right:1px solid var(--line);
    display:flex;flex-direction:column;padding:1.1rem .75rem;gap:.15rem;position:sticky;top:0;height:100vh}
+ .railhead{display:flex;align-items:center;justify-content:space-between;gap:.75rem}
  .brand{font-weight:680;letter-spacing:-.01em;color:var(--fg);text-decoration:none;
    padding:.25rem .5rem 1rem;font-size:1.02rem}
  .brand:hover{text-decoration:none}
+ .nav-toggle{display:none;border:1px solid var(--line);border-radius:8px;background:var(--surface);
+   color:var(--fg);padding:.4rem .7rem;font:inherit;font-size:.86rem;font-weight:600;cursor:pointer}
+ .railbody{min-height:0;display:flex;flex:1;flex-direction:column;overflow-y:auto;scrollbar-width:thin}
+ .navgroup{margin:0 0 .65rem}
+ .navgroup h2{margin:.2rem .6rem .25rem;color:var(--muted);font-size:.68rem;font-weight:700;
+   letter-spacing:.08em;text-transform:uppercase}
  .rail ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
  .rail a,.railout button{display:flex;align-items:center;gap:.6rem;width:100%;
    padding:.5rem .6rem;border-radius:8px;color:var(--fg);text-decoration:none;
@@ -171,14 +186,17 @@ const SHELL = (title: string, rawBody: string): string => {
  .main{padding:2rem 2rem 4rem;max-width:56rem}
  @media(max-width:52rem){
    .app{grid-template-columns:1fr}
-   .rail{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;
-     border-right:0;border-bottom:1px solid var(--line);padding:.6rem}
-   .brand{padding:.25rem .5rem;width:100%}
-   .rail ul{flex-direction:row;flex-wrap:wrap}
-   .rail a span,.railout button span{font-size:.85rem}
-   .railout{margin:0;border:0;padding:0}
+   .rail{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:.65rem .75rem}
+   .railhead{width:100%}.brand{padding:.25rem 0}.nav-toggle{display:block}
+   .railbody{width:100%;padding-top:.6rem;overflow:visible}
+   .railbody[hidden]{display:none}
+   .navgroup{margin-bottom:.55rem}.navgroup h2{margin-left:.35rem}
+   .rail ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+   .rail a span,.railout button span{font-size:.88rem}
+   .railout{margin:.5rem 0 0;border-top:1px solid var(--line);padding-top:.5rem}
    .main{padding:1.25rem 1rem 3rem}
  }
+ @media(max-width:26rem){.rail ul{grid-template-columns:1fr}}
 
  /* surfaces */
  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
@@ -830,7 +848,8 @@ export function bookingPage(
 
   return SHELL(
     schedule.title,
-    `<div class="book-grid">
+    `${schedule.owner_brand_color ? `<style>:root{--accent:${esc(schedule.owner_brand_color)};--accent-soft:color-mix(in srgb,${esc(schedule.owner_brand_color)} 12%,var(--surface))}</style>` : ''}
+<div class="book-grid">
 <div class="book-meta">
   ${opts.logo ? `<p style="margin:0 0 .6rem"><img src="${esc(opts.logo)}" alt="" class="brandlogo"></p>` : ''}
   ${schedule.owner_name ? `<p class="muted" style="margin:0 0 .2rem">${esc(schedule.owner_name)}</p>` : ''}
@@ -843,6 +862,10 @@ export function bookingPage(
 </div>
 <div class="book-pick">
 ${err}${empty}
+<ol class="booking-steps" aria-label="Booking progress">
+  <li class="current" id="step-time"><span>1</span> Choose a time</li>
+  <li id="step-details"><span>2</span> Your details</li>
+</ol>
 <div id="cal" hidden>
   <div class="cal-head">
     <button type="button" id="prev" class="navbtn" aria-label="Previous month">&lsaquo;</button>
@@ -855,6 +878,7 @@ ${err}${empty}
   <div class="slots" id="times"></div>
 </div>
 <div id="list"><div class="slots">${buttons}</div></div>
+<p class="selected-summary" id="selected-summary" role="status" aria-live="polite" hidden></p>
 <script type="application/json" id="slots-data">${JSON.stringify(slots).replace(/</g, '\\u003c')}</script>
 <form method="post" action="${esc(opts.action ?? `/${schedule.slug}/book`)}" id="f">
   <noscript><p class="muted">Times above are shown in UTC. With JavaScript on they
@@ -888,6 +912,15 @@ ${FOOTER}
  @media(min-width:46rem){.book-meta{border-bottom:0;border-right:1px solid var(--line);
    background:var(--rail);height:100%}}
  .book-pick{padding:1.5rem}
+ .booking-steps{list-style:none;display:flex;gap:1.25rem;margin:0 0 1.25rem;padding:0;
+   color:var(--muted);font-size:.8rem;font-weight:650}
+ .booking-steps li{display:flex;align-items:center;gap:.4rem}
+ .booking-steps span{display:inline-grid;place-items:center;width:1.45rem;height:1.45rem;border-radius:50%;
+   border:1px solid var(--line);font-size:.72rem}
+ .booking-steps .current{color:var(--accent)}.booking-steps .current span{border-color:var(--accent);background:var(--accent-soft)}
+ .booking-steps .complete{color:var(--ok)}.booking-steps .complete span{border-color:var(--ok)}
+ .selected-summary{margin:1rem 0 0;padding:.7rem .8rem;border-radius:8px;background:var(--accent-soft);
+   color:var(--fg);font-weight:600;font-size:.88rem}
  .cal-head{display:flex;align-items:center;justify-content:space-between;margin:.5rem 0}
  .navbtn{border:1px solid var(--line);background:transparent;color:var(--fg);
    border-radius:.4rem;padding:.2rem .7rem;font:inherit;cursor:pointer}
@@ -913,7 +946,13 @@ ${FOOTER}
   var tzSel = document.getElementById('tzsel');
   try {
     var zones = Intl.supportedValuesOf('timeZone');
-    zones.forEach(function(z){ var o=document.createElement('option'); o.value=z; o.textContent=z; tzSel.appendChild(o); });
+    var groups={}; zones.forEach(function(z){
+      var region=z.split('/')[0]||'Other';
+      if(!groups[region]){var g=document.createElement('optgroup');g.label=region;groups[region]=g;tzSel.appendChild(g)}
+      var o=document.createElement('option');o.value=z;
+      o.textContent=z.split('/').slice(1).join(' / ').replace(/_/g,' ')||z;
+      groups[region].appendChild(o);
+    });
     tzSel.value = tz;
     document.getElementById('tzwrap').hidden = false;
   } catch(e) {}
@@ -980,6 +1019,10 @@ ${FOOTER}
         document.getElementById('start').value = s.start;
         document.getElementById('end').value = s.end;
         document.getElementById('f').classList.add('on');
+        var chosen=document.getElementById('selected-summary');
+        chosen.hidden=false;chosen.textContent='Selected: '+dayFmt.format(new Date(s.start))+' at '+timeFmt.format(new Date(s.start))+' ('+tz+')';
+        document.getElementById('step-time').className='complete';
+        document.getElementById('step-details').className='current';
         document.getElementById('name').focus();
       };
       // Without this the button is built, wired, and dropped: the heading names
@@ -1798,8 +1841,6 @@ export interface ScheduleSummary {
   color?: string;
 }
 
-const DAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const;
-
 const DAYS_FULL = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] as const;
 
 const CARD_CSS = `<style>
@@ -1853,6 +1894,7 @@ export function meetingsPage(
     'Meetings',
     `<!--nav:meetings-->
 <h1>Meetings</h1>
+<p class="muted">Times are shown in ${esc(timezone)}.</p>
 <div class="navrow">
   <a href="/app/meetings" ${range !== 'past' ? 'style="font-weight:600"' : ''}>Upcoming</a>
   <a href="/app/meetings?range=past" ${range === 'past' ? 'style="font-weight:600"' : ''}>Past</a>
@@ -2025,17 +2067,18 @@ export function availabilityEditor(set: {
   </form>
 </div>
 <div class="card">
-  <h2>Date-specific hours</h2>
-  <p class="muted">A date listed here replaces that day's weekly hours entirely.
-    No times means the whole day is unavailable.</p>
+  <h2>Date-specific hours and out of office</h2>
+  <p class="muted">A date or date range listed here replaces weekly hours entirely.
+    Choose “Out of office” to block every time in the range.</p>
   ${ov ? `<table class="avail">${ov}</table>` : ''}
   <form method="post" action="/app/availability/${esc(set.set_id)}/overrides">
     <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin:.5rem 0">
-      <label>Date <input type="date" name="date" id="ov_date" required></label>
+      <label>From date <input type="date" name="date" id="ov_date" required></label>
+      <label>Through <input type="date" name="through" id="ov_through"></label>
       <label>From <input name="start" id="ov_start" value="09:00" placeholder="09:00" size="5"></label>
       <label>To <input name="end" id="ov_end" value="17:00" placeholder="17:00" size="5"></label>
       <label style="display:inline-flex;align-items:center;gap:.35rem;cursor:pointer">
-        <input type="checkbox" id="ov_off" style="width:auto" onchange="toggleFullDayOff(this.checked)"> Full Day Off</label>
+        <input type="checkbox" id="ov_off" style="width:auto" onchange="toggleFullDayOff(this.checked)"> Out of office</label>
     </div>
     <button class="submit" type="submit">Add override</button>
   </form>
@@ -2093,7 +2136,13 @@ const ovDate = document.getElementById('ov_date');
 if (ovDate && !ovDate.value) {
   const tmrw = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
   ovDate.value = tmrw;
+  const through = document.getElementById('ov_through');
+  if (through) through.value = tmrw;
 }
+if (ovDate) ovDate.addEventListener('change', function(){
+  const through = document.getElementById('ov_through');
+  if (through && !through.value) through.value = ovDate.value;
+});
 </script>
 <style>
  .card{border:1px solid var(--line);border-radius:.5rem;padding:1rem;margin:1rem 0}
@@ -2120,6 +2169,7 @@ export function workflowsPage(
   const label = (t: string, o: number) =>
     t === 'before_event' ? `${o} min before the meeting`
     : t === 'after_event' ? `${o} min after the meeting`
+    : t === 'booking_no_show' ? 'when a meeting is marked no-show'
     : t.replace('booking_', 'when a booking is ').replace('_', ' ');
   const list = flows
     .map(
@@ -2148,6 +2198,7 @@ ${list || '<p class="muted">No workflows yet.</p>'}
     <button type="button" class="preset-pill" onclick="setWfPreset('1h')">⏱️ 1h Reminder</button>
     <button type="button" class="preset-pill" onclick="setWfPreset('created')">📢 Instant Confirmation</button>
     <button type="button" class="preset-pill" onclick="setWfPreset('followup')">🙏 Post-Meeting Follow-up</button>
+    <button type="button" class="preset-pill" onclick="setWfPreset('noshow')">↩️ No-show Recovery</button>
   </div>
   <form method="post" action="/app/workflows">
     <label for="wt">Name</label><input id="wt" name="title" required value="24-Hour Meeting Reminder">
@@ -2158,6 +2209,7 @@ ${list || '<p class="muted">No workflows yet.</p>'}
       <option value="booking_created">When a booking is created</option>
       <option value="booking_cancelled">When a booking is cancelled</option>
       <option value="booking_rescheduled">When a booking is rescheduled</option>
+      <option value="booking_no_show">When a meeting is marked no-show</option>
     </select>
     <label for="wo">Offset (minutes, for before/after)</label>
     <input id="wo" name="offset_minutes" type="number" min="0" value="1440">
@@ -2209,6 +2261,13 @@ function setWfPreset(k) {
     r.value = 'booker';
     s.value = 'Thank you for meeting today!';
     b.value = 'Hi {{name}}, thank you for taking the time to meet today for {{title}}. Please let me know if you have any follow-up questions!';
+  } else if (k === 'noshow') {
+    t.value = 'No-show Recovery';
+    g.value = 'booking_no_show';
+    o.value = '0';
+    r.value = 'booker';
+    s.value = 'We missed you: {{title}}';
+    b.value = 'Hi {{name}}, we missed you for {{title}} at {{start}}. Reply to reschedule when you are ready.';
   }
 }
 </script>
@@ -2223,6 +2282,8 @@ ${CARD_CSS}
 /** P7 — outbound webhooks (a Slack incoming-webhook URL works directly). */
 export function webhooksPage(
   hooks: { webhook_id: string; url: string; secret: string; format: string }[],
+  deliveries: { job_id: string; status: string; attempts: number; run_at: string }[] = [],
+  retried = false,
 ): string {
   const list = hooks
     .map(
@@ -2243,6 +2304,7 @@ export function webhooksPage(
 <h1>Webhooks</h1>
 <p class="muted">Booking events, delivered as signed JSON POSTs with retries.
   Pick the Slack format to paste a Slack incoming-webhook URL directly.</p>
+${retried ? '<p class="ok">Delivery queued for another attempt.</p>' : ''}
 ${list || '<p class="muted">No webhooks yet.</p>'}
 <div class="card">
   <h2>New webhook</h2>
@@ -2256,9 +2318,24 @@ ${list || '<p class="muted">No webhooks yet.</p>'}
     <button class="submit" type="submit">Add webhook</button>
   </form>
 </div>
+<div class="card">
+  <div class="spread"><div><h2>Delivery history</h2>
+    <p class="muted">The latest 50 attempts. Payloads and attendee details are not shown here.</p></div></div>
+  ${deliveries.length ? `<div class="table-scroll"><table class="rows"><thead><tr><th>Scheduled</th><th>Status</th><th>Attempts</th><th></th></tr></thead><tbody>
+    ${deliveries.map((d) => `<tr><td><time class="lt" datetime="${esc(d.run_at)}">${esc(d.run_at)}</time></td>
+      <td><span class="pill delivery-${esc(d.status)}">${esc(d.status)}</span></td><td>${d.attempts}</td><td>
+      ${d.status === 'failed' ? `<form method="post" action="/app/webhooks/retry" style="margin:0">
+        <input type="hidden" name="id" value="${esc(d.job_id)}"><button class="linkish" type="submit">Retry</button></form>` : ''}
+      </td></tr>`).join('')}</tbody></table></div>`
+    : '<p class="muted">No webhook deliveries yet. They will appear after a booking event.</p>'}
+</div>
 ${CARD_CSS}
 <style>code{font-size:.85em;background:var(--line);padding:.1em .3em;border-radius:.25rem}
-select{width:100%;padding:.55rem;border:1px solid var(--line);border-radius:.4rem;background:transparent;color:var(--fg);font:inherit}</style>`,
+select{width:100%;padding:.55rem;border:1px solid var(--line);border-radius:.4rem;background:transparent;color:var(--fg);font:inherit}
+.table-scroll{overflow-x:auto}.delivery-done{color:var(--ok)}.delivery-failed{color:var(--danger)}</style>
+<script>document.querySelectorAll('time.lt').forEach(function(t){
+  t.textContent=new Date(t.getAttribute('datetime')).toLocaleString();
+});</script>`,
   );
 }
 
@@ -2543,6 +2620,7 @@ export function teamPage(
   ssoByOrg: Map<string, { issuer: string; email_domain?: string }> = new Map(),
   freshScimToken?: string,
   mintedInvite?: string,
+  invitedEmail?: string,
 ): string {
   const ssoSection = (o: { org_id: string; my_role: string }): string => {
     if (o.my_role !== 'admin') return '';
@@ -2582,8 +2660,8 @@ export function teamPage(
     .join('')}
   ${o.my_role === 'admin'
     ? `<form method="post" action="/app/team/${esc(o.org_id)}/members">
-    <label>Add member by email <input name="email" type="email" required></label>
-    <button class="submit" type="submit">Add</button>
+    <label>Invite or add a member <input name="email" type="email" required autocomplete="email" placeholder="teammate@company.com"></label>
+    <button class="submit" type="submit">Continue</button>
   </form>` : ''}
   ${ssoSection(o)}
 </div>`,
@@ -2593,11 +2671,14 @@ export function teamPage(
     'Team',
     `<!--nav:team-->
 <h1>Team</h1>
+${invitedEmail
+    ? `<p class="ok">Invitation sent to ${esc(invitedEmail)}. They will join this team after creating their account.</p>`
+    : ''}
 ${freshScimToken
     ? `<p class="ok">SCIM bearer token — copy it now, it is not shown again:<br>
   <code>${esc(freshScimToken)}</code></p>` : ''}
 <p class="muted">Members can host round-robin and collective event types together.
-  New members need their own account here first.</p>
+  Existing users join immediately; everyone else receives a one-time email invitation.</p>
 ${list || '<p class="muted">No teams yet.</p>'}
 <div class="card">
   <h2>New team</h2>

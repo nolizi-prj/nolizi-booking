@@ -115,6 +115,27 @@ test('a before-event reminder waits for its moment, and dies with a cancellation
     'reminder for a cancelled booking still sent');
 });
 
+test('marking a no-show fires its workflow once; clearing it does not', async () => {
+  const { cookie } = await ownerWithPage();
+  await call('POST', '/app/workflows', { cookie, form: {
+    title: 'No-show recovery', trigger: 'booking_no_show', offset_minutes: '0',
+    recipient: 'booker', subject: 'We missed you, {{name}}', body: 'Reschedule {{title}}.',
+  } });
+  await book('2026-06-01T10:00:00Z', 'late@example.com');
+  const booking = await db.query(
+    `SELECT booking_id FROM bookings WHERE booker_email = 'late@example.com'`);
+  const id = String(booking.rows[0]!['booking_id']);
+
+  await call('POST', `/app/meetings/${id}/noshow`, { cookie });
+  await processDueJobs(db, deps.mail, NOW);
+  assert.equal(mail.sent.filter((m) => m.subject === 'We missed you, Ada').length, 1);
+
+  await call('POST', `/app/meetings/${id}/noshow`, { cookie });
+  await processDueJobs(db, deps.mail, NOW);
+  assert.equal(mail.sent.filter((m) => m.subject === 'We missed you, Ada').length, 1,
+    'clearing a no-show must not send the recovery message again');
+});
+
 test('webhooks deliver signed JSON, retry on failure, and give up at five', async () => {
   const { cookie } = await ownerWithPage();
   await call('POST', '/app/webhooks', {
@@ -149,9 +170,21 @@ test('webhooks deliver signed JSON, retry on failure, and give up at five', asyn
       t = '2026-06-0' + (1 + Math.min(8, i)) + 'T23:00:00Z';
       await processDueJobs(db, deps.mail, t);
     }
-    const job = await db.query(`SELECT status, attempts FROM jobs WHERE kind = 'webhook'`);
+    const job = await db.query(`SELECT job_id, status, attempts FROM jobs WHERE kind = 'webhook'`);
     assert.equal(String(job.rows[0]!['status']), 'failed');
     assert.equal(Number(job.rows[0]!['attempts']), 5);
+    const history = await call('GET', '/app/webhooks', { cookie });
+    assert.ok(history.body.includes('Delivery history'));
+    assert.ok(history.body.includes('delivery-failed'));
+    assert.ok(history.body.includes('>Retry</button>'));
+    const retry = await call('POST', '/app/webhooks/retry', {
+      cookie, form: { id: String(job.rows[0]!['job_id']) },
+    });
+    assert.equal(retry.status, 303);
+    assert.equal(retry.headers['location'], '/app/webhooks?retried=1');
+    const reset = await db.query(`SELECT status, attempts FROM jobs WHERE job_id = $1`,
+      [String(job.rows[0]!['job_id'])]);
+    assert.deepEqual(reset.rows[0], { status: 'pending', attempts: 0 });
   } finally {
     globalThis.fetch = realFetch;
     failing = false;

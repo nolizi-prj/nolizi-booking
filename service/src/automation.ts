@@ -20,6 +20,7 @@ export type Trigger =
   | 'booking_created'
   | 'booking_cancelled'
   | 'booking_rescheduled'
+  | 'booking_no_show'
   | 'before_event'
   | 'after_event';
 

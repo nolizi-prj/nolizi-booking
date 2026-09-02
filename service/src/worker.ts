@@ -23,7 +23,7 @@
  */
 
 import { DurableObject } from 'cloudflare:workers';
-import { loadConfig, RATE_LIMITS, sealRefusal, signInRefusal } from './config.ts';
+import { loadConfig, RATE_LIMITS, signInRefusal } from './config.ts';
 import { handle, type AppDeps, type DirectoryPort } from './app.ts';
 import { migrate } from './db.ts';
 import { RecordingMail, RetryingMail, type MailPort } from './mail.ts';
@@ -61,6 +61,7 @@ import schema013 from '../migrations-sqlite/013_email_verification.sql';
 import schema014 from '../migrations-sqlite/014_custom_questions.sql';
 import schema015 from '../migrations-sqlite/015_branding.sql';
 import schema016 from '../migrations-sqlite/016_video_connections.sql';
+import schema017 from '../migrations-sqlite/017_no_show_workflows.sql';
 
 /** 5MB ceiling to support in-app feedback screenshots and diagnostic bundles. */
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
@@ -210,6 +211,7 @@ export class PumasiService extends DurableObject {
           { name: '014_custom_questions.sql', sql: schema014 as string },
           { name: '015_branding.sql', sql: schema015 as string },
           { name: '016_video_connections.sql', sql: schema016 as string },
+          { name: '017_no_show_workflows.sql', sql: schema017 as string },
         ],
       }),
     );

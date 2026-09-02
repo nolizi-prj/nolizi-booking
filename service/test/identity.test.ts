@@ -49,7 +49,7 @@ test('I1 an invite creates exactly one account under concurrent redemption', asy
     await invite('INV-1');
 
     const results = await Promise.all(
-      Array.from({ length: 8 }, (_, i) => redeemInvite(db, db, person(`p${round}x${i}`), 100)),
+      Array.from({ length: 8 }, (_, i) => redeemInvite(db, person(`p${round}x${i}`), 100)),
     );
     const won = results.filter((r) => r.ok).length;
     assert.equal(won, 1, `round ${round}: one invite, one account -- got ${won}`);
@@ -61,23 +61,23 @@ test('I1 an invite creates exactly one account under concurrent redemption', asy
 
 test('I1 a spent invite cannot be redeemed again', async () => {
   await invite('INV-1');
-  assert.equal((await redeemInvite(db, db, person('first'), 100)).ok, true);
-  const second = await redeemInvite(db, db, person('second'), 100);
+  assert.equal((await redeemInvite(db, person('first'), 100)).ok, true);
+  const second = await redeemInvite(db, person('second'), 100);
   assert.equal(second.ok, false);
   if (!second.ok) assert.equal(second.reason, 'invalid_invite');
 });
 
 test('I1 an unknown invite code is refused and creates nothing', async () => {
-  const r = await redeemInvite(db, db, { ...person('nobody'), code: 'NOPE' }, 100);
+  const r = await redeemInvite(db, { ...person('nobody'), code: 'NOPE' }, 100);
   assert.equal(r.ok, false);
   assert.equal(Number((await db.query(`SELECT count(*)::int AS c FROM owners`)).rows[0]?.['c']), 0);
 });
 
 test('D1 the owner ceiling is enforced inside the transaction', async () => {
   for (const c of ['A', 'B', 'C']) await invite(c);
-  assert.equal((await redeemInvite(db, db, { ...person('one'), code: 'A' }, 2)).ok, true);
-  assert.equal((await redeemInvite(db, db, { ...person('two'), code: 'B' }, 2)).ok, true);
-  const third = await redeemInvite(db, db, { ...person('three'), code: 'C' }, 2);
+  assert.equal((await redeemInvite(db, { ...person('one'), code: 'A' }, 2)).ok, true);
+  assert.equal((await redeemInvite(db, { ...person('two'), code: 'B' }, 2)).ok, true);
+  const third = await redeemInvite(db, { ...person('three'), code: 'C' }, 2);
   assert.equal(third.ok, false);
   if (!third.ok) assert.equal(third.reason, 'ceiling');
   // The refused redemption must not have spent the invite.
@@ -87,7 +87,7 @@ test('D1 the owner ceiling is enforced inside the transaction', async () => {
 
 test('I3 a sign-in link works once, and not after expiry', async () => {
   await invite('INV-1');
-  const r = await redeemInvite(db, db, person('ada'), 100);
+  const r = await redeemInvite(db, person('ada'), 100);
   assert.ok(r.ok);
   if (!r.ok) return;
 
@@ -105,7 +105,7 @@ test('I3 a sign-in link works once, and not after expiry', async () => {
 
 test('I3 a session resolves to its owner and dies on logout', async () => {
   await invite('INV-1');
-  const r = await redeemInvite(db, db, person('grace'), 100);
+  const r = await redeemInvite(db, person('grace'), 100);
   assert.ok(r.ok);
   if (!r.ok) return;
 
@@ -122,7 +122,7 @@ test('I3 a session resolves to its owner and dies on logout', async () => {
 
 test('I3 an expired session does not authenticate', async () => {
   await invite('INV-1');
-  const r = await redeemInvite(db, db, person('hopper'), 100);
+  const r = await redeemInvite(db, person('hopper'), 100);
   assert.ok(r.ok);
   if (!r.ok) return;
   const sid = await createSession(db, r.owner.owner_id, NOW, 1);
@@ -131,7 +131,7 @@ test('I3 an expired session does not authenticate', async () => {
 
 test('I3 the cookie carries no readable claims and no account identifier', async () => {
   await invite('INV-1');
-  const r = await redeemInvite(db, db, person('lovelace'), 100);
+  const r = await redeemInvite(db, person('lovelace'), 100);
   assert.ok(r.ok);
   if (!r.ok) return;
   const sid = await createSession(db, r.owner.owner_id, NOW, 24);

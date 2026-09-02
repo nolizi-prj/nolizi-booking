@@ -70,7 +70,7 @@ async function ownerWithPage(email = 'p3@example.com', slug = 'intro') {
 }
 
 async function book(slug: string, start: string, name = 'Ada', email = 'ada@example.com') {
-  const end = start.replace(/T(\d{2}):00/, (m, h) => `T${h}:30`);
+  const end = start.replace(/T(\d{2}):00/, (_match, h) => `T${h}:30`);
   return call('POST', `/${slug}/book`, {
     form: { start, end, name, email, booker_tz: 'UTC' },
   });

@@ -120,6 +120,33 @@ test('team management: admins add members; members cannot', async () => {
   assert.equal(Number(members.rows[0]!['c']), 2);
 });
 
+test('an unknown team member receives a one-time email invitation', async () => {
+  const admin = await makeOwner('admin@t.example', null);
+  await call('POST', '/app/team', { cookie: admin.cookie, form: { name: 'Crew' } });
+  const org = String((await db.query(`SELECT org_id FROM orgs`)).rows[0]!['org_id']);
+  deps.directory = {
+    mintInvite: async (kind) => {
+      assert.equal(kind, 'org');
+      return 'inv-team-once';
+    },
+  } as AppDeps['directory'];
+
+  const invited = await call('POST', `/app/team/${org}/members`, {
+    cookie: admin.cookie, form: { email: 'new-person@example.com' },
+  });
+
+  assert.equal(invited.status, 303);
+  assert.equal(invited.headers['location'], '/app/team?invited=new-person%40example.com');
+  assert.equal(mail.sent.length, 1);
+  assert.equal(mail.sent[0]?.kind, 'custom');
+  assert.equal(mail.sent[0]?.to, 'new-person@example.com');
+  assert.ok(mail.sent[0]?.body?.includes('/signup?invite=inv-team-once'));
+  const page = await call('GET', '/app/team', {
+    cookie: admin.cookie, query: { invited: 'new-person@example.com' },
+  });
+  assert.ok(page.body.includes('Invitation sent to new-person@example.com'));
+});
+
 test('collective offers the intersection of the hosts’ hours', async () => {
   await makeTeamEvent('collective', ['09:00', '12:00'], ['10:00', '14:00']);
   const page = await call('GET', '/duo');

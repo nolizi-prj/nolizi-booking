@@ -84,7 +84,6 @@ async function insertOwner(
  * Same ceiling, same duplicate check, no invite.
  */
 export async function createOwnerDirect(
-  sql: SqlClient,
   tx: { transaction<T>(fn: (tx: SqlClient) => Promise<T>): Promise<T> },
   input: { email: string; displayName: string; timezone: string },
   maxOwnerAccounts: number,
@@ -116,7 +115,6 @@ export async function createOwnerDirect(
 }
 
 export async function redeemInvite(
-  sql: SqlClient,
   tx: { transaction<T>(fn: (tx: SqlClient) => Promise<T>): Promise<T> },
   input: { code: string; email: string; displayName: string; timezone: string },
   maxOwnerAccounts: number,

@@ -3,6 +3,7 @@
     "target": "ES2022", "module": "NodeNext", "moduleResolution": "NodeNext",
     "lib": ["ES2022"], "outDir": "dist", "rootDir": "src", "strict": true,
     "noUncheckedIndexedAccess": true, "declaration": true,
+    "noUnusedLocals": true, "noUnusedParameters": true,
     "verbatimModuleSyntax": true, "rewriteRelativeImportExtensions": true,
     "allowImportingTsExtensions": true, "skipLibCheck": true
   },

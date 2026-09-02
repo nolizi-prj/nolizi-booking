@@ -164,6 +164,20 @@ test('S11 · an override replaces the day; an empty override closes it', async (
   });
   page = await call('GET', '/intro');
   assert.ok(page.body.includes('data-start="2026-06-01T09:00:00Z"'));
+
+  // Out-of-office ranges are expanded atomically into closed date overrides.
+  const range = await call('POST', `/app/availability/${setId}/overrides`, {
+    cookie, form: { date: '2026-06-01', through: '2026-06-03' },
+  });
+  assert.equal(range.status, 303);
+  const closed = await db.query(
+    `SELECT local_date FROM set_overrides WHERE set_id = $1 ORDER BY local_date`, [setId]);
+  assert.deepEqual(closed.rows.map((x) => String(x['local_date']).slice(0, 10)),
+    ['2026-06-01', '2026-06-02', '2026-06-03']);
+  const tooLong = await call('POST', `/app/availability/${setId}/overrides`, {
+    cookie, form: { date: '2026-06-01', through: '2026-10-01' },
+  });
+  assert.equal(tooLong.status, 400);
 });
 
 test('a fixed date range clamps the bookable window at both ends', async () => {

@@ -90,7 +90,7 @@ test('Live Browser Test: Home Page, Login Page, and SSO Redirects', async () => 
     console.log('Feedback modal opened, validated, and closed cleanly.');
 
     // 7. Test Live Health and Ready Endpoints
-    const readyRes = await page.goto('https://booking.pumasi.ai/readyz');
+    await page.goto('https://booking.pumasi.ai/readyz');
     const readyJson = JSON.parse(await page.$eval('body', el => el.textContent || '{}'));
     console.log('Live readyz response:', readyJson);
     assert.equal(readyJson.status, 'ready');
