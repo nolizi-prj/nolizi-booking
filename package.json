@@ -1,6 +1,6 @@
 {
   "name": "pumasi-booking",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Pumasi Booking. A booking page people can send someone to pick a time on.",
   "license": "Apache-2.0",
   "private": true,

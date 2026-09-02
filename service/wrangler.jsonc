@@ -21,6 +21,11 @@
   "observability": { "enabled": true },
   "vars": {
     "BASE_URL": "https://booking.pumasi.ai",
+    // Public launch: verified Google/Microsoft identities and email-verified
+    // signups may create accounts without an invite. The explicit ceiling
+    // remains a deliberate abuse/cost boundary and can be raised separately.
+    "PUBLIC_SIGNUP": "true",
+    "MAX_OWNER_ACCOUNTS": "1000",
     "MAIL_FROM": "Pumasi Booking <no-reply@pumasi.ai>",
     // The Workspace user the mailer service account impersonates (DWD).
     // no-reply@pumasi.ai is a registered send-as alias of this account.
