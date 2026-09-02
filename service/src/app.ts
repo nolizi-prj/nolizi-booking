@@ -32,7 +32,7 @@ import {
 import { googleSsoExchange, googleSsoUrl } from './sso-google.ts';
 import { microsoftSsoExchange, microsoftSsoUrl } from './sso-microsoft.ts';
 import { discoverOidc, oidcAuthUrl, oidcExchange } from './sso-oidc.ts';
-import { RATE_LIMITS, type Config } from './config.ts';
+import { RATE_LIMITS, sealRefusal, signInRefusal, type Config } from './config.ts';
 import type { CalendarHub } from './calendars.ts';
 import { OAuthState } from './oauth-state.ts';
 import { icsFor } from './ics.ts';
@@ -926,8 +926,10 @@ async function handleRoutes(
     // key nothing can start whatever the lookup finds, and looking up first
     // would tell an unauthenticated caller which org ids exist on a deployment
     // that cannot serve any of them.
+    // SPEC-0009 S2d · and it says what is missing: this door has no
+    // deployment-level credentials of its own, so the key is all it can lack.
     const states = deps.calendars?.state ?? oauthState(config);
-    if (!states) return html(404, errorPage(404, 'SSO is not configured on this deployment.'));
+    if (!states) return html(404, errorPage(404, sealRefusal('SSO')));
     // Sharding · the public entry addresses the TENANT ('main' = founding org).
     let ssoOrgId = parts[2];
     if (ssoOrgId === 'main') {
@@ -988,11 +990,17 @@ async function handleRoutes(
 
   // ── "Sign in with Google" (P4) — openid+email only, never calendar ───────
   if (parts[0] === 'auth' && parts[1] === 'google' && parts[2] === 'start' && req.method === 'POST') {
-    const hub = deps.calendars;
-    if (!hub || !config.googleClientId) {
-      return html(404, errorPage(404, 'Google sign-in is not configured.'));
-    }
-    const state = await hub.sealState({
+    // SPEC-0009 S2a · what this door needs is a sealer, a client id and a
+    // secret. `deps.calendars` stood for all three and named none of them, so
+    // an operator missing one was told the feature was "not configured". The
+    // hub's own sealer where there is one (SPEC-0007 S1b); the sentence comes
+    // from the one implementation the Workers router imports too (S1a).
+    const states = deps.calendars?.state ?? oauthState(config);
+    const refusal = signInRefusal(config, 'google', Boolean(states));
+    if (refusal !== undefined) return html(404, errorPage(404, refusal));
+    // No refusal means the id, the secret and a sealer all exist (S1b, last
+    // row); the assertions below only tell the types what the helper checked.
+    const state = await states!.seal({
       purpose: 'sso',
       invite: (req.form?.['invite'] ?? '').trim(),
       timezone: (req.form?.['timezone'] ?? '').trim(),
@@ -1001,7 +1009,7 @@ async function handleRoutes(
       status: 303,
       headers: {
         location: googleSsoUrl({
-          clientId: config.googleClientId,
+          clientId: config.googleClientId!,
           redirectUri: `${config.baseUrl}/oauth/google/callback`,
           state,
         }),
@@ -1021,11 +1029,14 @@ async function handleRoutes(
     // S2b · this is now the guard worker.ts:614 already holds, word for word
     // and message for message. Two builds answering the same question
     // differently is L-009, and this pair had drifted for exactly that long.
+    //
+    // SPEC-0009 S2c · the same guard now names what is missing, and requires
+    // the secret at the button — the callback (below) always did, so the only
+    // thing that moves is where the refusal arrives.
     const states = deps.calendars?.state ?? oauthState(config);
-    if (!states || !config.msClientId) {
-      return html(404, errorPage(404, 'Microsoft sign-in is not configured.'));
-    }
-    const state = await states.seal({
+    const refusal = signInRefusal(config, 'microsoft', Boolean(states));
+    if (refusal !== undefined) return html(404, errorPage(404, refusal));
+    const state = await states!.seal({
       purpose: 'sso_ms',
       invite: (req.form?.['invite'] ?? '').trim(),
       timezone: (req.form?.['timezone'] ?? '').trim(),
@@ -1034,7 +1045,7 @@ async function handleRoutes(
       status: 303,
       headers: {
         location: microsoftSsoUrl({
-          clientId: config.msClientId,
+          clientId: config.msClientId!,
           redirectUri: `${config.baseUrl}/oauth/microsoft/callback`,
           state,
         }),
@@ -1093,14 +1104,14 @@ async function handleRoutes(
 
     // P4 · the same callback serves sign-in; the sealed state says which.
     if (state['purpose'] === 'sso') {
-      if (!config.googleClientId || !config.googleClientSecret) {
-        return html(404, errorPage(404, 'Google sign-in is not configured.'));
-      }
+      // SPEC-0009 S2g · the callback's own refusal names what is missing too.
+      const refusal = signInRefusal(config, 'google', true);
+      if (refusal !== undefined) return html(404, errorPage(404, refusal));
       let email: string;
       try {
         const who = await googleSsoExchange({
-          clientId: config.googleClientId,
-          clientSecret: config.googleClientSecret,
+          clientId: config.googleClientId!,
+          clientSecret: config.googleClientSecret!,
           code,
           redirectUri: `${config.baseUrl}/oauth/google/callback`,
         });
@@ -1150,14 +1161,13 @@ async function handleRoutes(
 
     // Issue #5 · "Sign in with Microsoft"
     if (state['purpose'] === 'sso_ms' || (parts[1] === 'microsoft' && state['purpose'] === 'sso')) {
-      if (!config.msClientId || !config.msClientSecret) {
-        return html(404, errorPage(404, 'Microsoft sign-in is not configured.'));
-      }
+      const refusal = signInRefusal(config, 'microsoft', true);
+      if (refusal !== undefined) return html(404, errorPage(404, refusal));
       let email: string;
       try {
         const who = await microsoftSsoExchange({
-          clientId: config.msClientId,
-          clientSecret: config.msClientSecret,
+          clientId: config.msClientId!,
+          clientSecret: config.msClientSecret!,
           code,
           redirectUri: `${config.baseUrl}/oauth/microsoft/callback`,
         });

@@ -1,6 +1,6 @@
 # SPEC-0009 — a half-configured deployment is told what is missing, at the button, on both builds
 
-**Status:** for cross-family spec review · **Intent:** [`INTENT.md`](INTENT.md)
+**Status:** approved 2026-09-01 (gemini, `reviews/20260901-153639-spec-gemini.md`, APPROVE, no cited objection); acceptance cases **frozen** at that approval, before implementation · **Intent:** [`INTENT.md`](INTENT.md)
 (veto window: `pumasi/DECISIONS.md` Q-040) ·
 **Acceptance:** [`acceptance/cases.json`](acceptance/cases.json), frozen at
 spec-review approval, before implementation ·
@@ -130,6 +130,16 @@ Workers build reaches this route by forwarding into the Durable Object
 `This deployment cannot complete an OAuth connection: TOKEN_KEY is not
 configured.` — `app.ts:1083`'s sentence, verbatim, in place of `Not
 configured.`. Same condition, same wire format, same sentence.
+
+**S2g. The callbacks' own credential refusals (`app.ts:1096`, `:1153`;
+`worker.ts:651`, `:735`) take their sentence from the same helper**, with
+`canSeal = true` (a state has already been opened by then). *Added at
+implementation, and recorded rather than folded in silently:* SPEC-0007
+A-006 v1.2.0 asserts that neither build carries a literal refusal sentence of
+its own, and those four were literal copies of the "not configured" sentence.
+A callback reached with a client id and no secret now says which is missing
+rather than "not configured"; nothing about which callbacks are refused
+changes.
 
 **S2f. The redirect targets, scopes, state payloads and sealing key are not
 touched.** `googleSsoUrl`, `microsoftSsoUrl` and the `purpose` fields are

@@ -23,7 +23,7 @@
  */
 
 import { DurableObject } from 'cloudflare:workers';
-import { loadConfig, RATE_LIMITS } from './config.ts';
+import { loadConfig, RATE_LIMITS, sealRefusal, signInRefusal } from './config.ts';
 import { handle, type AppDeps, type DirectoryPort } from './app.ts';
 import { migrate } from './db.ts';
 import { RecordingMail, RetryingMail, type MailPort } from './mail.ts';
@@ -607,16 +607,18 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
     // "Continue with Google": the router seals the state and runs the
     // exchange; the directory decides which world the identity belongs to.
     if (url.pathname === '/auth/google/start' && request.method === 'POST') {
-      if (!states || !config.googleClientId) {
-        return htmlResponse(404, errorPage(404, 'Google sign-in is not configured.'));
-      }
-      const state = await states.seal({
+      // SPEC-0009 S2b · this door opened on the client id alone and sent a
+      // deployment with no secret to Google, to be refused on the way back.
+      // The guard and its sentence are the Node path's, from one place (S1a).
+      const refusal = signInRefusal(config, 'google', Boolean(states));
+      if (refusal !== undefined) return htmlResponse(404, errorPage(404, refusal));
+      const state = await states!.seal({
         purpose: 'sso',
         invite: (form['invite'] ?? '').trim(),
         timezone: (form['timezone'] ?? '').trim(),
       });
       return Response.redirect(googleSsoUrl({
-        clientId: config.googleClientId,
+        clientId: config.googleClientId!,
         redirectUri: `${config.baseUrl}/oauth/google/callback`,
         state,
       }), 303);
@@ -625,37 +627,41 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
     // "Continue with Microsoft": the router seals the state and runs the
     // exchange; the directory decides which world the identity belongs to.
     if (url.pathname === '/auth/microsoft/start' && request.method === 'POST') {
-      if (!states || !config.msClientId) {
-        return htmlResponse(404, errorPage(404, 'Microsoft sign-in is not configured.'));
-      }
-      const state = await states.seal({
+      // SPEC-0009 S2c · same helper, same sentence as app.ts.
+      const refusal = signInRefusal(config, 'microsoft', Boolean(states));
+      if (refusal !== undefined) return htmlResponse(404, errorPage(404, refusal));
+      const state = await states!.seal({
         purpose: 'sso_ms',
         invite: (form['invite'] ?? '').trim(),
         timezone: (form['timezone'] ?? '').trim(),
       });
       return Response.redirect(microsoftSsoUrl({
-        clientId: config.msClientId,
+        clientId: config.msClientId!,
         redirectUri: `${config.baseUrl}/oauth/microsoft/callback`,
         state,
       }), 303);
     }
 
     if (seg[0] === 'oauth' && seg[2] === 'callback' && request.method === 'GET') {
-      if (!states) return htmlResponse(404, errorPage(404, 'Not configured.'));
+      // SPEC-0009 S2e · app.ts's sentence for the same condition, verbatim.
+      if (!states) {
+        return htmlResponse(404, errorPage(404,
+          'This deployment cannot complete an OAuth connection: TOKEN_KEY is not configured.'));
+      }
       const state = await states.open(url.searchParams.get('state') ?? '');
       const code = url.searchParams.get('code');
       if (!state || !code) {
         return htmlResponse(400, errorPage(400, 'This attempt is stale or invalid. Start again.'));
       }
       if (state['purpose'] === 'sso') {
-        if (!config.googleClientId || !config.googleClientSecret) {
-          return htmlResponse(404, errorPage(404, 'Google sign-in is not configured.'));
-        }
+        // SPEC-0009 S2g · the callback's own refusal names what is missing too.
+        const refusal = signInRefusal(config, 'google', true);
+        if (refusal !== undefined) return htmlResponse(404, errorPage(404, refusal));
         let email: string;
         try {
           const who = await googleSsoExchange({
-            clientId: config.googleClientId,
-            clientSecret: config.googleClientSecret,
+            clientId: config.googleClientId!,
+            clientSecret: config.googleClientSecret!,
             code,
             redirectUri: `${config.baseUrl}/oauth/google/callback`,
           });
@@ -731,14 +737,13 @@ f.loading='lazy';f.title='Book a time';s.parentNode.insertBefore(f,s);})();`;
           'No account for that address. Accounts are invite-only while this service is small.'));
       }
       if (state['purpose'] === 'sso_ms' || (seg[1] === 'microsoft' && state['purpose'] === 'sso')) {
-        if (!config.msClientId || !config.msClientSecret) {
-          return htmlResponse(404, errorPage(404, 'Microsoft sign-in is not configured.'));
-        }
+        const refusal = signInRefusal(config, 'microsoft', true);
+        if (refusal !== undefined) return htmlResponse(404, errorPage(404, refusal));
         let email: string;
         try {
           const who = await microsoftSsoExchange({
-            clientId: config.msClientId,
-            clientSecret: config.msClientSecret,
+            clientId: config.msClientId!,
+            clientSecret: config.msClientSecret!,
             code,
             redirectUri: `${config.baseUrl}/oauth/microsoft/callback`,
           });

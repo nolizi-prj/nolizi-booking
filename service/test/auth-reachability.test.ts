@@ -276,12 +276,13 @@ test('A-003 · the doors keep their own credential checks', async () => {
   assert.equal(r4.status, 404);
   assert.equal(errText(r4.body), 'This organization has no SSO configured.');
 
-  // No TOKEN_KEY: nothing can be sealed, so neither door opens — and the
-  // Microsoft answer is byte-identical to worker.ts:614's (S2b).
+  // No TOKEN_KEY: nothing can be sealed, so neither door opens — and since
+  // Amendment 2 (SPEC-0009 S1b/S2c) the answer names the key; both builds
+  // take the sentence from one signInRefusal().
   deps = makeDeps(NO_KEY);
   const r5 = await call('POST', '/auth/microsoft/start', { form: {} });
   assert.equal(r5.status, 404);
-  assert.equal(errText(r5.body), 'Microsoft sign-in is not configured.');
+  assert.equal(errText(r5.body), 'Microsoft sign-in cannot start on this deployment: TOKEN_KEY is not configured.');
 
   // ...even with the organisation's SSO fully configured: the deployment check
   // stays above the org lookup and keeps its wording (S3b, S3c).
@@ -291,7 +292,7 @@ test('A-003 · the doors keep their own credential checks', async () => {
   try {
     const r6 = await call('GET', `/login/sso/${org2.orgId}`);
     assert.equal(r6.status, 404);
-    assert.equal(errText(r6.body), 'SSO is not configured on this deployment.');
+    assert.equal(errText(r6.body), 'SSO cannot start on this deployment: TOKEN_KEY is not configured.');
     assert.equal(r6.headers['location'], undefined,
       'with no seal key nothing unsigned is produced as a fallback');
   } finally { restore(); }
@@ -300,11 +301,12 @@ test('A-003 · the doors keep their own credential checks', async () => {
 // ── A-004 · nothing outside this spec’s two doors moves ────────────────────
 
 test('A-004 · Google sign-in, calendar connect and the calendar callback are unchanged', async () => {
-  // A client id with no secret is not a configured Google sign-in.
+  // A client id with no secret is not a configured Google sign-in — and since
+  // Amendment 2 (SPEC-0009 S1b) the refusal names the secret.
   deps = makeDeps(GOOGLE_ID_ONLY);
   const g1 = await call('POST', '/auth/google/start', { form: {} });
   assert.equal(g1.status, 404);
-  assert.equal(errText(g1.body), 'Google sign-in is not configured.');
+  assert.equal(errText(g1.body), 'Google sign-in cannot start on this deployment: GOOGLE_OAUTH_CLIENT_SECRET is not configured.');
 
   deps = makeDeps(MS_ONLY);
   const g2 = await call('POST', '/auth/google/start', { form: {} });
@@ -376,9 +378,10 @@ test('A-005 · the hub’s own sealer seals when a hub exists', async () => {
   } finally { restore2(); }
 });
 
-// ── A-006 · the Workers router is not modified ─────────────────────────────
+// ── A-006 · both builds answer a half-configured door from ONE implementation ──
+// (Amendment 2: until v1.2.0 this case froze SPEC-0007's own diff — S4d.)
 
-test('A-006 · worker.ts keeps the guards it already had right (S4d)', async () => {
+test('A-006 · neither build carries its own copy of a refusal sentence (S4d, as amended)', async () => {
   const { readFileSync, existsSync } = await import('node:fs');
   const { dirname, join } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
@@ -388,11 +391,16 @@ test('A-006 · worker.ts keeps the guards it already had right (S4d)', async () 
     dir = dirname(dir);
   }
   const worker = readFileSync(join(dir, 'src/worker.ts'), 'utf8');
+  const appSrc = readFileSync(join(dir, 'src/app.ts'), 'utf8');
 
-  assert.ok(worker.includes('if (!states || !config.msClientId) {'),
-    'S4d — the router’s Microsoft door was never Google-gated; it is not edited here');
-  assert.ok(worker.includes('if (!states || !config.googleClientId) {'),
-    'S4d — nor is its Google door');
+  for (const [name, src] of [['worker.ts', worker], ['app.ts', appSrc]] as const) {
+    assert.match(src, /import \{[^}]*\bsignInRefusal\b[^}]*\} from '\.\/config\.ts'/,
+      `S4d as amended — ${name} takes its refusal from config.ts`);
+    assert.ok(!src.includes("sign-in is not configured.'"),
+      `S4d as amended — ${name} carries no literal 'not configured' sentence of its own`);
+    assert.ok(!src.includes('cannot start on this deployment'),
+      `S4d as amended — ${name} carries no literal 'cannot start' sentence of its own`);
+  }
   assert.ok(!/const\s+hub\b/.test(worker),
     'S4d — the router holds no CalendarHub for state; spec/0006 removed it');
   assert.ok(worker.includes("forward(seg[2], { path: '/login/sso/main' })"),

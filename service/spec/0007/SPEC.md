@@ -219,19 +219,25 @@ reasons, and org SSO is correct on both paths for the same reason.
 
 ## 5 · Found, not fixed here
 
-- **A missing `TOKEN_KEY` is not named in either refusal.** An operator who
+> **Both bullets struck 2026-09-01 by SPEC-0009 (job `0104`, `roadmap/BACKLOG.md`
+> item 2 at `7c511a4`): both refusals name the missing variable on both builds,
+> the Workers router requires the secret at the button, and every sentence
+> comes from one `signInRefusal()` in `config.ts`. Kept as the dated record they
+> are; see [`../0009/SPEC.md`](../0009/SPEC.md) and Amendment 2 below.**
+
+- ~~**A missing `TOKEN_KEY` is not named in either refusal.** An operator who
   configures Microsoft or an IdP and forgets `TOKEN_KEY` is told the feature is
   not configured, which is true and unactionable. Fixing it well means changing
   the message on both the Node path and the Workers router together (L-009),
   and it is user-visible copy rather than reachability. Recorded for the
-  roadmap owner to rank; §3c and §2b say why it is not folded in.
-- **`worker.ts:596` gates `/auth/google/start` on `googleClientId` without
+  roadmap owner to rank; §3c and §2b say why it is not folded in.~~
+- ~~**`worker.ts:596` gates `/auth/google/start` on `googleClientId` without
   `googleClientSecret`, while `app.ts:973` effectively requires both** (via the
   hub). On the Workers build a deployment with an id and no secret redirects to
   Google and then 404s at the callback instead of refusing at the button. It
   predates this spec, is a divergence between the two paths in the opposite
   direction from D-a, and is not touched here because touching `worker.ts` is
-  what S4d forbids. Recorded for the roadmap owner.
+  what S4d forbids. Recorded for the roadmap owner.~~
 
 ## 6 · Acceptance
 

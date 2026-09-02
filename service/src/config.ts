@@ -153,3 +153,41 @@ export function refusals(env: NodeJS.ProcessEnv = process.env): ConfigRefusal[] 
   }
   return out;
 }
+
+// ── SPEC-0009 · a half-configured deployment is told what is missing ─────────
+
+export type SignInDoor = 'google' | 'microsoft';
+
+/**
+ * SPEC-0009 S1 · the sentence the person at a sign-in button reads when this
+ * deployment cannot open that door, or `undefined` when it can. One
+ * implementation for the Node path and the Workers router: each build carried
+ * its own copy of this rule and they drifted (SPEC-0007 §5, L-009).
+ *
+ * Names variables, never values (S1d). `canSeal` is the caller's to say: on
+ * the Node path a CalendarHub may seal under a key that never came from
+ * TOKEN_KEY (SPEC-0007 S1b), so `config.tokenKey` is not the answer here.
+ *
+ * A door with no client id at all keeps the old sentence (S1e): the login page
+ * draws no button for it, so only a hand-built request reaches it, and naming
+ * the id variable there would answer a probe for nobody's benefit.
+ */
+export function signInRefusal(config: Config, door: SignInDoor, canSeal: boolean): string | undefined {
+  const d = door === 'google'
+    ? { label: 'Google sign-in', id: config.googleClientId, secret: config.googleClientSecret, secretVar: 'GOOGLE_OAUTH_CLIENT_SECRET' }
+    : { label: 'Microsoft sign-in', id: config.msClientId, secret: config.msClientSecret, secretVar: 'MS_OAUTH_CLIENT_SECRET' };
+  if (!d.id) return `${d.label} is not configured.`;
+  const missing: string[] = [];
+  if (!d.secret) missing.push(d.secretVar); // S1c · the secret before the key
+  if (!canSeal) missing.push('TOKEN_KEY');
+  return missing.length ? cannotStart(d.label, missing) : undefined;
+}
+
+/** SPEC-0009 S1b · a door whose only deployment-level need is the seal key. */
+export function sealRefusal(what: string): string {
+  return cannotStart(what, ['TOKEN_KEY']);
+}
+
+function cannotStart(what: string, missing: string[]): string {
+  return `${what} cannot start on this deployment: ${missing.join(' and ')} ${missing.length > 1 ? 'are' : 'is'} not configured.`;
+}
